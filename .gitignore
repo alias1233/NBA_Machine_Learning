@@ -31,7 +31,6 @@ ENV/
 
 # Model checkpoints
 checkpoints/
-models/
 weights/
 *.pt
 *.pth
