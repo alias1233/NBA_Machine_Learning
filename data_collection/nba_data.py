@@ -47,6 +47,14 @@ class NBAData():
         return ids
     
     @staticmethod
+    def player_id_to_name(id: int) -> str | None:
+        player_data = players.find_player_by_id(id)
+        if player_data is None:
+            return None
+        
+        return player_data['full_name']
+    
+    @staticmethod
     @retry
     def get_game_box_score_stats(game_id: str):
         return boxscoretraditionalv3.BoxScoreTraditionalV3(

@@ -21,8 +21,9 @@ class TeamDataCollector(DataCollector):
 
 
 if __name__ == "__main__":
-    team_data_collector = TeamDataCollector(FILEPATH, NAME, CATEGORIES)
-    team_data_collector.create_database()
+    Database.create_database_with_user_prompt(FILEPATH, NAME, CATEGORIES)
+    database = Database(FILEPATH, NAME, CATEGORIES)
+    team_data_collector = TeamDataCollector(database)
     team_data_collector.fetch_data()
 
 RUNPATH = "data_collection.training_data_collection.team_data_collection"

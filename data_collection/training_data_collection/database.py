@@ -5,7 +5,9 @@ import threading, time
 # Simple SQLite Database
 class Database():
     def __init__(self, filepath: str, name: str, categories: list):
+        self.filepath = filepath
         self.name = name
+        self.categories = categories
         self.connection = sq.connect(filepath)
         self.cursor = self.connection.cursor()
         self.insert_command = Database.get_insert_command(name, categories)
@@ -19,6 +21,12 @@ class Database():
                 insert_command += ","
         insert_command += ")"
         return insert_command
+
+    @staticmethod
+    def create_database_with_user_prompt(filepath: str, name: str, categories: list):
+        create_database = input("Create database? (y/n): ").capitalize()
+        if create_database == 'Y':
+            Database.create_database(filepath, name, categories)
 
     @staticmethod
     def create_database(filepath: str, name: str, categories: list):
@@ -46,15 +54,12 @@ class Database():
         self.cursor.execute(command)
         return self.cursor.fetchall()
     
-    def print_all(self, rows: int = 0):
-        self.cursor.execute(f"""SELECT * FROM {self.name}""")
-
-        data = None
-        if rows == 0:
-            data = self.cursor.fetchall()
-        else:
-            data = self.cursor.fetchmany(rows)
+    def print_values(self, amount_to_print: int = 10):
+        amount_to_print = min(amount_to_print, 100)
         
+        self.cursor.execute(f"""SELECT * FROM {self.name} LIMIT {amount_to_print}""")
+
+        data = self.cursor.fetchmany(amount_to_print)
         for row in data:
             print(row)
     
@@ -64,35 +69,15 @@ class Database():
 
 # Base Data Collector With User Input
 class DataCollector(ABC):
-    def __init__(self, filepath: str, name: str, categories: list):
-        self.filepath = filepath
-        self.name = name
-        self.categories = categories
-        self.database = None
+    def __init__(self, database: Database):
+        self.database = database
 
-    def create_database(self):
-        create_database = input("Create database? (y/n): ").capitalize()
-        if create_database == 'Y':
-            Database.create_database(self.filepath, self.name, self.categories)
-
-    def initialize_database_instance(self):
-        if self.database is None:
-            self.database = Database(self.filepath, self.name, self.categories)
-
-    def fetch_data(self, wait_interval: float = 1, start_index: int = 0, print_database: bool = False, rows_to_print: int = 0, **kwargs):
-        self.initialize_database_instance()
-
+    def fetch_data(self, wait_interval: float = 1, start_index: int = 0, **kwargs):
         scheme = input("User controlled or automatic? (u/a): ").capitalize()
         if scheme == 'A':
             self.begin_fetch_data_automatic(wait_interval, start_index, **kwargs)
         else:
             self.fetch_data_user(**kwargs)
-
-        if self.database is not None:
-            if print_database:
-                self.database.print_all(rows_to_print)
-                
-            self.database.close()
 
     @abstractmethod
     def fetch_data_user(self, **kwargs):
@@ -119,7 +104,7 @@ class DataCollector(ABC):
     def fetch_data_automatic(self, index: int, **kwargs):
         pass
 
-    def get_database(self):
+    def get_database(self) -> Database:
         return self.database
 
 if __name__ == "__main__":

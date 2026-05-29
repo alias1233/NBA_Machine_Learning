@@ -6,7 +6,6 @@ from .database import Database, DataCollector
 FILEPATH = "databases/player_data.db"
 NAME = "players"
 RAW_CATEGORIES = [
-    "SEASON_ID", "integer",
     "Player_ID", "integer",
     "Game_ID", "integer",
     "GAME_DATE", "text",
@@ -105,8 +104,16 @@ class PlayerDataCollector(DataCollector):
 
 
 if __name__ == "__main__":
-    player_data_collector = PlayerDataCollector(FILEPATH, NAME, CATEGORY_TUPLES)
-    player_data_collector.create_database()
-    player_data_collector.fetch_data(print_database=True, players=['Lebron James'], seasons=[2020])
+    Database.create_database_with_user_prompt(FILEPATH, NAME, CATEGORY_TUPLES)
+    database = Database(FILEPATH, NAME, CATEGORY_TUPLES)
+    player_data_collector = PlayerDataCollector(database)
+    player_data_collector.fetch_data(players=[], seasons=[])
+
+    player_id = NBAData.player_name_to_ids("Stephen Curry")[0]
+    data = database.query_SQL(f"""SELECT * FROM {NAME} WHERE Player_ID = {player_id}""")
+    for row in data:
+        print(row)
+    
+    database.close()
 
 RUNPATH = "data_collection.training_data_collection.player_data_collection"
