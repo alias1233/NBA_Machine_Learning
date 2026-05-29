@@ -1,5 +1,5 @@
 [project]
-name = "nbaplayerpredictor"
+name = "NBA Machine Learning Framework"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"

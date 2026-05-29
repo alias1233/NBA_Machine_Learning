@@ -1,18 +1,54 @@
+import pandas as pd
+
 from data_collection.nba_data import NBAData
 from .database import Database, DataCollector
 
 FILEPATH = "databases/player_data.db"
 NAME = "players"
-CATEGORIES = [
-    ('PPG', 'integer'),
-    ('TEST', 'text')
+RAW_CATEGORIES = [
+    "SEASON_ID", "integer",
+    "Player_ID", "integer",
+    "Game_ID", "integer",
+    "GAME_DATE", "text",
+    "MATCHUP", "text",
+    "WL", "text",
+    "MIN", "integer",
+    "FGM", "integer",
+    "FGA", "integer",
+    "FG_PCT", "real",
+    "FG3M", "integer",
+    "FG3A", "integer",
+    "FG3_PCT", "real",
+    "FTM", "integer",
+    "FTA", "integer",
+    "FT_PCT", "real",
+    "OREB", "integer",
+    "DREB", "integer",
+    "REB", "integer",
+    "AST", "integer",
+    "STL", "integer",
+    "BLK", "integer",
+    "TOV", "integer",
+    "PF", "integer",
+    "PTS", "integer",
+    "PLUS_MINUS", "integer",
 ]
+CATEGORY_TUPLES = list(zip(RAW_CATEGORIES[0::2], RAW_CATEGORIES[1::2]))
+CATEGORY_NAMES = RAW_CATEGORIES[0::2]
 
 # Handles Retrieving Player Data
 class PlayerDataCollector(DataCollector):
 
     def add_player_data(self, player_id: str, season: int):
-        print(f"ID: {player_id} SEASON: {season}")
+        if self.database is None:
+            return
+        
+        player_data: pd.DataFrame = NBAData.get_player_season_game_logs(player_id, season)[0]
+
+        # TODO: Use executemany to insert a list of dictionaries in bulk
+        for game in player_data.itertuples(index=False):
+            data_dict = {cat: getattr(game, cat) for cat in CATEGORY_NAMES}
+            self.database.add_value(data_dict)
 
     def add_player_data_range(self, player_id: str, start_season_year: int, end_season_year: int):
         start_season = start_season_year
@@ -69,7 +105,7 @@ class PlayerDataCollector(DataCollector):
 
 
 if __name__ == "__main__":
-    player_data_collector = PlayerDataCollector(FILEPATH, NAME, CATEGORIES)
+    player_data_collector = PlayerDataCollector(FILEPATH, NAME, CATEGORY_TUPLES)
     player_data_collector.create_database()
     player_data_collector.fetch_data(print_database=True, players=['Lebron James'], seasons=[2020])
 

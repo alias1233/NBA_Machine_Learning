@@ -62,7 +62,7 @@ class Database():
         self.connection.commit()
         self.connection.close()
 
-# Base Collector With User Input
+# Base Data Collector With User Input
 class DataCollector(ABC):
     def __init__(self, filepath: str, name: str, categories: list):
         self.filepath = filepath
@@ -88,10 +88,11 @@ class DataCollector(ABC):
         else:
             self.fetch_data_user(**kwargs)
 
-        if print_database:
-            self.database.print_all(rows_to_print)
-
-        self.database.close()
+        if self.database is not None:
+            if print_database:
+                self.database.print_all(rows_to_print)
+                
+            self.database.close()
 
     @abstractmethod
     def fetch_data_user(self, **kwargs):
