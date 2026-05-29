@@ -1,1 +1,1 @@
-Predicts the overall effectiveness of a player in the NBA.
+Framework For Collecting, Saving, and Machine Learning For The NBA
