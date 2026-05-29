@@ -50,6 +50,7 @@ logs/
 
 # Datasets
 data/
+databases/
 datasets/
 cache/
 .huggingface/
