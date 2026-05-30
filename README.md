@@ -1,1 +1,1 @@
-Framework For Collecting, Saving, and Machine Learning For The NBA
+Framework For Collecting And Saving NBA Data For Machine Learning
