@@ -1,5 +1,5 @@
-from data_collection.nba_data import NBAData
-from .database import Database, DataCollector
+from ...nba_data import NBAData
+from ..database import Database, DataCollector
 
 FILEPATH = "databases/team_data.db"
 NAME = "teams"
@@ -26,4 +26,4 @@ if __name__ == "__main__":
     team_data_collector = TeamDataCollector(database)
     team_data_collector.fetch_data()
 
-RUNPATH = "data_collection.training_data_collection.team_data_collection"
+RUNPATH = "data_collection.training_data_collection.data_collectors.team_game_data_collector"

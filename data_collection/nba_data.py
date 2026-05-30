@@ -1,9 +1,8 @@
 import requests
 import time
-import pandas
 
 from nba_api.stats.static import teams, players
-from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, teaminfocommon, teamgamelogs
+from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, teamgamelogs, commonplayerinfo
 
 def retry(func, retries: int = 3, timeout: int = 5):
     """
@@ -22,12 +21,16 @@ def retry(func, retries: int = 3, timeout: int = 5):
 
     return retry_wrapper
 
-# Helper For Retrieving NBA Data
+# Handles Retrieving NBA Data
 class NBAData():
 
     @staticmethod
     def convert_year_to_NBA_season(season_year: int) -> str:
         return str(season_year) + '-' + str(season_year + 1)[-2:]
+
+    @staticmethod
+    def get_all_teams():
+        return teams.get_teams()
 
     @staticmethod
     def team_abb_to_id(abbreviation: str) -> str:
@@ -39,6 +42,10 @@ class NBAData():
         )
     
     @staticmethod
+    def get_all_players():
+        return players.get_players()
+    
+    @staticmethod
     def player_name_to_ids(name: str) -> list:
         players_data = players.find_players_by_full_name(name)
         ids = []
@@ -47,12 +54,19 @@ class NBAData():
         return ids
     
     @staticmethod
-    def player_id_to_name(id: int) -> str | None:
+    def player_id_to_name(id: str) -> str | None:
         player_data = players.find_player_by_id(id)
         if player_data is None:
             return None
         
         return player_data['full_name']
+    
+    @staticmethod
+    @retry
+    def get_common_player_info(player_id: str):
+        return commonplayerinfo.CommonPlayerInfo(
+            player_id=player_id
+        ).get_data_frames()
     
     @staticmethod
     @retry
@@ -76,3 +90,42 @@ class NBAData():
             team_id_nullable=team_id,
             season_nullable=NBAData.convert_year_to_NBA_season(season_year)
         ).get_data_frames()
+    
+# Helper For Retrieving Data With User Input
+class NBADataUser():
+
+    @staticmethod
+    def get_player_id(use_id: bool):
+        if use_id:
+            player = input("Input the player id or q to quit: ")
+            if player.capitalize() == "Q":
+                return None
+            return player
+        
+        player = input("Input the player name or q to quit: ")
+        if player.capitalize() == "Q":
+            return None
+
+        player_ids = NBAData.player_name_to_ids(player)
+        while not player_ids:
+            player = input("Player name does not correspond with a player. Input the player name or q to quit: ")
+            if player.capitalize() == "Q":
+                return None
+            player_ids = NBAData.player_name_to_ids(player)
+
+        player_id = 0
+        if len(player_ids) == 1:
+            player_id = player_ids[0]
+        else:
+            id_index = -1
+            while id_index < 0 or id_index >= len(player_ids):
+                print(player_ids)
+                id_index = int(input("Input the index of the id to use: "))
+            player_id = player_ids[id_index]
+        return player_id
+    
+    @staticmethod
+    def get_season_range():
+        start_season = input("Input the start season year: ")
+        end_season = input("Input the end season year: ")
+        return (int(start_season), int(end_season))
