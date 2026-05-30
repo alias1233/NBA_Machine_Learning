@@ -123,13 +123,15 @@ class DataCollector(ABC):
 
         i = start_index
         while not running_event.is_set():
-            self.fetch_data_automatic(i, **kwargs)
             print(f"Loop Index: {i}")
+            if not self.fetch_data_automatic(i, **kwargs):
+                print("Loop has finished.")
+                break
             i += 1
             time.sleep(wait_interval)
 
     @abstractmethod
-    def fetch_data_automatic(self, index: int, **kwargs):
+    def fetch_data_automatic(self, index: int, **kwargs) -> bool:
         pass
 
 # Helper For Lazy Loading Databases

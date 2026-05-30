@@ -1,6 +1,5 @@
 def main():
-    print("Hello from nbaplayerpredictor!")
-
+    pass
 
 if __name__ == "__main__":
     main()

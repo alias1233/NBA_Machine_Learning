@@ -53,17 +53,21 @@ class PlayerDataCollector(DataCollector):
     def fetch_data_user(self, **kwargs):
         use_id = input("Input whether to search for players by id or by full name: (i/n) ").capitalize() == 'I'
         while True:
-            player_id = NBADataUser.get_player_id(use_id)
+            player_id = NBADataUser.get_player_id_user(use_id)
             if player_id is None:
                 return
-            season_start, season_end = NBADataUser.get_season_range()
+            season_start, season_end = NBADataUser.get_season_range_user()
             self.add_player_data_range(player_id, season_start, season_end)
 
-    def fetch_data_automatic(self, index: int, player_data: list):
+    def fetch_data_automatic(self, index: int, player_data: list) -> bool:
+        if index >= len(player_data):
+            return False
         player = player_data[index]
         self.add_player_data_range(player[0], player[1], player[2])
         
         print(f'Player ID: {player[0]} SEASON START: {player[1]} SEASON END: {player[2]}')
+
+        return True
 
 
 if __name__ == "__main__":
@@ -76,7 +80,7 @@ if __name__ == "__main__":
         player_data = player_info_collector.get_all_player_seasons()
     except:
         print("Database of player seasons is non-functional. Automatic data collection is non-functional.")
-        
+
     player_data_collector.fetch_data(player_data=player_data)
 
     # Testing

@@ -35,14 +35,19 @@ class PlayerInfoCollector(DataCollector):
     def fetch_data_user(self, **kwargs):
         use_id = input("Input whether to search for players by id or by full name: (i/n) ").capitalize() == 'I'
         while True:
-            player_id = NBADataUser.get_player_id(use_id)
+            player_id = NBADataUser.get_player_id_user(use_id)
             if player_id is None:
                 return
             self.add_player_data(player_id)
     
-    def fetch_data_automatic(self, index: int, player_ids: list):
+    def fetch_data_automatic(self, index: int, player_ids: list) -> bool:
+        if index >= len(player_ids):
+            return False
         self.add_player_data(player_ids[index])
+
         print(f"player_id: {player_ids[index]}")
+
+        return True
 
 if __name__ == "__main__":
     database = database_loader.create_database()
@@ -53,6 +58,7 @@ if __name__ == "__main__":
     player_ids = []
     for player in players:
         player_ids.append(player['id'])
+
     player_info_collector.fetch_data(player_ids=player_ids)
 
     # Testing

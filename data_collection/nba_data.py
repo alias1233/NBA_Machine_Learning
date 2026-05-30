@@ -1,8 +1,9 @@
 import requests
 import time
+from enum import Enum, auto
 
 from nba_api.stats.static import teams, players
-from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, teamgamelogs, commonplayerinfo
+from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, teamgamelog, commonplayerinfo
 
 def retry(func, retries: int = 3, timeout: int = 5):
     """
@@ -35,11 +36,20 @@ class NBAData():
     @staticmethod
     def team_abb_to_id(abbreviation: str) -> str:
         team = teams.find_team_by_abbreviation(abbreviation)
-        if (team != None):
+        if team != None:
             return team["id"]
         raise ValueError(
             f"{abbreviation} does not correspond with a team."
         )
+    
+    @staticmethod
+    def team_name_to_id(name: str) -> str:
+        team = teams.find_teams_by_full_name(name)
+        if team == []:
+            raise ValueError(
+            f"{name} does not correspond with a team."
+            )
+        return team[0]['id']
     
     @staticmethod
     def get_all_players():
@@ -86,16 +96,16 @@ class NBAData():
     @staticmethod
     @retry
     def get_team_season_stats(team_id: str, season_year: int):
-        return teamgamelogs.TeamGameLogs(
-            team_id_nullable=team_id,
-            season_nullable=NBAData.convert_year_to_NBA_season(season_year)
+        return teamgamelog.TeamGameLog(
+            team_id=team_id,
+            season=NBAData.convert_year_to_NBA_season(season_year)
         ).get_data_frames()
     
 # Helper For Retrieving Data With User Input
 class NBADataUser():
 
     @staticmethod
-    def get_player_id(use_id: bool):
+    def get_player_id_user(use_id: bool) -> str | None:
         if use_id:
             player = input("Input the player id or q to quit: ")
             if player.capitalize() == "Q":
@@ -125,7 +135,40 @@ class NBADataUser():
         return player_id
     
     @staticmethod
-    def get_season_range():
+    def get_season_range_user():
         start_season = input("Input the start season year: ")
         end_season = input("Input the end season year: ")
         return (int(start_season), int(end_season))
+    
+    class TeamChooseSchema(Enum):
+        ID = 1
+        ABBREVIATION = 2
+        FULL_NAME = 3
+
+    @staticmethod
+    def get_team_id_user(choose_type: TeamChooseSchema) -> str | None:
+        match choose_type:
+            case NBADataUser.TeamChooseSchema.ID:
+                team = input("Input the team id or q to quit: ")
+                if team.capitalize() == "Q":
+                    return None
+                return team
+            case NBADataUser.TeamChooseSchema.ABBREVIATION:
+                while True:
+                    team = input("Input the team abbreviation or q to quit: ")
+                    if (team.capitalize() == "Q"):
+                        return None
+                    try:
+                        return NBAData.team_abb_to_id(team)
+                    except:
+                        print("Team abbreviation does not correspond with a team.")
+            case NBADataUser.TeamChooseSchema.FULL_NAME:
+                while True:
+                    team = input("Input the team name or q to quit: ")
+                    if (team.capitalize() == "Q"):
+                        return None
+                    try:
+                        return NBAData.team_name_to_id(team)
+                    except:
+                        print("Team name does not correspond with a team.")
+                    
