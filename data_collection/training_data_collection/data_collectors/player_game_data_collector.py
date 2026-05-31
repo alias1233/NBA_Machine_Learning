@@ -1,7 +1,9 @@
 import pandas as pd
 
 from ...nba_data import NBAData, NBADataUser
-from ..database import Database, DataCollector, DatabaseLoader
+from .. import database
+from ..database import Database, DatabaseLoader
+from ..base_data_collector import DataCollector
 from . import player_info_collector
 
 FILEPATH = "databases/player_game_data.db"
@@ -33,31 +35,29 @@ RAW_CATEGORIES = [
     "PTS", "integer",
     "PLUS_MINUS", "integer",
 ]
-database_loader = DatabaseLoader(FILEPATH, NAME, RAW_CATEGORIES)
+PRIMARY_KEYS = [
+    "Player_ID",
+    "Game_ID"
+]
+DATA_CONFLICT_HANDLER = database.DataConflictHandler.IGNORE
+database_loader = DatabaseLoader(FILEPATH, NAME, RAW_CATEGORIES, DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
 
 # Handles Retrieving Player Game Log Data
 class PlayerDataCollector(DataCollector):
 
     def add_player_data(self, player_id: str, season: int):
         player_data: pd.DataFrame = NBAData.get_player_season_game_logs(player_id, season)[0]
+        data = []
         for game in player_data.itertuples(index=False):
             data_dict = {cat: getattr(game, cat) for cat in database_loader.get_category_names()}
-            self.database.add_value(data_dict)
+            data.append(data_dict)
+        self.database.add_many_values(data)
 
     def add_player_data_range(self, player_id: str, start_season_year: int, end_season_year: int):
         start_season = start_season_year
         while start_season <= end_season_year:
             self.add_player_data(player_id, start_season)
             start_season += 1
-
-    def fetch_data_user(self, **kwargs):
-        use_id = input("Input whether to search for players by id or by full name: (i/n) ").capitalize() == 'I'
-        while True:
-            player_id = NBADataUser.get_player_id_user(use_id)
-            if player_id is None:
-                return
-            season_start, season_end = NBADataUser.get_season_range_user()
-            self.add_player_data_range(player_id, season_start, season_end)
 
     def fetch_data_automatic(self, index: int, player_data: list) -> bool:
         if index >= len(player_data):
@@ -69,27 +69,26 @@ class PlayerDataCollector(DataCollector):
 
         return True
 
+def collect_and_save_data(wait_interval: float, starting_index: int = 0, player_data: list = []):
+    database = database_loader.create_database()
+    database.create_database_self()
+
+    if not player_data:
+        player_info_collector.get_all_player_seasons()
+        player_data = []
+        try:
+            player_data = player_info_collector.get_all_player_seasons()
+        except:
+            print("Database of player seasons is non-functional. Automatic data collection is non-functional.")
+
+    player_data_collector = PlayerDataCollector(database)
+    index = player_data_collector.begin_fetch_data(starting_index=starting_index, wait_interval=wait_interval, player_data=player_data)
+
+    database.close()
+
+    return index
 
 if __name__ == "__main__":
-    database = database_loader.create_database()
-    database.create_database_with_user_prompt_self()
-    player_data_collector = PlayerDataCollector(database)
-
-    player_data = []
-    try:
-        player_data = player_info_collector.get_all_player_seasons()
-    except:
-        print("Database of player seasons is non-functional. Automatic data collection is non-functional.")
-
-    player_data_collector.fetch_data(player_data=player_data)
-
-    # Testing
-    player_name = input("Input the player name to query for: ")
-    player_id = NBAData.player_name_to_ids(player_name)[0]
-    data = database.query_condition_SQL(f"""Player_ID = {player_id}""")
-    for row in data:
-        print(row)
-    
-    database.close()
+    pass
 
 RUNPATH = "data_collection.training_data_collection.data_collectors.player_game_data_collector"

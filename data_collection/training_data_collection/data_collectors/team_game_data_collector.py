@@ -1,7 +1,9 @@
 import pandas as pd
 
 from ...nba_data import NBAData, NBADataUser
-from ..database import Database, DataCollector, DatabaseLoader
+from .. import database
+from ..database import Database, DatabaseLoader
+from ..base_data_collector import DataCollector
 
 FILEPATH = "databases/team_game_data.db"
 NAME = "teams"
@@ -34,16 +36,23 @@ RAW_CATEGORIES = [
     "PF", "integer",
     "PTS", "integer",
 ]
-database_loader = DatabaseLoader(FILEPATH, NAME, RAW_CATEGORIES)
+PRIMARY_KEYS = [
+    "Team_ID",
+    "Game_ID"
+]
+DATA_CONFLICT_HANDLER = database.DataConflictHandler.IGNORE
+database_loader = DatabaseLoader(FILEPATH, NAME, RAW_CATEGORIES, DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
 
 # Handles Retrieving Team Data
 class TeamDataCollector(DataCollector):
 
     def add_team_data(self, team_id: str, season: int):
         team_data: pd.DataFrame = NBAData.get_team_season_stats(team_id, season)[0]
+        data = []
         for game in team_data.itertuples(index=False):
             data_dict = {cat : getattr(game, cat) for cat in database_loader.get_category_names()}
-            self.database.add_value(data_dict)
+            data.append(data_dict)
+        self.database.add_many_values(data)
 
     def add_team_data_range(self, team_id: str, start_season_year: int, end_season_year: int):
         start_season = start_season_year
@@ -51,47 +60,24 @@ class TeamDataCollector(DataCollector):
             self.add_team_data(team_id, start_season)
             start_season += 1
 
-    def fetch_data_user(self, **kwargs):
-        choose_schema: NBADataUser.TeamChooseSchema | None = None
-        while choose_schema is None:
-            choose_type = input("Input whether to search for teams by id, name, or abbreviation: (i/n/a) ")
-            match choose_type.capitalize():
-                case "I":
-                    choose_schema = NBADataUser.TeamChooseSchema.ID
-                case "N":
-                    choose_schema = NBADataUser.TeamChooseSchema.FULL_NAME
-                case "A":
-                    choose_schema = NBADataUser.TeamChooseSchema.ABBREVIATION
-                case _:
-                    print("Not a valid choosing option.")
-        
-        while True:
-            team_id = NBADataUser.get_team_id_user(choose_schema)
-            if team_id is None:
-                return
-            season_start, season_end = NBADataUser.get_season_range_user()
-            self.add_team_data_range(team_id, season_start, season_end)
-
-
-    def fetch_data_automatic(self, index: int, teams: list, seasons: list) -> bool:
+    def fetch_data_automatic(self, index: int, team_info: list) -> bool:
         return False
+    
+def collect_and_save_data(wait_interval: float, starting_index: int = 0, team_info: list = []):
+    database = database_loader.create_database()
+    database.create_database_self()
 
+    if not team_info:
+        pass
+
+    team_data_collector = TeamDataCollector(database)
+    index = team_data_collector.begin_fetch_data(starting_index=starting_index, wait_interval=wait_interval, team_info=team_info)
+
+    database.close()
+
+    return index
 
 if __name__ == "__main__":
-    database = database_loader.create_database()
-    database.create_database_with_user_prompt_self()
-    team_data_collector = TeamDataCollector(database)
-
-    teams = NBAData.get_all_teams()
-    team_ids = []
-    for team in teams:
-        team_ids.append(team['id'])
-    
-    team_data_collector.fetch_data(team_ids=team_ids)
-
-    # Testing
-    data = database.print_values(100)
-    
-    database.close()
+    pass
 
 RUNPATH = "data_collection.training_data_collection.data_collectors.team_game_data_collector"

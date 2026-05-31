@@ -136,9 +136,19 @@ class NBADataUser():
     
     @staticmethod
     def get_season_range_user():
-        start_season = input("Input the start season year: ")
-        end_season = input("Input the end season year: ")
-        return (int(start_season), int(end_season))
+        def get_season_range_user():
+            start_season = int(input("Input the start season year: "))
+            end_season = int(input("Input the end season year: "))
+            invalid_input = (end_season < start_season) or (start_season < 1950 or end_season < 1950) or (start_season > 2100 or end_season > 2100)
+            if invalid_input:
+                raise ValueError
+            return (int(start_season), int(end_season))
+        
+        while True:
+            try:
+                return get_season_range_user()
+            except:
+                print("Not a valid season range. ")
     
     class TeamChooseSchema(Enum):
         ID = 1
