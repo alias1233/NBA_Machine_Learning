@@ -26,6 +26,15 @@ def retry(func, retries: int = 3, timeout: int = 5):
 class NBAData():
 
     @staticmethod
+    def get_oldest_season_with_data():
+        return 1990
+    
+    @staticmethod
+    def get_current_nba_season():
+        # TODO: Update this somewhere else
+        return 2025
+
+    @staticmethod
     def convert_year_to_NBA_season(season_year: int) -> str:
         return str(season_year) + '-' + str(season_year + 1)[-2:]
 
@@ -88,10 +97,13 @@ class NBAData():
     @staticmethod
     @retry
     def get_player_season_game_logs(player_id: str, season_year: int):
-        return playergamelog.PlayerGameLog(
-            player_id=player_id,
-            season=NBAData.convert_year_to_NBA_season(season_year)
-        ).get_data_frames()
+        try:
+            return playergamelog.PlayerGameLog(
+                player_id=player_id,
+                season=NBAData.convert_year_to_NBA_season(season_year)
+            ).get_data_frames()
+        except:
+            print(f"player id {player_id} in the {season_year} season is invalid.")
     
     @staticmethod
     @retry

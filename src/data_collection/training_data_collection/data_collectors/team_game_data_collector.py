@@ -1,4 +1,5 @@
 import pandas as pd
+import time
 
 from ...nba_data import NBAData, NBADataUser
 from .. import database
@@ -54,13 +55,14 @@ class TeamDataCollector(DataCollector):
             data.append(data_dict)
         self.database.add_many_values(data)
 
-    def add_team_data_range(self, team_id: str, start_season_year: int, end_season_year: int):
+    def add_team_data_range(self, team_id: str, start_season_year: int, end_season_year: int, wait_interval: float):
         start_season = start_season_year
         while start_season <= end_season_year:
             self.add_team_data(team_id, start_season)
             start_season += 1
+            time.sleep(wait_interval)
 
-    def fetch_data_automatic(self, index: int, team_info: list) -> bool:
+    def fetch_data_automatic(self, index: int, wait_interval: float, team_info: list) -> bool:
         return False
     
 def collect_and_save_data(wait_interval: float, starting_index: int = 0, team_info: list = []):
@@ -68,7 +70,8 @@ def collect_and_save_data(wait_interval: float, starting_index: int = 0, team_in
     database.create_database_self()
 
     if not team_info:
-        pass
+        teams = NBAData.get_all_teams()
+        team_info = [(team['id'], NBAData.get_oldest_season_with_data(), NBAData.get_current_nba_season()) for team in teams]
 
     team_data_collector = TeamDataCollector(database)
     index = team_data_collector.begin_fetch_data(starting_index=starting_index, wait_interval=wait_interval, team_info=team_info)

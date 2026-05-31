@@ -1,4 +1,4 @@
-from trainer import Trainer
+from .trainer import Trainer
 from models.feed_forward import FeedForward
 
 def __main__():

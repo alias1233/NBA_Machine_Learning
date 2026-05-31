@@ -36,7 +36,7 @@ class PlayerInfoCollector(DataCollector):
             data_dict = {cat: getattr(player, cat) for cat in database_loader.get_category_names()}
             self.database.add_value(data_dict)
     
-    def fetch_data_automatic(self, index: int, player_ids: list) -> bool:
+    def fetch_data_automatic(self, index: int, wait_interval: float, player_ids: list) -> bool:
         if index >= len(player_ids):
             return False
         self.add_player_data(player_ids[index])

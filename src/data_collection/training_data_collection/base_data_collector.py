@@ -22,7 +22,7 @@ class DataCollector(ABC):
         i = int(starting_index)
         while not running_event.is_set():
             print(f"Loop Index: {i}")
-            if not self.fetch_data_automatic(i, **kwargs):
+            if not self.fetch_data_automatic(i, wait_interval, **kwargs):
                 print("Loop has finished.")
                 break
             i += 1
@@ -31,5 +31,5 @@ class DataCollector(ABC):
         return i
 
     @abstractmethod
-    def fetch_data_automatic(self, index: int, **kwargs) -> bool:
+    def fetch_data_automatic(self, index: int, wait_interval: float, **kwargs) -> bool:
         pass

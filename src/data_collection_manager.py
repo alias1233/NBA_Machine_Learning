@@ -1,7 +1,8 @@
 from enum import Enum, auto
 
-from .nba_data import NBADataUser
-from data_collection.training_data_collection.data_collectors import player_game_data_collector, player_info_collector, team_game_data_collector
+from .data_collection.nba_data import NBADataUser
+from .data_collection.training_data_collection.data_collectors import team_game_data_collector
+from .data_collection.training_data_collection.data_collectors import player_game_data_collector, player_info_collector
 
 def collect_player_info_data(wait_interval: float, starting_index: int, player_ids: list = []):
     return player_info_collector.collect_and_save_data(wait_interval, starting_index, player_ids)
@@ -121,4 +122,5 @@ if __name__ == "__main__":
     if data_category is not None:
         collect_data_user(data_category)
 
-CURRENT_PLAYER_INFO_INDEX = 4225
+CURRENT_PLAYER_INFO_INDEX = 5103
+CURRENT_PLAYER_GAME_DATA_INDEX = 146

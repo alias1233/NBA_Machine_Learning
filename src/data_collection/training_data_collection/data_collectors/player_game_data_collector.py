@@ -1,4 +1,5 @@
 import pandas as pd
+import time
 
 from ...nba_data import NBAData, NBADataUser
 from .. import database
@@ -46,24 +47,29 @@ database_loader = DatabaseLoader(FILEPATH, NAME, RAW_CATEGORIES, DATA_CONFLICT_H
 class PlayerDataCollector(DataCollector):
 
     def add_player_data(self, player_id: str, season: int):
-        player_data: pd.DataFrame = NBAData.get_player_season_game_logs(player_id, season)[0]
+        data = NBAData.get_player_season_game_logs(player_id, season)
+        if not data:
+            return
+        
+        player_data: pd.DataFrame = data[0]
         data = []
         for game in player_data.itertuples(index=False):
             data_dict = {cat: getattr(game, cat) for cat in database_loader.get_category_names()}
             data.append(data_dict)
         self.database.add_many_values(data)
 
-    def add_player_data_range(self, player_id: str, start_season_year: int, end_season_year: int):
+    def add_player_data_range(self, player_id: str, start_season_year: int, end_season_year: int, wait_interval: float):
         start_season = start_season_year
         while start_season <= end_season_year:
             self.add_player_data(player_id, start_season)
             start_season += 1
+            time.sleep(wait_interval)
 
-    def fetch_data_automatic(self, index: int, player_data: list) -> bool:
+    def fetch_data_automatic(self, index: int, wait_interval: float, player_data: list) -> bool:
         if index >= len(player_data):
             return False
         player = player_data[index]
-        self.add_player_data_range(player[0], player[1], player[2])
+        self.add_player_data_range(player[0], player[1], player[2], wait_interval)
         
         print(f'Player ID: {player[0]} SEASON START: {player[1]} SEASON END: {player[2]}')
 
