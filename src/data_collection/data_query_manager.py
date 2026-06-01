@@ -1,4 +1,6 @@
-from .data_collection.training_data_collection.data_collectors import player_game_data_collector, player_info_collector, team_game_data_collector
+from .data_collectors import player_game_data_collector, player_info_collector
+
+from .data_collectors import team_game_data_collector
 
 PLAYER_INFO_DATABASE = player_info_collector.DATABASE
 PLAYER_GAME_DATABASE = player_game_data_collector.DATABASE

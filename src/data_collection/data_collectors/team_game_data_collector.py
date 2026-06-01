@@ -1,10 +1,10 @@
 import pandas as pd
 import time
 
-from ...nba_data import NBAData
-from .. import database
-from ..database import Database, Categories, DataType
-from ..base_data_collector import DataCollector
+from .components.nba_data import NBAData
+from .components import database
+from .components.database import Database, Categories, DataType
+from .base_data_collector import DataCollector
 
 FILEPATH = "databases/team_game_data.db"
 NAME = "teams"

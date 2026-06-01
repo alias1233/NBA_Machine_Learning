@@ -1,7 +1,9 @@
 from enum import Enum, auto
 
-from .data_collection.nba_data import NBAData, NBADataUser
-from .data_collection.training_data_collection.data_collectors import player_game_data_collector, player_info_collector, team_game_data_collector
+from .data_collectors import player_game_data_collector, player_info_collector
+
+from .data_collectors.components.nba_data import NBAData, NBADataUser
+from .data_collectors import team_game_data_collector
 from . import data_query_manager
 
 def collect_player_info_data(wait_interval: float, starting_index: int, player_ids: list = []):
@@ -128,5 +130,5 @@ if __name__ == "__main__":
     if data_category is not None:
         being_collect_data_user(data_category)
 
-CURRENT_PLAYER_INFO_LOOP_INDEX = 0
-CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 0
+CURRENT_PLAYER_INFO_LOOP_INDEX = 5000 # DONE
+CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 571

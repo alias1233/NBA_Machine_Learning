@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import threading
 import time
 
-from .database import Database
+from .components.database import Database
 
 # Base Data Collector
 class DataCollector(ABC):

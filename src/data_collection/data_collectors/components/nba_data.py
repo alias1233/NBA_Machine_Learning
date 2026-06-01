@@ -3,6 +3,7 @@ import time
 from enum import Enum, auto
 
 from nba_api.stats.static import teams, players
+from nba_api.stats.library.parameters import Season
 from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, teamgamelog, commonplayerinfo
 
 def retry(func, retries: int = 3, timeout: int = 5):
@@ -27,12 +28,11 @@ class NBAData():
 
     @staticmethod
     def get_oldest_season_with_data():
-        return 1990
+        return 1985
     
     @staticmethod
     def get_current_nba_season():
-        # TODO: Update this somewhere else
-        return 2025
+        return Season.current_season_year
 
     @staticmethod
     def convert_year_to_NBA_season(season_year: int) -> str:
