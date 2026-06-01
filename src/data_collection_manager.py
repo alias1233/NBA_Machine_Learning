@@ -1,16 +1,30 @@
 from enum import Enum, auto
 
-from .data_collection.nba_data import NBADataUser
-from .data_collection.training_data_collection.data_collectors import team_game_data_collector
-from .data_collection.training_data_collection.data_collectors import player_game_data_collector, player_info_collector
+from .data_collection.nba_data import NBAData, NBADataUser
+from .data_collection.training_data_collection.data_collectors import player_game_data_collector, player_info_collector, team_game_data_collector
+from . import data_query_manager
 
 def collect_player_info_data(wait_interval: float, starting_index: int, player_ids: list = []):
+    if not player_ids:
+        players = NBAData.get_all_players()
+        player_ids = [player['id'] for player in players]
+
     return player_info_collector.collect_and_save_data(wait_interval, starting_index, player_ids)
 
 def collect_player_game_data(wait_interval: float, starting_index: int, player_info: list = []):
+    if not player_info:
+        try:
+            player_info = data_query_manager.get_all_players_season_played_info()
+        except:
+            print("Database of player seasons is non-functional. Automatic data collection is non-functional.")
+            return starting_index
+        
     return player_game_data_collector.collect_and_save_data(wait_interval, starting_index, player_info)
 
 def collect_team_game_data(wait_interval: float, starting_index: int, team_info: list = []):
+    if not team_info:
+        teams = NBAData.get_all_teams()
+        team_info = [(team['id'], NBAData.get_oldest_season_with_data(), NBAData.get_current_nba_season()) for team in teams]
     return team_game_data_collector.collect_and_save_data(wait_interval, starting_index, team_info)
 
 def get_collection_params():
@@ -20,6 +34,14 @@ def get_collection_params():
     if get_all:
         starting_index = int(input("Input the starting index: "))
     return int(wait_interval), get_all, int(starting_index)
+
+def collect_data_user(user_choice_function, collect_data_function) -> int:
+    wait_interval, get_all, starting_index = get_collection_params()
+    choice_data = []
+    if not get_all:
+        choice_data = user_choice_function()
+    
+    return collect_data_function(wait_interval, starting_index, choice_data)
 
 def collect_player_info_data_user():
     def get_player_ids_user() -> list:
@@ -32,12 +54,7 @@ def collect_player_info_data_user():
             player_ids.append(player_id)
         return player_ids
     
-    wait_interval, get_all, starting_index = get_collection_params()
-    player_ids = []
-    if not get_all:
-        player_ids = get_player_ids_user()
-
-    return collect_player_info_data(wait_interval, starting_index, player_ids)
+    return collect_data_user(get_player_ids_user, collect_player_info_data)
 
 def collect_player_game_data_user():
     def get_player_infos_user() -> list:
@@ -51,12 +68,7 @@ def collect_player_game_data_user():
             player_info.append((player_id, season_start, season_end))
         return player_info
 
-    wait_interval, get_all, starting_index = get_collection_params()
-    player_infos = []
-    if not get_all:
-        player_infos = get_player_infos_user()
-    
-    return collect_player_game_data(wait_interval, starting_index, player_infos)
+    return collect_data_user(get_player_infos_user, collect_player_game_data)
 
 def collect_team_game_data_user():
     def get_team_infos_user() -> list:
@@ -82,20 +94,14 @@ def collect_team_game_data_user():
             team_info.append((team_id, season_start, season_end))
         return team_info
     
-    wait_interval, get_all, starting_index = get_collection_params()
-    team_infos = []
-    if not get_all:
-        team_infos = get_team_infos_user()
-    
-    return collect_player_game_data(wait_interval, starting_index, team_infos)
-        
+    return collect_data_user(get_team_infos_user, collect_team_game_data)
 
 class DataCategories(Enum):
     PLAYER_INFO = 1
     PLAYER_GAME_BOX_SCORE_STATS = 2
     TEAM_GAME_BOX_SCORE_STATS = 3
 
-def collect_data_user(data_category: DataCategories):
+def being_collect_data_user(data_category: DataCategories):
     match data_category:
         case DataCategories.PLAYER_INFO:
             collect_player_info_data_user()
@@ -120,7 +126,7 @@ if __name__ == "__main__":
             data_category = DataCategories.TEAM_GAME_BOX_SCORE_STATS
         
     if data_category is not None:
-        collect_data_user(data_category)
+        being_collect_data_user(data_category)
 
-CURRENT_PLAYER_INFO_INDEX = 5103
-CURRENT_PLAYER_GAME_DATA_INDEX = 146
+CURRENT_PLAYER_INFO_LOOP_INDEX = 0
+CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 0

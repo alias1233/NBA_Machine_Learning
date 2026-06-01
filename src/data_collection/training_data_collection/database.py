@@ -1,30 +1,50 @@
 import sqlite3 as sq
 from enum import Enum, auto
+from dataclasses import dataclass
 
 class DataConflictHandler(Enum):
         IGNORE = "IGNORE"
         REPLACE = "REPLACE"
 
-# Simple SQLite Database
+class DataType(Enum):
+    INTEGER = "integer"
+    REAL = "real"
+    TEXT = "text"
+    NULL = "null"
+    BLOB = "blob"
+
+@dataclass
+class Category():
+    category_name: str
+    category_type: DataType
+
 class Database():
-    def __init__(self, filepath: str, name: str, categories: list, data_conflict_handler: DataConflictHandler, primary_keys: list):
+    """
+    Simple SQLite Database.
+    """
+    def __init__(self, filepath: str, name: str, categories: list[Category], data_conflict_handler: DataConflictHandler, primary_keys: list[Category]):
         self.filepath = filepath
         self.name = name
         self.categories = categories
+        self.categories_index_dict = Database.get_categories_index_dict(categories)
+        self.category_names = [property.category_name for property in categories]
         self.primary_keys = primary_keys
         self.insert_command = Database.get_insert_command(name, categories, data_conflict_handler)
         self.query_command = Database.get_query_command(name)
-        self.initialize_components()
         
     def initialize_components(self):
         self.connection = sq.connect(self.filepath)
         self.cursor = self.connection.cursor()
 
     @staticmethod
-    def get_insert_command(name: str, categories: list, data_conflict_handler: DataConflictHandler) -> str:
+    def get_categories_index_dict(categories: list[Category]) -> dict:
+        return { category.category_name : index for index, category in enumerate(categories) }
+
+    @staticmethod
+    def get_insert_command(name: str, categories: list[Category], data_conflict_handler: DataConflictHandler) -> str:
         insert_command = f"""INSERT OR {data_conflict_handler.value} INTO {name} VALUES ("""
         for category in categories:
-            insert_command += f""":{category[0]},"""
+            insert_command += f""":{category.category_name},"""
         insert_command = insert_command.rstrip(',') + ")"
         return insert_command
     
@@ -34,7 +54,7 @@ class Database():
         return query_command
 
     @staticmethod
-    def create_database(filepath: str, name: str, categories: list, primary_keys: list):
+    def create_database(filepath: str, name: str, categories: list[Category], primary_keys: list[Category]):
         connection = sq.connect(filepath)
         cursor = connection.cursor()
         cursor.execute(Database.get_create_command(name, categories, primary_keys))
@@ -42,14 +62,14 @@ class Database():
         connection.close()
 
     @staticmethod
-    def get_create_command(name: str, categories: list, primary_keys: list) -> str:
+    def get_create_command(name: str, categories: list[Category], primary_keys: list[Category]) -> str:
         command = f"CREATE TABLE IF NOT EXISTS {name} ("
         for category in categories:
-            command += f"{category[0]} {category[1]},"
+            command += f"{category.category_name} {category.category_type.value},"
         
         primary_key_categories = ""
         for category in primary_keys:
-            primary_key_categories += category + ","
+            primary_key_categories += category.category_name + ","
         
         primary_key_categories = primary_key_categories.rstrip(',')
         command += f"PRIMARY KEY ({primary_key_categories}))"
@@ -58,7 +78,6 @@ class Database():
     
     def create_database_self(self):
         self.create_database(self.filepath, self.name, self.categories, self.primary_keys)
-        self.initialize_components()
 
     def add_value(self, value: dict):
         self.cursor.execute(self.insert_command, value)
@@ -68,15 +87,15 @@ class Database():
         self.cursor.executemany(self.insert_command, values)
         self.connection.commit()
 
-    def query_SQL(self, command: str):
+    def query_SQL(self, command: str) -> list:
         self.cursor.execute(command)
         return self.cursor.fetchall()
     
-    def query_condition_SQL(self, condition: str, params: dict):
+    def query_condition_SQL(self, condition: str, params: dict) -> list:
         self.cursor.execute(self.query_command + condition, params)
         return self.cursor.fetchall()
     
-    def query_all_SQL(self, limit: int | None = None):
+    def query_all_SQL(self, limit: int | None = None) -> list:
         command = f"""SELECT * FROM {self.name}"""
         if limit is not None:
             command += f""" LIMIT {limit}"""
@@ -94,33 +113,27 @@ class Database():
         self.connection.commit()
         self.connection.close()
 
-# Helper For Lazy Loading Databases
-class DatabaseLoader():
-    def __init__(self, filepath: str, name: str, raw_categories: list, data_conflict_handler: DataConflictHandler, primary_keys: list):
-        self.filepath = filepath
-        self.name = name
-        self.data_conflict_handler = data_conflict_handler
-        self.primary_keys = primary_keys
-        self.category_with_types = list(zip(raw_categories[0::2], raw_categories[1::2]))
-        self.category_names = raw_categories[0::2]
-
-    def create_database(self):
-        return Database(self.filepath, self.name, self.category_with_types, self.data_conflict_handler, self.primary_keys)
+    def get_categories(self) -> list[Category]:
+        return self.categories
     
-    def get_category_names(self):
+    def get_category_names(self) -> list[str]:
         return self.category_names
+
+    def get_property_from_value(self, value: list, category_name: str):
+        return value[self.categories_index_dict[category_name]]
     
-    def get_category_with_types(self):
-        return self.category_with_types
+# Helper Class For Making Categories
+class Categories():
+    def __init__(self):
+        self.categories: list[Category] = []
+
+    def add_category(self, category_name: str, category_type: DataType) -> Category:
+        category = Category(category_name, category_type)
+        self.categories.append(category)
+        return category
+    
+    def get_categories(self) -> list[Category]:
+        return self.categories
 
 if __name__ == "__main__":
-    print(Database.get_insert_command(
-        "test", 
-        [("TEST1", "text"),
-        ("Test2", "integer")],
-        DataConflictHandler.REPLACE))
-    print(Database.get_create_command(
-        "test", 
-        [("TEST1", "text"),
-        ("TEST2", "integer")],
-        ["TEST1", "TEST2"]))
+    pass
