@@ -2,12 +2,10 @@ from abc import ABC, abstractmethod
 import threading
 import time
 
-from .components.database import Database
-
-# Base Data Collector
 class DataCollector(ABC):
-    def __init__(self, database: Database):
-        self.database = database
+    """
+    Automatic Data Collector
+    """
 
     def begin_fetch_data(self, starting_index: int, wait_interval: float, **kwargs) -> int:
         running_event = threading.Event()
