@@ -1,23 +1,13 @@
 import sqlite3 as sq
 from enum import Enum
 from typing import Any
-from dataclasses import dataclass
+import pandas as pd
+
+from .category import Category
 
 class DataConflictHandler(Enum):
         IGNORE = "IGNORE"
         REPLACE = "REPLACE"
-
-class DataType(Enum):
-    INTEGER = "integer"
-    REAL = "real"
-    TEXT = "text"
-    NULL = "null"
-    BLOB = "blob"
-
-@dataclass(frozen=True)
-class Category():
-    category_name: str
-    category_type: DataType
 
 class Database():
     """
@@ -108,13 +98,14 @@ class Database():
             categories: list[Category] | None = None, 
             limit: int | None = None
             ) -> list:
-        """Queries the database.
+        """
+        Queries the database with the given parameters and returns the values found as a list.
 
         Args:
             SQL_condition: A filter in SQL style on the returned values.
             condition_params: A dictionary that maps each category in the SQL_condition to a value.
-            categories: The returned categories of the fetched values.
-            limit: The maximum number of returned values.
+            categories: The specified returned categories of the fetched values. An input value of None will return all categories.
+            limit: The maximum number of returned values. An input value of None corresponds to no limit.
         """
         query_columns = self.get_query_columns(categories)
         command = f"""SELECT {query_columns} FROM {self.name}"""
@@ -128,6 +119,22 @@ class Database():
         else:
             self.cursor.execute(command)
         return self.cursor.fetchall()
+    
+    def query_dataframe(
+            self, 
+            SQL_condition: str | None = None, 
+            condition_params: dict[Category, Any] | None = None, 
+            categories: list[Category] | None = None, 
+            limit: int | None = None
+            ) -> pd.DataFrame:
+        """
+        Identical to [query] except that the values are returned as a pandas.DataFrame.
+        """
+
+        data = self.query(SQL_condition, condition_params, categories, limit)
+        if not categories:
+            categories = self.categories
+        return pd.DataFrame(data, columns=[category.category_name for category in categories])
     
     def print_values(self, amount_to_print: int = 10):
         amount_to_print = min(amount_to_print, 100)
@@ -147,18 +154,3 @@ class Database():
 
     def get_property_from_value(self, value: list, category_name: str):
         return value[self.categories_index_dict[category_name]]
-    
-class Categories():
-    """
-    Helper Class For Making Categories
-    """
-    def __init__(self):
-        self.categories: list[Category] = []
-
-    def add_category(self, category_name: str, category_type: DataType) -> Category:
-        category = Category(category_name, category_type)
-        self.categories.append(category)
-        return category
-    
-    def get_categories(self) -> list[Category]:
-        return self.categories

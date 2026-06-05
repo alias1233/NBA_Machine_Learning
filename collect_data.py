@@ -1,7 +1,7 @@
 from enum import Enum
 
-from data_collection import data_collection
-from data_collection.components.nba_data import NBAData
+from src.data_preparation.data_collection import data_collection
+from src.data_preparation.components.nba_data import NBAData
 
 class NBADataUser():
     """
@@ -173,5 +173,5 @@ if __name__ == "__main__":
     begin_collect_data_user()
 
 CURRENT_PLAYER_INFO_LOOP_INDEX = ~5000 # DONE
-CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 3699
+CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 4709
 CURRENT_TEAM_GAME_DATA_LOOP_INDEX = 0

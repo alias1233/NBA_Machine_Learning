@@ -1,5 +1,5 @@
-from ..components import database
-from ..components.database import Database, Categories, DataType
+from src.data_preparation.components.database import Database, DataConflictHandler
+from src.data_preparation.components.category import DataType, Categories
 
 FILEPATH = "data/player_info.db"
 NAME = "player_info"
@@ -13,5 +13,5 @@ TO_YEAR = CATEGORIES.add_category("TO_YEAR", DataType.INTEGER)
 PRIMARY_KEYS = [
     PLAYER_ID
 ]
-DATA_CONFLICT_HANDLER = database.DataConflictHandler.REPLACE
+DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 DATABASE = Database(FILEPATH, NAME, CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
