@@ -60,8 +60,24 @@ class NBADataUser():
         FULL_NAME = 3
 
     @staticmethod
-    def get_team_id_user(choose_type: TeamChooseSchema) -> str | None:
-        match choose_type:
+    def get_team_choose_schema_user() -> TeamChooseSchema:
+        choose_schema: NBADataUser.TeamChooseSchema | None = None
+        while choose_schema is None:
+            choose_type = input("Input whether to search for teams by id, name, or abbreviation: (i/n/a) ")
+            match choose_type.capitalize():
+                case "I":
+                    choose_schema = NBADataUser.TeamChooseSchema.ID
+                case "N":
+                    choose_schema = NBADataUser.TeamChooseSchema.FULL_NAME
+                case "A":
+                    choose_schema = NBADataUser.TeamChooseSchema.ABBREVIATION
+                case _:
+                    print("Not a valid choosing option.")
+        return choose_schema
+
+    @staticmethod
+    def get_team_id_user() -> str | None:
+        match NBADataUser.get_team_choose_schema_user():
             case NBADataUser.TeamChooseSchema.ID:
                 team = input("Input the team id or q to quit: ")
                 if team.capitalize() == "Q":
@@ -131,22 +147,9 @@ def collect_player_game_data_user():
 
 def collect_team_game_data_user():
     def get_team_infos_user() -> list:
-        choose_schema: NBADataUser.TeamChooseSchema | None = None
-        while choose_schema is None:
-            choose_type = input("Input whether to search for teams by id, name, or abbreviation: (i/n/a) ")
-            match choose_type.capitalize():
-                case "I":
-                    choose_schema = NBADataUser.TeamChooseSchema.ID
-                case "N":
-                    choose_schema = NBADataUser.TeamChooseSchema.FULL_NAME
-                case "A":
-                    choose_schema = NBADataUser.TeamChooseSchema.ABBREVIATION
-                case _:
-                    print("Not a valid choosing option.")
-        
         team_info = []
         while True:
-            team_id = NBADataUser.get_team_id_user(choose_schema)
+            team_id = NBADataUser.get_team_id_user()
             if team_id is None:
                 break
             season_start, season_end = NBADataUser.get_season_range_user()

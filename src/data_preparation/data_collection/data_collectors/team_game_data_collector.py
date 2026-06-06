@@ -10,8 +10,8 @@ class TeamDameDataCollector(DataCollector):
     Handles Retrieving Team Data
     """
 
-    def add_team_data(self, team_id: str, season: int):
-        data = NBAData.get_team_season_stats(team_id, season)
+    def _add_team_data(self, team_id: str, season: int, season_type: str):
+        data = NBAData.get_team_season_stats(team_id, season, season_type)
         if not data:
             return
         
@@ -22,27 +22,28 @@ class TeamDameDataCollector(DataCollector):
             data.append(data_dict)
         self.database.add_many_values(data)
 
-    def add_team_data_range(self, team_id: str, start_season_year: int, end_season_year: int, wait_interval: float):
+    def _add_team_data_range(self, team_id: str, start_season_year: int, end_season_year: int, season_types: list[str], wait_interval: float):
         start_season = start_season_year
         while start_season <= end_season_year:
-            self.add_team_data(team_id, start_season)
+            for season_type in season_types:
+                self._add_team_data(team_id, start_season, season_type)
+                time.sleep(wait_interval)
             start_season += 1
-            time.sleep(wait_interval)
 
-    def _collect_data(self, index: int, wait_interval: float, team_info: list) -> bool:
+    def _collect_data(self, index: int, wait_interval: float, team_info: list, season_types: list[str]) -> bool:
         if index >= len(team_info):
             return False
         
         team = team_info[index]
-        self.add_team_data_range(team[0], team[1], team[2], wait_interval)
+        self._add_team_data_range(team[0], team[1], team[2], season_types, wait_interval)
         
         return True
     
-    def begin_collect_data(self, index: int, wait_interval: float, team_info: list) -> int:
+    def begin_collect_data(self, index: int, wait_interval: float, team_info: list, season_types: list[str]) -> int:
         """
         Args: team_info must be a list where each element is: (team_id, season_start, season_end)
         """
 
-        return self._begin_collect_data(index, wait_interval, team_info=team_info)
+        return self._begin_collect_data(index, wait_interval, team_info=team_info, season_types=season_types)
     
 TEAM_GAME_DATA_COLLECTOR = TeamDameDataCollector(team_game_database.DATABASE)

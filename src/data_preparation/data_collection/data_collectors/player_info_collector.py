@@ -9,7 +9,7 @@ class PlayerInfoCollector(DataCollector):
     Handles Retrieving Player Information
     """
 
-    def add_player_data(self, player_id: str):
+    def _add_player_data(self, player_id: str):
         player_data: pd.DataFrame = NBAData.get_common_player_info(player_id)[0]
         for player in player_data.itertuples(index=False):
             data_dict = {category: getattr(player, category.category_name) for category in self.database.get_categories()}
@@ -18,7 +18,7 @@ class PlayerInfoCollector(DataCollector):
     def _collect_data(self, index: int, wait_interval: float, player_ids: list[str]) -> bool:
         if index >= len(player_ids):
             return False
-        self.add_player_data(player_ids[index])
+        self._add_player_data(player_ids[index])
 
         print(f"player_id: {player_ids[index]}")
 

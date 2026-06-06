@@ -2,8 +2,8 @@ import requests
 import time
 
 from nba_api.stats.static import teams, players
-from nba_api.stats.library.parameters import Season
-from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, commonplayerinfo, leaguegamefinder
+from nba_api.stats.library.parameters import Season, SeasonTypeAllStar
+from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, commonplayerinfo, teamgamelog
 
 def retry(func, retries: int = 3, timeout: int = 5):
     """
@@ -38,6 +38,10 @@ class NBAData():
     @staticmethod
     def convert_year_to_NBA_season(season_year: int) -> str:
         return str(season_year) + '-' + str(season_year + 1)[-2:]
+    
+    @staticmethod
+    def get_all_season_types() -> list[str]:
+        return [SeasonTypeAllStar.preseason, SeasonTypeAllStar.regular, SeasonTypeAllStar.playin, SeasonTypeAllStar.playoffs]
 
     @staticmethod
     def get_all_teams():
@@ -60,6 +64,14 @@ class NBAData():
             f"{name} does not correspond with a team."
             )
         return team[0]['id']
+    
+    @staticmethod
+    def team_id_to_name(id: str) -> str | None:
+        team_data = teams.find_team_name_by_id(id)
+        if team_data is None:
+            return None
+        
+        return team_data['full_name']
     
     @staticmethod
     def get_all_players():
@@ -97,11 +109,12 @@ class NBAData():
     
     @staticmethod
     @retry
-    def get_player_season_game_logs(player_id: str, season_year: int):
+    def get_player_season_game_logs(player_id: str, season_year: int, season_type: str):
         try:
             return playergamelog.PlayerGameLog(
                 player_id=player_id,
-                season=NBAData.convert_year_to_NBA_season(season_year)
+                season=NBAData.convert_year_to_NBA_season(season_year),
+                season_type_all_star=season_type
             ).get_data_frames()
         except Exception as e:
             print(f"player id {player_id} in the {season_year} season is invalid.")
@@ -109,11 +122,12 @@ class NBAData():
 
     @staticmethod
     @retry
-    def get_team_season_stats(team_id: str, season_year: int):
+    def get_team_season_stats(team_id: str, season_year: int, season_type: str):
         try:
-            return leaguegamefinder.LeagueGameFinder(
-                team_id_nullable=team_id,
-                season_nullable=NBAData.convert_year_to_NBA_season(season_year)
+            return teamgamelog.TeamGameLog(
+                team_id=team_id,
+                season=NBAData.convert_year_to_NBA_season(season_year),
+                season_type_all_star=season_type
             ).get_data_frames()
         except Exception as e:
             print(f"team id {team_id} in the year {season_year} is invalid")
