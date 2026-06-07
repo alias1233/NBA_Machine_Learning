@@ -22,12 +22,11 @@ def collect_player_game_data(wait_interval: float, starting_index: int, player_i
         
     return player_game_data_collector.PLAYER_GAME_DATA_COLLECTOR.begin_collect_data(starting_index, wait_interval, player_info, season_types)
 
-def collect_team_game_data(wait_interval: float, starting_index: int, team_info: list = [], season_types: list[str] = []):
-    if not team_info:
-        teams = NBAData.get_all_teams()
-        team_info = [(team['id'], NBAData.get_oldest_season_with_data(), NBAData.get_current_nba_season()) for team in teams]
+def collect_team_game_data(wait_interval: float, starting_index: int, seasons: list[int] = [], season_types: list[str] = []):
+    if not seasons:
+        seasons = [i for i in range(NBAData.get_oldest_season_with_data(), NBAData.get_current_nba_season() + 1)]
 
     if not season_types:
         season_types = NBAData.get_all_season_types()
     
-    return team_game_data_collector.TEAM_GAME_DATA_COLLECTOR.begin_collect_data(starting_index, wait_interval, team_info, season_types)
+    return team_game_data_collector.TEAM_GAME_DATA_COLLECTOR.begin_collect_data(starting_index, wait_interval, seasons, season_types)

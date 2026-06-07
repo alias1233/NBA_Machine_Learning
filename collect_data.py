@@ -39,14 +39,32 @@ class NBADataUser():
         return player_id
     
     @staticmethod
+    def get_season_user() -> int | None:
+        def get_season_user():
+            season = int(input("Input the season year: "))
+            oldest_season = NBAData.get_oldest_season_with_data()
+            current_season = NBAData.get_current_nba_season()
+            invalid_input = season < oldest_season or season > current_season
+            if invalid_input:
+                raise ValueError
+            return season
+        
+        try:
+            return get_season_user()
+        except:
+            print("Not a valid season.")
+    
+    @staticmethod
     def get_season_range_user():
         def get_season_range_user():
             start_season = int(input("Input the start season year: "))
             end_season = int(input("Input the end season year: "))
-            invalid_input = (end_season < start_season) or (start_season < 1950 or end_season < 1950) or (start_season > 2100 or end_season > 2100)
+            oldest_season = NBAData.get_oldest_season_with_data()
+            current_season = NBAData.get_current_nba_season()
+            invalid_input = (end_season < start_season) or (start_season < oldest_season or end_season < oldest_season) or (start_season > current_season or end_season > current_season)
             if invalid_input:
                 raise ValueError
-            return (int(start_season), int(end_season))
+            return (start_season, end_season)
         
         while True:
             try:
@@ -146,15 +164,14 @@ def collect_player_game_data_user():
     return collect_data_user(get_player_infos_user, data_collection.collect_player_game_data)
 
 def collect_team_game_data_user():
-    def get_team_infos_user() -> list:
-        team_info = []
+    def get_team_infos_user() -> list[int]:
+        seasons: set[int] = set([])
         while True:
-            team_id = NBADataUser.get_team_id_user()
-            if team_id is None:
+            season = NBADataUser.get_season_user()
+            if season is None:
                 break
-            season_start, season_end = NBADataUser.get_season_range_user()
-            team_info.append((team_id, season_start, season_end))
-        return team_info
+            seasons.add(season)
+        return list(seasons)
     
     return collect_data_user(get_team_infos_user, data_collection.collect_team_game_data)
 

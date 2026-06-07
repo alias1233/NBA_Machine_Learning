@@ -25,15 +25,15 @@ def split_by_player(player_game_data: pd.DataFrame) -> dict[Any, pd.DataFrame]:
 def split_by_team(team_game_data: pd.DataFrame) -> dict[Any, pd.DataFrame]:
     return {team_id : team_dataframe for team_id, team_dataframe in team_game_data.groupby(team_game_database.TEAM_ID.category_name)}
 
-def sort_by_date(game_data: pd.DataFrame, format: str | None) -> pd.DataFrame:
+def _sort_by_date(game_data: pd.DataFrame, format: str | None) -> pd.DataFrame:
     game_data[player_game_database.GAME_DATE.category_name] = pd.to_datetime(game_data[player_game_database.GAME_DATE.category_name], format=format)
     return game_data.sort_values(by=player_game_database.GAME_DATE.category_name)
 
 def sort_by_date_players(player_game_data: pd.DataFrame) -> pd.DataFrame:
-    return sort_by_date(player_game_data, PLAYER_DATE_FORMAT)
+    return _sort_by_date(player_game_data, PLAYER_DATE_FORMAT)
 
 def sort_by_date_team(team_game_data: pd.DataFrame) -> pd.DataFrame:
-    return sort_by_date(team_game_data, None)
+    return _sort_by_date(team_game_data, None)
 
 def _calculate_points_column(field_goals_made: pd.Series, three_pointers_made: pd.Series, free_throws_made: pd.Series) -> pd.Series:
     return (field_goals_made - three_pointers_made) * 2 + three_pointers_made * 3 + free_throws_made

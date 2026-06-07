@@ -4,8 +4,8 @@ from src.data_preparation.components.category import DataType, Categories
 FILEPATH = "data/team_game_data.db"
 NAME = "teams"
 CATEGORIES = Categories()
-TEAM_ID = CATEGORIES.add_category("Team_ID", DataType.INTEGER)
-GAME_ID = CATEGORIES.add_category("Game_ID", DataType.INTEGER)
+TEAM_ID = CATEGORIES.add_category("TEAM_ID", DataType.INTEGER)
+GAME_ID = CATEGORIES.add_category("GAME_ID", DataType.INTEGER)
 GAME_DATE = CATEGORIES.add_category("GAME_DATE", DataType.TEXT)
 MATCHUP = CATEGORIES.add_category("MATCHUP", DataType.TEXT)
 WIN_LOSS = CATEGORIES.add_category("WL", DataType.TEXT)

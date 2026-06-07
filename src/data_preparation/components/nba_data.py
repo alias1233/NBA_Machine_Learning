@@ -3,7 +3,7 @@ import time
 
 from nba_api.stats.static import teams, players
 from nba_api.stats.library.parameters import Season, SeasonTypeAllStar
-from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, commonplayerinfo, teamgamelog
+from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, commonplayerinfo, leaguegamelog
 
 def retry(func, retries: int = 3, timeout: int = 5):
     """
@@ -122,14 +122,14 @@ class NBAData():
 
     @staticmethod
     @retry
-    def get_team_season_stats(team_id: str, season_year: int, season_type: str):
+    def get_season_game_logs(season_year: int, season_type: str):
         try:
-            return teamgamelog.TeamGameLog(
-                team_id=team_id,
+            return leaguegamelog.LeagueGameLog(
                 season=NBAData.convert_year_to_NBA_season(season_year),
                 season_type_all_star=season_type
             ).get_data_frames()
         except Exception as e:
-            print(f"team id {team_id} in the year {season_year} is invalid")
+            print(f"The year {season_year} is invalid")
             print(f"Error Message: {e}")
+
                     
