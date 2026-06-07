@@ -4,9 +4,9 @@ from typing import Any
 from src.data_preparation.data_collection.databases import player_game_database, player_info_database, team_game_database
 from src.data_preparation.components.database import Database, Category
 
-PLAYER_INFO_DATABASE = player_info_database.DATABASE
-PLAYER_GAME_DATABASE = player_game_database.DATABASE
-TEAM_GAME_DATABASE = team_game_database.DATABASE
+PLAYER_INFO_DATABASE: Database = player_info_database.DATABASE
+PLAYER_GAME_DATABASE: Database = player_game_database.DATABASE
+TEAM_GAME_DATABASE: Database = team_game_database.DATABASE
 
 def get_all_players_season_played_info() -> list:
     PLAYER_INFO_DATABASE.initialize_components()

@@ -42,7 +42,7 @@ class NBADataUser():
     def get_season_user() -> int | None:
         def get_season_user():
             season = int(input("Input the season year: "))
-            oldest_season = NBAData.get_oldest_season_with_data()
+            oldest_season = NBAData.get_oldest_season_with_all_player_box_score_data_data()
             current_season = NBAData.get_current_nba_season()
             invalid_input = season < oldest_season or season > current_season
             if invalid_input:
@@ -59,7 +59,7 @@ class NBADataUser():
         def get_season_range_user():
             start_season = int(input("Input the start season year: "))
             end_season = int(input("Input the end season year: "))
-            oldest_season = NBAData.get_oldest_season_with_data()
+            oldest_season = NBAData.get_oldest_season_with_all_player_box_score_data_data()
             current_season = NBAData.get_current_nba_season()
             invalid_input = (end_season < start_season) or (start_season < oldest_season or end_season < oldest_season) or (start_season > current_season or end_season > current_season)
             if invalid_input:
@@ -128,6 +128,15 @@ def get_collection_params_user():
         starting_index = int(input("Input the starting index: "))
     return int(wait_interval), get_all, int(starting_index)
 
+def get_seasons_user() -> list[int]:
+        seasons: set[int] = set([])
+        while True:
+            season = NBADataUser.get_season_user()
+            if season is None:
+                break
+            seasons.add(season)
+        return list(seasons)
+
 def collect_data_user(user_choice_function, collect_data_function) -> int:
     wait_interval, get_all, starting_index = get_collection_params_user()
     choice_data = []
@@ -150,30 +159,10 @@ def collect_player_info_data_user():
     return collect_data_user(get_player_ids_user, data_collection.collect_player_info_data)
 
 def collect_player_game_data_user():
-    def get_player_infos_user() -> list:
-        use_id = input("Input whether to search for players by id or by full name: (i/n) ").capitalize() == 'I'
-        player_info = []
-        while True:
-            player_id = NBADataUser.get_player_id_user(use_id)
-            if player_id is None:
-                break
-            season_start, season_end = NBADataUser.get_season_range_user()
-            player_info.append((player_id, season_start, season_end))
-        return player_info
-
-    return collect_data_user(get_player_infos_user, data_collection.collect_player_game_data)
+    return collect_data_user(get_seasons_user, data_collection.collect_player_game_data)
 
 def collect_team_game_data_user():
-    def get_team_infos_user() -> list[int]:
-        seasons: set[int] = set([])
-        while True:
-            season = NBADataUser.get_season_user()
-            if season is None:
-                break
-            seasons.add(season)
-        return list(seasons)
-    
-    return collect_data_user(get_team_infos_user, data_collection.collect_team_game_data)
+    return collect_data_user(get_seasons_user, data_collection.collect_team_game_data)
 
 def begin_collect_data_user():
     data_category_input = input("""Input the category of data to collect:
@@ -193,5 +182,5 @@ if __name__ == "__main__":
     begin_collect_data_user()
 
 CURRENT_PLAYER_INFO_LOOP_INDEX = ~5000 # DONE
-CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 4709
-CURRENT_TEAM_GAME_DATA_LOOP_INDEX = 0
+CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 0
+CURRENT_TEAM_GAME_DATA_LOOP_INDEX = 41 # DONE

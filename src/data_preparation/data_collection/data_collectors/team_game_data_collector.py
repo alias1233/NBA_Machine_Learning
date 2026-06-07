@@ -11,7 +11,7 @@ class TeamDameDataCollector(DataCollector):
     """
 
     def _add_season_game_data(self, season: int, season_type: str):
-        data = NBAData.get_season_game_logs(season, season_type)
+        data = NBAData.get_all_teams_season_game_logs(season, season_type)
         if not data:
             return
         
@@ -33,6 +33,8 @@ class TeamDameDataCollector(DataCollector):
         
         season = seasons[index]
         self._add_season_game_data_range(season, season_types, wait_interval)
+
+        print(f'SEASON YEAR: {season} SEASON TYPES: {season_types}')
         
         return True
     

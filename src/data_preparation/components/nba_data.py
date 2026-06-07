@@ -2,7 +2,7 @@ import requests
 import time
 
 from nba_api.stats.static import teams, players
-from nba_api.stats.library.parameters import Season, SeasonTypeAllStar
+from nba_api.stats.library.parameters import Season, SeasonTypeAllStar, PlayerOrTeamAbbreviation
 from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, commonplayerinfo, leaguegamelog
 
 def retry(func, retries: int = 3, timeout: int = 5):
@@ -28,8 +28,8 @@ class NBAData():
     """
 
     @staticmethod
-    def get_oldest_season_with_data():
-        return 1985
+    def get_oldest_season_with_all_player_box_score_data_data():
+        return 1996
     
     @staticmethod
     def get_current_nba_season():
@@ -117,19 +117,30 @@ class NBAData():
                 season_type_all_star=season_type
             ).get_data_frames()
         except Exception as e:
-            print(f"player id {player_id} in the {season_year} season is invalid.")
+            print(f"player id {player_id} in the {season_year} season with {season_type} season type is invalid.")
             print(f"Error Message: {e}")
 
     @staticmethod
     @retry
-    def get_season_game_logs(season_year: int, season_type: str):
+    def get_all_teams_season_game_logs(season_year: int, season_type: str):
         try:
             return leaguegamelog.LeagueGameLog(
                 season=NBAData.convert_year_to_NBA_season(season_year),
                 season_type_all_star=season_type
             ).get_data_frames()
         except Exception as e:
-            print(f"The year {season_year} is invalid")
+            print(f"The year {season_year} with {season_type} season type is invalid")
             print(f"Error Message: {e}")
 
-                    
+    @staticmethod
+    @retry
+    def get_all_players_season_game_logs(season_year: int, season_type: str):
+        try:
+            return leaguegamelog.LeagueGameLog(
+                player_or_team_abbreviation=PlayerOrTeamAbbreviation.player,
+                season=NBAData.convert_year_to_NBA_season(season_year),
+                season_type_all_star=season_type
+            ).get_data_frames()
+        except Exception as e:
+            print(f"The year {season_year} with {season_type} season type is invalid")
+            print(f"Error Message: {e}")

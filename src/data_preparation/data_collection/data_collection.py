@@ -9,22 +9,18 @@ def collect_player_info_data(wait_interval: float, starting_index: int, player_i
 
     return player_info_collector.PLAYER_INFO_COLLECTOR.begin_collect_data(starting_index, wait_interval, player_ids)
 
-def collect_player_game_data(wait_interval: float, starting_index: int, player_info: list = [], season_types: list[str] = []):
-    if not player_info:
-        try:
-            player_info = data_query.get_all_players_season_played_info()
-        except:
-            print("Database of player seasons is non-functional. Automatic data collection is non-functional.")
-            return starting_index
+def collect_player_game_data(wait_interval: float, starting_index: int, seasons: list[int] = [], season_types: list[str] = []):
+    if not seasons:
+        seasons = [i for i in range(NBAData.get_oldest_season_with_all_player_box_score_data_data(), NBAData.get_current_nba_season() + 1)]
     
     if not season_types:
         season_types = NBAData.get_all_season_types()
         
-    return player_game_data_collector.PLAYER_GAME_DATA_COLLECTOR.begin_collect_data(starting_index, wait_interval, player_info, season_types)
+    return player_game_data_collector.PLAYER_GAME_DATA_COLLECTOR.begin_collect_data(starting_index, wait_interval, seasons, season_types)
 
 def collect_team_game_data(wait_interval: float, starting_index: int, seasons: list[int] = [], season_types: list[str] = []):
     if not seasons:
-        seasons = [i for i in range(NBAData.get_oldest_season_with_data(), NBAData.get_current_nba_season() + 1)]
+        seasons = [i for i in range(NBAData.get_oldest_season_with_all_player_box_score_data_data(), NBAData.get_current_nba_season() + 1)]
 
     if not season_types:
         season_types = NBAData.get_all_season_types()

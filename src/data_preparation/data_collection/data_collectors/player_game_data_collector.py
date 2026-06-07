@@ -10,8 +10,8 @@ class PlayerGameDataCollector(DataCollector):
     Handles Retrieving Player Game Log Data
     """
 
-    def _add_player_data(self, player_id: str, season: int, season_type: str):
-        data = NBAData.get_player_season_game_logs(player_id, season, season_type)
+    def _add_season_player_data(self, season: int, season_type: str):
+        data = NBAData.get_all_players_season_game_logs(season, season_type)
         if not data:
             return
         
@@ -22,29 +22,26 @@ class PlayerGameDataCollector(DataCollector):
             data.append(data_dict)
         self.database.add_many_values(data)
 
-    def _add_player_data_range(self, player_id: str, start_season_year: int, end_season_year: int, season_types: list[str], wait_interval: float):
-        start_season = start_season_year
-        while start_season <= end_season_year:
-            for season_type in season_types:
-                self._add_player_data(player_id, start_season, season_type)
-                time.sleep(wait_interval)
-            start_season += 1
+    def _add_season_player_game_data_range(self, season: int, season_types: list[str], wait_interval: float):
+        for season_type in season_types:
+            self._add_season_player_data(season, season_type)
+            time.sleep(wait_interval)
 
-    def _collect_data(self, index: int, wait_interval: float, player_info: list, season_types: list[str]) -> bool:
-        if index >= len(player_info):
+    def _collect_data(self, index: int, wait_interval: float, seasons: list[int], season_types: list[str]) -> bool:
+        if index >= len(seasons):
             return False
-        player = player_info[index]
-        self._add_player_data_range(player[0], player[1], player[2], season_types, wait_interval)
+        season = seasons[index]
+        self._add_season_player_game_data_range(season, season_types, wait_interval)
         
-        print(f'Player ID: {player[0]} SEASON START: {player[1]} SEASON END: {player[2]}')
+        print(f'SEASON YEAR: {season} SEASON TYPES: {season_types}')
 
         return True
     
-    def begin_collect_data(self, index: int, wait_interval: float, player_info: list, season_types: list[str]) -> int:
+    def begin_collect_data(self, index: int, wait_interval: float, seasons: list[int], season_types: list[str]) -> int:
         """
-        Args: player_info must be a list where each element is: (player_id, start_season, end_season) 
+        Args: seasons must be the list of seasons to query from, and season_types are the list of season types to query from.
         """
 
-        return self._begin_collect_data(index, wait_interval, player_info=player_info, season_types=season_types)
+        return self._begin_collect_data(index, wait_interval, seasons=seasons, season_types=season_types)
     
 PLAYER_GAME_DATA_COLLECTOR = PlayerGameDataCollector(player_game_database.DATABASE)
