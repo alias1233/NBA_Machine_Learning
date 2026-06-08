@@ -1,4 +1,11 @@
-from src.data_preparation.data_preprocessing import over_under_processing
+from src.data_preparation.data_preprocessing import player_props_processing
 
 if __name__ == '__main__':
-    print(over_under_processing.get_over_under_input_output_data(True))
+    input_data, output_data = player_props_processing.get_over_under_input_output_data(True)
+
+    import pandas as pd
+    pd.set_option("display.max_rows", 10)
+    pd.set_option("display.max_columns", 100)
+
+    # print(input_data)
+    print(output_data)
