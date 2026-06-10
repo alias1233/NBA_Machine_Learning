@@ -13,7 +13,15 @@ class Database():
     """
     Simple SQLite Database
     """
-    def __init__(self, filepath: str, name: str, categories: list[Category], data_conflict_handler: DataConflictHandler, primary_keys: list[Category]):
+    def __init__(
+        self, 
+        filepath: str, 
+        name: str, 
+        categories: list[Category], 
+        data_conflict_handler: DataConflictHandler, 
+        primary_keys: list[Category]
+        ):
+
         self.filepath = filepath
         self.name = name
         self.categories = categories
@@ -31,7 +39,12 @@ class Database():
         return {category.category_name : index for index, category in enumerate(categories)}
 
     @staticmethod
-    def get_insert_command(name: str, categories: list[Category], data_conflict_handler: DataConflictHandler) -> str:
+    def get_insert_command(
+        name: str, 
+        categories: list[Category], 
+        data_conflict_handler: DataConflictHandler
+        ) -> str:
+
         insert_command = f"""INSERT OR {data_conflict_handler.value} INTO {name} VALUES ("""
         for category in categories:
             insert_command += f""":{category.category_name},"""
@@ -39,7 +52,13 @@ class Database():
         return insert_command
 
     @staticmethod
-    def create_database(filepath: str, name: str, categories: list[Category], primary_keys: list[Category]):
+    def create_database(
+        filepath: str, 
+        name: str, 
+        categories: list[Category], 
+        primary_keys: list[Category]
+        ):
+
         connection = sq.connect(filepath)
         cursor = connection.cursor()
         cursor.execute(Database.get_create_command(name, categories, primary_keys))
@@ -47,7 +66,12 @@ class Database():
         connection.close()
 
     @staticmethod
-    def get_create_command(name: str, categories: list[Category], primary_keys: list[Category]) -> str:
+    def get_create_command(
+        name: str, 
+        categories: list[Category], 
+        primary_keys: list[Category]
+        ) -> str:
+
         command = f"CREATE TABLE IF NOT EXISTS {name} ("
         for category in categories:
             command += f"{category.category_name} {category.category_type.value},"
@@ -152,5 +176,10 @@ class Database():
     def get_category_names(self) -> list[str]:
         return self.category_names
 
-    def get_property_from_value(self, value: list, category_name: str):
+    def get_property_from_value(
+            self, 
+            value: list, 
+            category_name: str
+            ):
+        
         return value[self.categories_index_dict[category_name]]
