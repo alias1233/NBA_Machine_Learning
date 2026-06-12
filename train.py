@@ -18,3 +18,6 @@ if __name__ == '__main__':
 
         if index >= 100:
             break
+
+    print(len(input_data))
+    print(len(output_data))

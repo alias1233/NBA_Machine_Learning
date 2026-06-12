@@ -60,7 +60,8 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
     player_info_database.PLAYER_ID.category_name,
     player_info_database.POSITION.category_name,
     player_info_database.FROM_YEAR.category_name,
-    player_info_database.TO_YEAR.category_name
+    player_info_database.TO_YEAR.category_name,
+    player_info_database.BIRTHDATE.category_name
 ]
 POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE = [
     team_game_database.TEAM_ID.category_name, processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name,
@@ -92,9 +93,20 @@ def preprocess_game_data(
     if print_debug:
         print("Feature engineering isolated data...")
 
-    # TODO: Preprocess player info
+    player_info = processing.drop_all_rows_with_missing_info(player_info)
+    player_info[player_info_database.BIRTHDATE.category_name] = pd.to_datetime(player_info[player_info_database.BIRTHDATE.category_name])
+    player_info[player_info_database.FROM_YEAR.category_name] = pd.to_datetime(player_info[player_info_database.FROM_YEAR.category_name], format='%Y')
+    player_info = processing.convert_height_to_inches(
+        player_info,
+        player_info_database.HEIGHT.category_name
+    )
+    player_info = processing.add_position_columns(
+        player_info,
+        player_info_database.POSITION.category_name
+        )
 
     player_game_data = player_game_data.drop(columns=PRE_UNUSED_PLAYER_CATEGORIES, errors='ignore')
+    player_game_data[player_game_database.GAME_DATE.category_name] = pd.to_datetime(player_game_data[player_game_database.GAME_DATE.category_name])
     player_game_data = processing.add_points_column(
         player_game_data, 
         player_game_database.FIELD_GOALS_MADE.category_name, 
@@ -106,7 +118,24 @@ def preprocess_game_data(
         player_game_database.OFFENSIVE_REBOUNDS.category_name,
         player_game_database.DEFENSIVE_REBOUNDS.category_name
         )
+    player_game_data = processing.add_age_during_game_column(
+        player_game_data,
+        player_info,
+        player_info_database.PLAYER_ID.category_name,
+        player_game_database.PLAYER_ID.category_name,
+        player_info_database.BIRTHDATE.category_name,
+        player_game_database.GAME_DATE.category_name
+    )
+    player_game_data = processing.add_NBA_experience_during_game_column(
+        player_game_data,
+        player_info,
+        player_info_database.PLAYER_ID.category_name,
+        player_game_database.PLAYER_ID.category_name,
+        player_info_database.FROM_YEAR.category_name,
+        player_game_database.GAME_DATE.category_name
+    )
 
+    team_game_data[team_game_database.GAME_DATE.category_name] = pd.to_datetime(team_game_data[team_game_database.GAME_DATE.category_name])
     team_game_data = processing.add_points_column(
         team_game_data,
         team_game_database.FIELD_GOALS_MADE.category_name, 
@@ -156,10 +185,7 @@ def preprocess_game_data(
 
     accumulator = []
     for _, game_data in team_game_data.groupby(by=team_game_database.TEAM_ID.category_name):
-        game_data = processing.sort_by_date(
-            game_data,
-            team_game_database.GAME_DATE.category_name
-            )
+        game_data = game_data.sort_values(by=team_game_database.GAME_DATE.category_name)
         game_data = processing.add_rolling_function_columns(game_data, TEAM_ROLLING_CATEGORIES)
 
         accumulator.append(game_data)
@@ -173,10 +199,7 @@ def preprocess_game_data(
         if player_id not in static_player_info_dict:
             continue 
         
-        game_data = processing.sort_by_date(
-            game_data,
-            player_game_database.GAME_DATE.category_name
-            )
+        game_data = game_data.sort_values(by=player_game_database.GAME_DATE.category_name)
         game_data = processing.add_rest_column(
             game_data,
             player_game_database.GAME_DATE.category_name
@@ -252,8 +275,9 @@ def get_all_player_props_input_output_training_data(step_size: int = 1, print_de
 
     for player_data in data_per_player:
         static_player_info, player_game_data = player_data
+        static_player_info = static_player_info.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC, errors='ignore')
 
-        opponent_game_data = {
+        opponent_game_data_dict = {
             opponent_id : game_data 
             for opponent_id, game_data 
             in player_game_data.groupby(by=processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name)
@@ -264,10 +288,10 @@ def get_all_player_props_input_output_training_data(step_size: int = 1, print_de
 
             # Creating sequence of last played games against the opponent of the current game.
             opponent_team_id = current_game[processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name]
-            if opponent_team_id not in opponent_game_data:
+            if opponent_team_id not in opponent_game_data_dict:
                 continue
             date_of_game = current_game[team_game_database.GAME_DATE.category_name]
-            past_games_against_opponent = get_past_games_against_opponent(opponent_game_data[opponent_team_id], date_of_game)
+            past_games_against_opponent = get_past_games_against_opponent(opponent_game_data_dict[opponent_team_id], date_of_game)
             if past_games_against_opponent is None:
                 continue
             past_games_against_opponent = past_games_against_opponent.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
@@ -276,8 +300,7 @@ def get_all_player_props_input_output_training_data(step_size: int = 1, print_de
             past_games_sequence = past_games_sequence.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
 
             output_data = current_game[OUTPUT_COLUMNS]
-            input_data_static_data = current_game.drop(columns=OUTPUT_COLUMNS, errors='ignore')
-            input_data_static_data = input_data_static_data.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
+            input_data_static_data = current_game.drop(columns=OUTPUT_COLUMNS + POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
 
             input_chunk = {
                 INPUT_DATA_PLAYER_INFO : static_player_info,
