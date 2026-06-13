@@ -13,21 +13,20 @@ RANDOM_SEED = 1
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
-CHUNK_STEP_SIZE = 100
-VALIDATION_START_YEAR = 2024
-TEST_START_YEAR = 2025
+CHUNK_STEP_SIZE = 1
+VALIDATION_START_DATE = datetime(2026, 1, 1)
+TEST_START_DATE = datetime(2026, 3, 1)
 
 HIDDEN_LAYERS = [
-    100,
-    75,
-    100,
-    50
+    40,
+    20,
+    10,
 ]
 
-LEARNING_RATE = 0.01
-EPOCHS = 1000
+LEARNING_RATE = 0.001
+EPOCHS = 500
 LOSS_FUNCTION = torch.nn.MSELoss()
-SAVE_MODEL_FILE_PATH = '/trained_models.test'
+SAVE_MODEL_FILE_PATH = 'trained_models/test.pth'
 LOG_LOSS_INTERVAL = 10
 
 def print_dataset(dataset, num_to_print):
@@ -129,8 +128,8 @@ def to_tensor(array: np.ndarray) -> torch.Tensor:
     
 def train(debug: bool = False):
     datasets = player_props_processing.get_all_player_props_input_output_training_data(
-        validation_split_start_date = datetime(VALIDATION_START_YEAR, 1, 1),
-        test_split_start_date = datetime(TEST_START_YEAR, 1, 1),
+        validation_split_start_date = VALIDATION_START_DATE,
+        test_split_start_date = TEST_START_DATE,
         chunk_step_size = CHUNK_STEP_SIZE,
         print_debug = True
         )
@@ -143,8 +142,8 @@ def train(debug: bool = False):
     input_train_clean, output_train_clean, input_val_clean, output_val_clean, input_test_clean, output_test_clean = cleaned_datasets
  
     if debug:
-        print(f"[squisher] input_train shape : {input_train_clean.shape}")
-        print(f"[squisher] output_train shape : {output_train_clean.shape}")
+        print(f"Input feature dimensions: {input_train_clean.shape}")
+        print(f"Output feature dimensions: {output_train_clean.shape}")
  
     (input_train_norm, output_train_norm, 
      input_val_norm, output_val_norm,
