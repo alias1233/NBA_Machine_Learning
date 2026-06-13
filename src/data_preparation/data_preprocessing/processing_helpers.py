@@ -41,6 +41,7 @@ def add_rolling_function_columns(
 
 # Represents the number of days without a game inbetween the current game and the player's last played game.
 REST = 'REST'
+MAX_REST = 7
 
 def add_rest_column(
         game_data: pd.DataFrame, 
@@ -50,7 +51,8 @@ def add_rest_column(
     """
     Adds rest column to the given game_data. 
     The given game_data must be sorted by game date, and the game_date column must be in datetime form.
-    If it is the first game that has ever been played, the value for 'rest' will be NaN.
+    The value of rest is clamped to MAX_REST.
+    If it is the first game that has ever been played, the value for 'rest' will be MAX_REST.
     """
 
     game_dates = None
@@ -59,7 +61,7 @@ def add_rest_column(
     else:
         game_dates = game_data
 
-    game_data[REST] = game_dates[game_date_column].diff().dt.days - 1
+    game_data[REST] = (game_dates[game_date_column].diff().dt.days - 1).fillna(MAX_REST).clip(upper=MAX_REST)
     return game_data
 
 POINTS = 'POINTS'
@@ -108,7 +110,7 @@ def add_possessions_column(
 # A value of 0 represents home, and a value of 1 represents away.
 HOME_OR_AWAY = 'HOME_OR_AWAY'
 
-def add_home_or_away_column(
+def add_encoded_home_or_away_column(
         team_game_data: pd.DataFrame, 
         matchup_column: str
         ) -> pd.DataFrame:
@@ -144,7 +146,7 @@ def add_opponent_stat_columns(
     merged = merged[merged[team_id_column] != merged[OPPONENT_PREFIX + team_id_column]]
     return merged
 
-def _add_time_between_static_player_event_and_game_column(
+def _add_years_between_static_player_event_and_game_column(
     game_data: pd.DataFrame,
     player_info: pd.DataFrame,
     player_id_column_player_info: str,
@@ -163,7 +165,7 @@ def _add_time_between_static_player_event_and_game_column(
 
     player_id_to_static_event_time = player_info.set_index(player_id_column_player_info)[static_player_event_time_column].to_dict()
     game_data[TEMP] = game_data[player_id_column_game_data].map(player_id_to_static_event_time, na_action='ignore')
-    game_data[new_column_name] = game_data[game_date_column] - game_data[TEMP]
+    game_data[new_column_name] = ((game_data[game_date_column] - game_data[TEMP]).dt.days / 365.25).astype(float)
     game_data = game_data.drop(columns=TEMP)
     return game_data
 
@@ -181,7 +183,7 @@ def add_age_during_game_column(
     The birthdate and game_date columns must be represented in datetime form.
     """
 
-    return _add_time_between_static_player_event_and_game_column(
+    return _add_years_between_static_player_event_and_game_column(
         game_data,
         player_info,
         player_id_column_player_info,
@@ -193,7 +195,7 @@ def add_age_during_game_column(
 
 NBA_EXPERIENCE_DURING_GAME = 'NBA_EXPERIENCE_DURING_GAME'
 
-def add_NBA_experience_during_game_column(
+def add_years_NBA_experience_during_game_column(
     game_data: pd.DataFrame,
     player_info: pd.DataFrame,
     player_id_column_player_info: str,
@@ -205,7 +207,7 @@ def add_NBA_experience_during_game_column(
     The date_entered_league and game_date columns must be represented in datetime form.
     """
 
-    return _add_time_between_static_player_event_and_game_column(
+    return _add_years_between_static_player_event_and_game_column(
         game_data,
         player_info,
         player_id_column_player_info,
@@ -228,7 +230,7 @@ REGULAR_SEASON = 'REGULAR_SEASON'
 PLAYOFFS = 'PLAYOFFS'
 PLAY_IN = 'PLAY_IN'
 
-def add_season_type_columns(
+def add_encoded_season_type_columns(
         team_game_data: pd.DataFrame,
         game_id_column: str
         ) -> pd.DataFrame:
@@ -239,7 +241,7 @@ def add_season_type_columns(
     team_game_data[PLAY_IN] = _encode_string_equality_as_integer(season_type_id, "5")
     return team_game_data
 
-def convert_win_loss_to_integer(
+def encode_win_loss_column_as_integer(
         game_data: pd.DataFrame,
         win_loss_column: str
         ) -> pd.DataFrame:
@@ -270,7 +272,7 @@ FORWARD_GUARD = 'Forward-Guard'
 GUARD = 'Guard'
 GUARD_FORWARD = 'Guard-Forward'
 
-def add_position_columns(
+def add_encoded_position_columns(
         player_info: pd.DataFrame,
         position_column: str,
         ) -> pd.DataFrame:
@@ -282,6 +284,17 @@ def add_position_columns(
     player_info[FORWARD_GUARD] = _encode_string_equality_as_integer(position, FORWARD_GUARD)
     player_info[GUARD] = _encode_string_equality_as_integer(position, GUARD)
     player_info[GUARD_FORWARD] = _encode_string_equality_as_integer(position, GUARD_FORWARD)
+    return player_info
+
+UNDRAFTED = 'Undrafted'
+
+def encode_undrafted(
+    player_info: pd.DataFrame,
+    draft_number_column: str, 
+    ) -> pd.DataFrame:
+    draft_number = player_info[draft_number_column]
+    player_info[UNDRAFTED] = _encode_string_equality_as_integer(draft_number, UNDRAFTED)
+    player_info[draft_number_column] = pd.to_numeric(player_info[draft_number_column].replace(UNDRAFTED, 0))
     return player_info
 
 def drop_all_rows_with_missing_info(

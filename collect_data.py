@@ -181,6 +181,6 @@ def begin_collect_data_user():
 if __name__ == "__main__":
     begin_collect_data_user()
 
-CURRENT_PLAYER_INFO_LOOP_INDEX = ~5000 # DONE
+CURRENT_PLAYER_INFO_LOOP_INDEX = 5103 # DONE
 CURRENT_PLAYER_GAME_DATA_LOOP_INDEX = 30 # DONE
 CURRENT_TEAM_GAME_DATA_LOOP_INDEX = 30 # DONE

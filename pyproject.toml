@@ -1,5 +1,5 @@
 [project]
-name = "NBA Machine Learning Framework"
+name = "NBA_Machine_Learning_Framework"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -8,6 +8,7 @@ dependencies = [
     "numpy==1.26.4",
     "pandas==2.2.2",
     "torch>=2.4.0",
+    "scikit-learn>=1.6.0",
     "nba_api",
     "jupyter>=1.1.1"
 ]

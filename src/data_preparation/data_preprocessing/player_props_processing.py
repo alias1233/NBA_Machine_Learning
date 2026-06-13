@@ -71,6 +71,16 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE = [
     team_game_database.WIN_LOSS.category_name,
     player_game_database.PLAYER_ID.category_name
 ]
+INPUT_STATIC_GAME_DATA_COLUMNS = [
+    processing.REST,
+    processing.AGE_DURING_GAME,
+    processing.NBA_EXPERIENCE_DURING_GAME,
+    processing.PRESEASON,
+    processing.REGULAR_SEASON,
+    processing.PLAYOFFS,
+    processing.PLAY_IN,
+    processing.HOME_OR_AWAY
+]
 
 OUTPUT_COLUMNS = [
     processing.POINTS + PLAYER_LABEL,
@@ -100,10 +110,14 @@ def preprocess_game_data(
         player_info,
         player_info_database.HEIGHT.category_name
     )
-    player_info = processing.add_position_columns(
+    player_info = processing.add_encoded_position_columns(
         player_info,
         player_info_database.POSITION.category_name
         )
+    player_info = processing.encode_undrafted(
+        player_info,
+        player_info_database.DRAFT_NUMBER.category_name
+    )
 
     player_game_data = player_game_data.drop(columns=PRE_UNUSED_PLAYER_CATEGORIES, errors='ignore')
     player_game_data[player_game_database.GAME_DATE.category_name] = pd.to_datetime(player_game_data[player_game_database.GAME_DATE.category_name])
@@ -126,7 +140,7 @@ def preprocess_game_data(
         player_info_database.BIRTHDATE.category_name,
         player_game_database.GAME_DATE.category_name
     )
-    player_game_data = processing.add_NBA_experience_during_game_column(
+    player_game_data = processing.add_years_NBA_experience_during_game_column(
         player_game_data,
         player_info,
         player_info_database.PLAYER_ID.category_name,
@@ -154,11 +168,11 @@ def preprocess_game_data(
         team_game_database.OFFENSIVE_REBOUNDS.category_name,
         team_game_database.TURNOVERS.category_name
         )
-    team_game_data = processing.add_season_type_columns(
+    team_game_data = processing.add_encoded_season_type_columns(
         team_game_data,
         team_game_database.GAME_ID.category_name
         )
-    team_game_data = processing.add_home_or_away_column(
+    team_game_data = processing.add_encoded_home_or_away_column(
         team_game_data,
         team_game_database.MATCHUP.category_name
         )
@@ -168,7 +182,7 @@ def preprocess_game_data(
         team_game_database.TEAM_ID.category_name,
         DUPLICATE_OPPONENT_MERGED_CATEGORIES
         )
-    team_game_data = processing.convert_win_loss_to_integer(
+    team_game_data = processing.encode_win_loss_column_as_integer(
         team_game_data,
         team_game_database.WIN_LOSS.category_name
     )
@@ -176,6 +190,7 @@ def preprocess_game_data(
     if print_debug:
         print("Creating processed player info lookup table...")
 
+    player_info = player_info.sort_index(axis=1)
     static_player_info_dict = {}
     for player_id, player_info in player_info.groupby(by=player_info_database.PLAYER_ID.category_name):
         static_player_info_dict[player_id] = player_info
@@ -229,6 +244,7 @@ def preprocess_game_data(
     if print_debug:
         print("Seperating game data by player and reformatting...")
 
+    player_team_game_data = player_team_game_data.sort_index(axis=1)
     preprocessed_game_data = []
     for player_id, game_data in player_team_game_data.groupby(by=player_game_database.PLAYER_ID.category_name):
         preprocessed_game_data.append((static_player_info_dict[player_id], game_data))
@@ -246,11 +262,17 @@ def get_past_games_against_opponent(opponent_game_data: pd.DataFrame, date_of_ga
     
     return game_data_before_game_data.iloc[-PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH:]
 
-def get_all_player_props_input_output_training_data(step_size: int = 1, print_debug: bool = False) -> tuple:
+def get_all_player_props_input_output_training_data(
+        validation_split_start_date: datetime,
+        test_split_start_date: datetime,
+        chunk_step_size: int = 1,
+        print_debug: bool = False
+        ) -> tuple:
     """
-    Returns pre-processed training data for over/under prediction.
+    Returns pre-processed training dataset for over/under prediction.
 
-    The returned data is in the form of a tuple consisting of the input data at index 0, and the output data at index 1.
+    The returned data is in the form of a tuple consisting of:
+    (input training dataset, output training dataset, input validation data, output validation dataset, input test dataset, output test dataset)
     """
 
     if print_debug:
@@ -270,8 +292,12 @@ def get_all_player_props_input_output_training_data(step_size: int = 1, print_de
     if print_debug:
         print("Arranging data into training chunks...")
 
-    input_training_data = []
-    output_training_data = []
+    input_training_data: list[dict[str, pd.DataFrame]] = []
+    output_training_data: list[pd.DataFrame] = []
+    input_validation_data: list[dict[str, pd.DataFrame]] = []
+    output_validation_data: list[pd.DataFrame] = []
+    input_test_data: list[dict[str, pd.DataFrame]] = []
+    output_test_data: list[pd.DataFrame] = []
 
     for player_data in data_per_player:
         static_player_info, player_game_data = player_data
@@ -283,14 +309,14 @@ def get_all_player_props_input_output_training_data(step_size: int = 1, print_de
             in player_game_data.groupby(by=processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name)
             }
 
-        for index in range(PAST_GAMES_PLAYED_SEQUENCE_LENGTH, len(player_game_data), step_size):
+        for index in range(PAST_GAMES_PLAYED_SEQUENCE_LENGTH, len(player_game_data), chunk_step_size):
             current_game = player_game_data.iloc[index]
 
             # Creating sequence of last played games against the opponent of the current game.
             opponent_team_id = current_game[processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name]
             if opponent_team_id not in opponent_game_data_dict:
                 continue
-            date_of_game = current_game[team_game_database.GAME_DATE.category_name]
+            date_of_game: datetime = current_game[team_game_database.GAME_DATE.category_name]
             past_games_against_opponent = get_past_games_against_opponent(opponent_game_data_dict[opponent_team_id], date_of_game)
             if past_games_against_opponent is None:
                 continue
@@ -299,21 +325,32 @@ def get_all_player_props_input_output_training_data(step_size: int = 1, print_de
             past_games_sequence = player_game_data.iloc[index - PAST_GAMES_PLAYED_SEQUENCE_LENGTH : index]
             past_games_sequence = past_games_sequence.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
 
-            output_data = current_game[OUTPUT_COLUMNS]
-            input_data_static_data = current_game.drop(columns=OUTPUT_COLUMNS + POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
+            output_data = current_game[OUTPUT_COLUMNS].to_frame()
+            input_data_static_game_data = current_game[INPUT_STATIC_GAME_DATA_COLUMNS].to_frame()
 
             input_chunk = {
                 INPUT_DATA_PLAYER_INFO : static_player_info,
                 INPUT_DATA_PAST_GAMES_SEQUENCE : past_games_sequence,
                 INPUT_DATA_PAST_GAMES_AGAINST_OPPONENT_SEQUENCE : past_games_against_opponent,
-                INPUT_DATA_STATIC_DATA : input_data_static_data
+                INPUT_DATA_STATIC_DATA : input_data_static_game_data
             }
             output_chunk = output_data
+
+            if date_of_game > test_split_start_date:
+                input_test_data.append(input_chunk)
+                output_test_data.append(output_chunk)
+                continue
+
+            if date_of_game > validation_split_start_date:
+                input_validation_data.append(input_chunk)
+                output_validation_data.append(output_chunk)
+                continue
+
             input_training_data.append(input_chunk)
             output_training_data.append(output_chunk)
-
+    
     if print_debug:
         print("Finished data processing.")
     
-    return (input_training_data, output_training_data)
+    return (input_training_data, output_training_data, input_validation_data, output_validation_data, input_test_data, output_test_data)
 

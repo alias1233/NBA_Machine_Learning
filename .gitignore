@@ -47,6 +47,7 @@ mlruns/
 lightning_logs/
 tensorboard/
 logs/
+trained_models/
 
 # Datasets
 data/
