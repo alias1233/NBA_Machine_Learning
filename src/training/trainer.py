@@ -15,13 +15,13 @@ class Trainer():
             validation_input_data: torch.Tensor, 
             validation_output_data: torch.Tensor,
             loss_function,
-            save_model_path: str, 
             log_loss_interval: int = 0
             ):
         
         # TODO: Implement using a data loader for batching to have SGD
         # TODO: Use a scheduler
         # TODO: Implement an early stopper
+        # TODO: Use GPU to train instead of CPU
         
         log_loss = log_loss_interval != 0
 
@@ -43,5 +43,3 @@ class Trainer():
                     val_loss = loss_function(val_prediction, validation_output_data)
 
                 print(f'Epoch: {i} | Train Loss: {loss.item():.4f} | Val Loss: {val_loss.item():.4f}')
-
-        torch.save(self.model.state_dict(), save_model_path)

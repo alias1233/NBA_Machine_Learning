@@ -1,4 +1,10 @@
 import torch.nn as nn
+from typing import Any
+
+INPUT_DIM = 'input_dim'
+OUTPUT_DIM = 'output_dim'
+HIDDEN_LAYERS = 'hidden_layers'
+MODEL_STATE = 'model_state'
 
 # Simple Feed Forward Model
 class FeedForward(nn.Module):
@@ -9,6 +15,10 @@ class FeedForward(nn.Module):
             hidden_layers: holds the number of nodes for each layer, with each index corresponding to a hidden layer.
         """
         super().__init__()
+
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.hidden_layers = hidden_layers
 
         layers = []
         input_size = input_dim
@@ -24,3 +34,12 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+    
+    def get_save_parameters_dict(self) -> dict[str, Any]:
+        params = {
+            INPUT_DIM : self.input_dim,
+            OUTPUT_DIM : self.output_dim,
+            HIDDEN_LAYERS : self.hidden_layers,
+            MODEL_STATE : self.state_dict()
+        }
+        return params
