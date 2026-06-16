@@ -10,7 +10,7 @@ def convert_dataframe_to_numpy(data: list[dict[str, pd.DataFrame]] | list[pd.Dat
     If flatten is set to True, each element in the resulting np.ndarray should correspond to 1 dimensional structure of features. 
     """
 
-    # TODO: Potentially move the type checking outside of the loop so that it runs once per call instead of once per data chunk.
+    # TODO: Potentially move the type checking outside of the loop so that it runs once per dataset instead of once per data chunk.
     
     samples = []
 

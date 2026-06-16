@@ -6,8 +6,13 @@ OUTPUT_DIM = 'output_dim'
 HIDDEN_LAYERS = 'hidden_layers'
 MODEL_STATE = 'model_state'
 
-# Simple Feed Forward Model
 class FeedForward(nn.Module):
+    """
+    Simple Feed Forward Model
+
+    Uses RELU activation functions after each hidden layer.
+    """
+
     def __init__(self, input_dim: int, output_dim: int, hidden_layers: list) -> None: 
         """
         Initializes the model.

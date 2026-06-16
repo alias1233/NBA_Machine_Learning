@@ -3,15 +3,27 @@ from typing import Any
 
 # TODO: Fix errors concerning pandas: A value is trying to be set on a copy of a slice from a DataFrame.
 
+def sort_columns_alphabetically(dataframe: pd.DataFrame) -> pd.DataFrame:
+    return dataframe.sort_index(axis=1)
+
+def create_lookup_table(
+    dataframe: pd.DataFrame,
+    key_column: str
+    ) -> dict[Any, pd.DataFrame]:
+    lookup_table = {}
+    for key, data in dataframe.groupby(by=key_column):
+        lookup_table[key] = data
+    return lookup_table
+
 # Represents the number of days without a game inbetween the current game and the player's last played game.
 REST = 'REST'
 MAX_REST = 7
 
 def add_rest_column(
-        game_data: pd.DataFrame, 
-        game_date_column: str, 
-        group_by_id: str | None = None
-        ) -> pd.DataFrame:
+    game_data: pd.DataFrame, 
+    game_date_column: str, 
+    group_by_id: str | None = None
+    ) -> pd.DataFrame:
     """
     Adds rest column to the given game_data. 
     The given game_data must be sorted by game date, and the game_date column must be in datetime form.
@@ -31,11 +43,11 @@ def add_rest_column(
 POINTS = 'POINTS'
 
 def add_points_column(
-        game_data: pd.DataFrame, 
-        fgm_column: str, 
-        fg3m_column: str, 
-        ftm_column: str
-        ) -> pd.DataFrame:
+    game_data: pd.DataFrame, 
+    fgm_column: str, 
+    fg3m_column: str, 
+    ftm_column: str
+    ) -> pd.DataFrame:
     fgm = game_data[fgm_column]
     fg3m = game_data[fg3m_column]
     ftm = game_data[ftm_column]
@@ -45,10 +57,10 @@ def add_points_column(
 REBOUNDS = 'REBOUNDS'
 
 def add_total_rebounds_column(
-        game_data: pd.DataFrame, 
-        orb_column: str, 
-        drb_column: str
-        ) -> pd.DataFrame:
+    game_data: pd.DataFrame, 
+    orb_column: str, 
+    drb_column: str
+    ) -> pd.DataFrame:
     orb = game_data[orb_column]
     drb = game_data[drb_column]
     game_data[REBOUNDS] = orb + drb
@@ -58,12 +70,12 @@ def add_total_rebounds_column(
 POSSESSIONS = 'POSSESSIONS'
 
 def add_possessions_column(
-        team_game_data: pd.DataFrame, 
-        fga_column: str, 
-        fta_column: str, 
-        orb_column: str, 
-        tov_column: str
-        ) -> pd.DataFrame:
+    team_game_data: pd.DataFrame, 
+    fga_column: str, 
+    fta_column: str, 
+    orb_column: str, 
+    tov_column: str
+    ) -> pd.DataFrame:
     fga = team_game_data[fga_column]
     fta = team_game_data[fta_column]
     orb = team_game_data[orb_column]
@@ -75,9 +87,9 @@ def add_possessions_column(
 HOME_OR_AWAY = 'HOME_OR_AWAY'
 
 def add_encoded_home_or_away_column(
-        team_game_data: pd.DataFrame, 
-        matchup_column: str
-        ) -> pd.DataFrame:
+    team_game_data: pd.DataFrame, 
+    matchup_column: str
+    ) -> pd.DataFrame:
     matchup = team_game_data[matchup_column]
     home_or_away = pd.Series(index=matchup.index, dtype='Int64')
     home_or_away[matchup.str.contains('@', regex=False, na=False)] = 1
@@ -85,18 +97,65 @@ def add_encoded_home_or_away_column(
     team_game_data[HOME_OR_AWAY] = home_or_away
     return team_game_data
 
+PLAYER_SUFFIX = '_PLAYER'
+TEAM_SUFFIX = '_TEAM'
+
+def merge_player_team_game_data(
+    player_game_data: pd.DataFrame,
+    team_game_data: pd.DataFrame,
+    game_id_column_team: str,
+    game_id_column_player: str,
+    team_id_column_team: str,
+    team_id_column_player: str,
+    duplicate_categories_player: list[str] = [],
+    ) -> pd.DataFrame:
+
+    non_duplicate_player_game_data = player_game_data.drop(columns=duplicate_categories_player, errors='ignore')
+
+    player_team_game_data: pd.DataFrame = non_duplicate_player_game_data.merge(
+        team_game_data, 
+        left_on=game_id_column_player, 
+        right_on=game_id_column_team,
+        suffixes=(PLAYER_SUFFIX, TEAM_SUFFIX)
+        )
+    
+    if team_id_column_team == team_id_column_player:
+        player_team_game_data = player_team_game_data[
+            player_team_game_data[team_id_column_team + PLAYER_SUFFIX] 
+            == player_team_game_data[team_id_column_player + TEAM_SUFFIX]
+            ]
+        
+        player_team_game_data = player_team_game_data.drop(columns=team_id_column_player + PLAYER_SUFFIX, errors='ignore')
+        player_team_game_data = player_team_game_data.rename(columns={team_id_column_team + TEAM_SUFFIX : team_id_column_player}, errors='ignore')
+
+    else:
+        player_team_game_data = player_team_game_data[
+            player_team_game_data[team_id_column_team] 
+            == player_team_game_data[team_id_column_player]
+            ]
+    
+    return player_team_game_data
+
+def merge_player_game_info_data(
+    player_game_data: pd.DataFrame,
+    player_info_data: pd.DataFrame,
+    player_id_column_game: str,
+    player_id_column_info: str
+    ) -> pd.DataFrame:
+    return player_game_data.merge(right=player_info_data, left_on=player_id_column_game, right_on=player_id_column_info)
+
 OPPONENT_PREFIX = 'OPP_'
 
 def add_opponent_stat_columns(
-        team_game_data: pd.DataFrame, 
-        game_id_column: str, 
-        team_id_column: str,
-        non_required_opponent_categories: list[str] = []
-        ) -> pd.DataFrame:
+    team_game_data: pd.DataFrame, 
+    game_id_column: str, 
+    team_id_column: str,
+    duplicate_categories: list[str] = []
+    ) -> pd.DataFrame:
     opponent_stats = team_game_data.copy()
 
-    if non_required_opponent_categories:
-        opponent_stats = opponent_stats.drop(columns=non_required_opponent_categories, errors='ignore')
+    if duplicate_categories:
+        opponent_stats = opponent_stats.drop(columns=duplicate_categories, errors='ignore')
 
     opponent_column_names = {}
     for column_name in opponent_stats.columns:
@@ -106,9 +165,58 @@ def add_opponent_stat_columns(
         opponent_column_names[column_name] = opponent_column_name
 
     opponent_stats = opponent_stats.rename(columns=opponent_column_names)
+
     merged = team_game_data.merge(opponent_stats, on=game_id_column)
     merged = merged[merged[team_id_column] != merged[OPPONENT_PREFIX + team_id_column]]
     return merged
+
+# TODO: Support bucketing on continuous data such as weight and height for by-attribute stat columns.
+
+STATS_BASED_ON_ATTRIBUTE_SUFFIX = "_BY_"
+
+def add_total_player_stats_per_game_by_attribute(
+    team_game_data: pd.DataFrame,
+    player_game_data: pd.DataFrame,
+    player_info: pd.DataFrame,
+    player_id_column_info: str,
+    player_id_column_player: str,
+    game_id_column: str,
+    team_id_column: str,
+    attribute_columns: list[str],
+    stat_columns: list[str]
+    ) -> pd.DataFrame:
+    """
+    Adds columns corresponding to the total stats of every player with the given attribute of each game to the team game dataframe.
+
+    THe attribute column must be a hot encoded column in player_info, where every value at each row index is 0 or 1 corresponding to whether the player has that attribute.
+    """
+
+    for attribute_column in attribute_columns:
+        player_ids_with_attribute = player_info[player_info[attribute_column] == 1][player_id_column_info].unique()
+        player_game_data_with_attribute = (
+            player_game_data[player_game_data[player_id_column_player].isin(player_ids_with_attribute)]
+        )
+
+        total_player_stats_in_game_by_attribute = (
+            player_game_data_with_attribute.groupby(
+                by=[game_id_column, team_id_column])
+                [stat_columns]
+                .sum()
+                .reset_index()
+                )
+        
+        team_game_data = (
+            team_game_data
+            .merge(
+                total_player_stats_in_game_by_attribute, 
+                on=[game_id_column, team_id_column], 
+                suffixes=[None, STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute_column],
+                how='left'
+                )
+                .fillna(0)
+                )
+
+    return team_game_data
 
 def _add_years_between_static_player_event_and_game_column(
     game_data: pd.DataFrame,
@@ -195,9 +303,9 @@ PLAYOFFS = 'PLAYOFFS'
 PLAY_IN = 'PLAY_IN'
 
 def add_encoded_season_type_columns(
-        team_game_data: pd.DataFrame,
-        game_id_column: str
-        ) -> pd.DataFrame:
+    team_game_data: pd.DataFrame,
+    game_id_column: str
+    ) -> pd.DataFrame:
     season_type_id = team_game_data[game_id_column].astype(str).str[0]
     team_game_data[PRESEASON] = _encode_equality_as_integer(season_type_id, "1")
     team_game_data[REGULAR_SEASON] = _encode_equality_as_integer(season_type_id, "2")
@@ -206,9 +314,9 @@ def add_encoded_season_type_columns(
     return team_game_data
 
 def encode_win_loss_column_as_integer(
-        game_data: pd.DataFrame,
-        win_loss_column: str
-        ) -> pd.DataFrame:
+    game_data: pd.DataFrame,
+    win_loss_column: str
+    ) -> pd.DataFrame:
     """
     Converts the given game_data's win/loss columnn from a string represenation to an interger representation.
     A value of 0 representing a loss, and a value of 1 representing a win.
@@ -220,9 +328,9 @@ def encode_win_loss_column_as_integer(
 UNKNOWN_HEIGHT = 'UNKNOWN_HEIGHT'
 
 def convert_height_to_inches(
-        player_info: pd.DataFrame,
-        height_column: str
-        ) -> pd.DataFrame:
+    player_info: pd.DataFrame,
+    height_column: str
+    ) -> pd.DataFrame:
     heights = player_info[height_column]
     heights_split = heights.str.split("-", expand=True)
     feet = pd.to_numeric(heights_split[0], errors="coerce").fillna(0)
@@ -251,11 +359,21 @@ FORWARD_GUARD = 'Forward-Guard'
 GUARD = 'Guard'
 GUARD_FORWARD = 'Guard-Forward'
 UNKNOWN_POSITION = 'UNKNOWN_POSITION'
+ALL_POSITIONS = [
+    CENTER,
+    CENTER_FORWARD,
+    FORWARD,
+    FORWARD_CENTER,
+    FORWARD_GUARD,
+    GUARD,
+    GUARD_FORWARD,
+    UNKNOWN_POSITION
+]
 
 def add_encoded_position_columns(
-        player_info: pd.DataFrame,
-        position_column: str,
-        ) -> pd.DataFrame:
+    player_info: pd.DataFrame,
+    position_column: str,
+    ) -> pd.DataFrame:
     position = player_info[position_column]
     player_info[CENTER] = _encode_equality_as_integer(position, CENTER)
     player_info[CENTER_FORWARD] = _encode_equality_as_integer(position, CENTER_FORWARD)
@@ -275,7 +393,7 @@ def encode_undrafted(
     ) -> pd.DataFrame:
     draft_number = player_info[draft_number_column]
     player_info[UNDRAFTED] = _encode_equality_as_integer(draft_number, UNDRAFTED)
-    player_info[draft_number_column] = pd.to_numeric(player_info[draft_number_column].replace(UNDRAFTED, 0))
+    player_info[draft_number_column] = pd.to_numeric(player_info[draft_number_column].replace(UNDRAFTED, '0'))
     return player_info
 
 def drop_all_rows_with_missing_info(

@@ -1,12 +1,11 @@
 from datetime import datetime
 import numpy as np
 import torch
-from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 
 from models import helpers
-from . import player_props_processors
-from src.training.trainer import Trainer
+from . import player_props_processor
+from src.training import trainer
 from src.training.model_architectures import feed_forward
 from src.training.model_architectures.feed_forward import FeedForward
 
@@ -28,8 +27,8 @@ HIDDEN_LAYERS = [
     128
 ]
 
-LEARNING_RATE = 0.00025
-EPOCHS = 160
+LEARNING_RATE = 0.0005
+EPOCHS = 150
 LOSS_FUNCTION = torch.nn.MSELoss()
 LOG_LOSS_INTERVAL = 10
 
@@ -54,7 +53,7 @@ def train(debug: bool = False):
     np.random.seed(RANDOM_SEED)
 
     # Fetching and rearranging training data
-    datasets = player_props_processors.get_all_player_props_input_output_training_data(
+    datasets = player_props_processor.get_all_player_props_input_output_training_data(
         validation_split_start_date = VALIDATION_START_DATE,
         test_split_start_date = TEST_START_DATE,
         flatten = True,
@@ -85,12 +84,11 @@ def train(debug: bool = False):
         HIDDEN_LAYERS
     )
 
-    trainer = Trainer(
-        LEARNING_RATE,
-        model
-    )
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
 
     trainer.train(
+        model,
+        optimizer,
         EPOCHS,
         input_train,
         output_train,

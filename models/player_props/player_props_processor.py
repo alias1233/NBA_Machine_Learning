@@ -10,11 +10,13 @@ from src.data_preparation.data_preprocessing import rolling_category
 from src.data_preparation.data_preprocessing.rolling_category import RollingCategory
 from src.data_preparation.data_preprocessing import training_data_processing
 
-# TODO: Add 
+# TODO: Add average and std rolling data to the datasets
+# TODO: Remove useless features from the final datasets
 
-MEAN_STD_WINDOW = 20
-PAST_POINTS_MEAN = RollingCategory("PAST_POINTS_MEAN", nba_data_processing.POINTS, MEAN_STD_WINDOW, True, rolling_category.MEAN_FUNCTION)
-PAST_POINTS_STD = RollingCategory("PAST_POINTS_STD", nba_data_processing.POINTS, MEAN_STD_WINDOW, True, rolling_category.STD_FUNCTION)
+ROLLING_WINDOW = 15
+PAST_POINTS_MEAN = RollingCategory("PAST_POINTS_MEAN", nba_data_processing.POINTS, ROLLING_WINDOW, True, rolling_category.MEAN_FUNCTION)
+PAST_POINTS_STD = RollingCategory("PAST_POINTS_STD", nba_data_processing.POINTS, ROLLING_WINDOW, True, rolling_category.STD_FUNCTION)
+PAST_POINTS_ALLOWED_TO_CENTER = RollingCategory("PAST_POINTS_ALLOWED_TO_CENTER", nba_data_processing.POINTS, ROLLING_WINDOW, True, rolling_category.MEAN_FUNCTION)
 
 PLAYER_ROLLING_CATEGORIES = [
 
@@ -25,7 +27,7 @@ TEAM_ROLLING_CATEGORIES = [
 ]
 
 # Players with less than this number of games will be removed from the dataset.
-MINIMUM_REQUIRED_GAMES_PLAYED = MEAN_STD_WINDOW + 1
+MINIMUM_REQUIRED_GAMES_PLAYED = ROLLING_WINDOW + 1
 
 DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
     team_game_database.GAME_DATE.category_name,
@@ -39,20 +41,24 @@ DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
     nba_data_processing.PLAY_IN
 ]
 
-PLAYER_LABEL = "_PLAYER"
-TEAM_LABEL = "_TEAM"
-
 PRE_UNUSED_PLAYER_CATEGORIES = [
     player_game_database.MATCHUP.category_name,
     player_game_database.WIN_LOSS.category_name
 ]
 
 DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES = [
-    player_game_database.TEAM_ID.category_name,
-    player_game_database.GAME_DATE.category_name,
+    player_game_database.GAME_DATE.category_name
 ]
-REDUNDANT_MERGED_CATEGORIES = [column_name + PLAYER_LABEL for column_name in DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES]
-RENAMING_MERGED_DICT = {column_name + TEAM_LABEL : column_name for column_name in DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES}
+
+ATTRIBUTE_COLUMNS = nba_data_processing.ALL_POSITIONS + [
+    
+]
+
+STAT_COLUMNS = [
+    nba_data_processing.POINTS,
+    nba_data_processing.REBOUNDS,
+    player_game_database.ASSISTS.category_name
+]
 
 PAST_GAMES_PLAYED_SEQUENCE_LENGTH = 15
 PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH = 4
@@ -76,7 +82,9 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE = [
     team_game_database.MATCHUP.category_name,
     team_game_database.WIN_LOSS.category_name,
     player_game_database.PLAYER_ID.category_name
-]
+] + (
+    [stat + nba_data_processing.STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute for stat in STAT_COLUMNS for attribute in ATTRIBUTE_COLUMNS]
+    )
 INPUT_STATIC_GAME_DATA_COLUMNS = [
     nba_data_processing.REST,
     nba_data_processing.AGE_DURING_GAME,
@@ -86,12 +94,13 @@ INPUT_STATIC_GAME_DATA_COLUMNS = [
     nba_data_processing.PLAYOFFS,
     nba_data_processing.PLAY_IN,
     nba_data_processing.HOME_OR_AWAY
+    # TODO: Add rolling data here
 ]
 
 OUTPUT_COLUMNS = [
-    nba_data_processing.POINTS + PLAYER_LABEL,
-    nba_data_processing.REBOUNDS + PLAYER_LABEL,
-    player_game_database.ASSISTS.category_name + PLAYER_LABEL
+    nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
+    nba_data_processing.REBOUNDS + nba_data_processing.PLAYER_SUFFIX,
+    player_game_database.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
 ]
 
 def preprocess_game_data(
@@ -185,24 +194,27 @@ def preprocess_game_data(
         team_game_data,
         team_game_database.MATCHUP.category_name
         )
+    team_game_data = nba_data_processing.encode_win_loss_column_as_integer(
+        team_game_data,
+        team_game_database.WIN_LOSS.category_name
+    )
+    team_game_data = nba_data_processing.add_total_player_stats_per_game_by_attribute(
+        team_game_data,
+        player_game_data,
+        player_info,
+        player_info_database.PLAYER_ID.category_name,
+        player_game_database.PLAYER_ID.category_name,
+        team_game_database.GAME_ID.category_name,
+        team_game_database.TEAM_ID.category_name,
+        ATTRIBUTE_COLUMNS,
+        STAT_COLUMNS
+    )
     team_game_data = nba_data_processing.add_opponent_stat_columns(
         team_game_data,
         team_game_database.GAME_ID.category_name,
         team_game_database.TEAM_ID.category_name,
         DUPLICATE_OPPONENT_MERGED_CATEGORIES
         )
-    team_game_data = nba_data_processing.encode_win_loss_column_as_integer(
-        team_game_data,
-        team_game_database.WIN_LOSS.category_name
-    )
-    
-    if print_debug:
-        print("Creating processed player info lookup table...")
-
-    player_info = player_info.sort_index(axis=1)
-    static_player_info_dict = {}
-    for player_id, player_info in player_info.groupby(by=player_info_database.PLAYER_ID.category_name):
-        static_player_info_dict[player_id] = player_info
 
     if print_debug:
         print("Feature engineering historical-context-dependant game data...")
@@ -214,13 +226,14 @@ def preprocess_game_data(
 
         accumulator.append(game_data)
     
-    updated_team_game_data = pd.concat(accumulator)
+    team_game_data = pd.concat(accumulator)
 
+    all_valid_players = player_info[player_info_database.PLAYER_ID.category_name].unique()
     accumulator = []
     for player_id, game_data in player_game_data.groupby(by=player_game_database.PLAYER_ID.category_name):
         if len(game_data) < MINIMUM_REQUIRED_GAMES_PLAYED:
             continue
-        if player_id not in static_player_info_dict:
+        if player_id not in all_valid_players:
             continue 
         
         game_data = game_data.sort_values(by=player_game_database.GAME_DATE.category_name)
@@ -232,28 +245,29 @@ def preprocess_game_data(
 
         accumulator.append(game_data)
 
-    updated_player_game_data = pd.concat(accumulator)
+    player_game_data = pd.concat(accumulator)
 
     if print_debug:
-        print("Merging team game data and player game data...")
+        print("Rearranging data...")
+
+    player_info = nba_data_processing.sort_columns_alphabetically(player_info)
+    static_player_info_dict = nba_data_processing.create_lookup_table(
+        player_info,
+        player_info_database.PLAYER_ID.category_name
+    )
     
-    player_team_game_data: pd.DataFrame = updated_player_game_data.merge(
-        updated_team_game_data, 
-        left_on=player_game_database.GAME_ID.category_name, 
-        right_on=team_game_database.GAME_ID.category_name,
-        suffixes=(PLAYER_LABEL, TEAM_LABEL)
-        )
-    player_team_game_data = player_team_game_data[
-        player_team_game_data[player_game_database.TEAM_ID.category_name + PLAYER_LABEL] 
-        == player_team_game_data[team_game_database.TEAM_ID.category_name + TEAM_LABEL]
-        ]
-    player_team_game_data = player_team_game_data.drop(columns=REDUNDANT_MERGED_CATEGORIES, errors='ignore')
-    player_team_game_data = player_team_game_data.rename(columns=RENAMING_MERGED_DICT)
+    player_team_game_data = nba_data_processing.merge_player_team_game_data(
+        player_game_data,
+        team_game_data,
+        team_game_database.GAME_ID.category_name,
+        player_game_database.GAME_ID.category_name,
+        team_game_database.TEAM_ID.category_name,
+        player_game_database.TEAM_ID.category_name,
+        DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES
+    )
 
-    if print_debug:
-        print("Seperating game data by player and reformatting...")
+    player_team_game_data = nba_data_processing.sort_columns_alphabetically(player_team_game_data)
 
-    player_team_game_data = player_team_game_data.sort_index(axis=1)
     preprocessed_game_data = []
     for player_id, game_data in player_team_game_data.groupby(by=player_game_database.PLAYER_ID.category_name):
         preprocessed_game_data.append((static_player_info_dict[player_id], game_data))
@@ -276,7 +290,7 @@ def get_all_player_props_input_output_labeled_data(
         test_split_start_date: datetime,
         chunk_step_size: int = 1,
         print_debug: bool = False
-        ) -> tuple:
+        ) -> tuple[list, list, list, list, list, list]:
     """
     Returns a labeled training dataset for over/under prediction.
 
@@ -334,8 +348,8 @@ def get_all_player_props_input_output_labeled_data(
             past_games_sequence = player_game_data.iloc[index - PAST_GAMES_PLAYED_SEQUENCE_LENGTH : index]
             past_games_sequence = past_games_sequence.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
 
-            output_data = current_game[OUTPUT_COLUMNS].to_frame()
-            input_data_static_game_data = current_game[INPUT_STATIC_GAME_DATA_COLUMNS].to_frame()
+            output_data = current_game[OUTPUT_COLUMNS].to_frame().T
+            input_data_static_game_data = current_game[INPUT_STATIC_GAME_DATA_COLUMNS].to_frame().T
 
             input_chunk = {
                 INPUT_DATA_PLAYER_INFO : static_player_info,
@@ -385,12 +399,26 @@ def get_all_player_props_input_output_training_data(
     input scaler, output scaler)
     """
 
-    datasets = get_all_player_props_input_output_labeled_data(
+    labeled_datasets = get_all_player_props_input_output_labeled_data(
         validation_split_start_date,
         test_split_start_date,
         chunk_step_size,
         print_debug
     )
 
-    return training_data_processing.process_raw_data_for_training(*datasets, flatten=flatten)
+    if print_debug:
+        print('-----------------------------------------------------')
+        input_training_data_chunk: dict[str, pd.DataFrame] = labeled_datasets[0][0]
+        output_training_data_chunk: pd.DataFrame = labeled_datasets[1][0]
+        for label, dataframe in input_training_data_chunk.items():
+            print(f'Input- | Label: {label} | Columns: ')
+            for column_name in list(dataframe.columns):
+                print(column_name)
+
+        print('-----------------------------------------------------')
+        print(f'Output- | Columns: ')
+        for column_name in list(output_training_data_chunk.columns):
+            print(column_name)
+
+    return training_data_processing.process_raw_data_for_training(*labeled_datasets, flatten=flatten)
 
