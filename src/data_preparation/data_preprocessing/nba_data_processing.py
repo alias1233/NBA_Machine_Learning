@@ -1,4 +1,5 @@
 import pandas as pd
+from typing import Any
 
 # TODO: Fix errors concerning pandas: A value is trying to be set on a copy of a slice from a DataFrame.
 
@@ -180,12 +181,12 @@ def add_years_NBA_experience_during_game_column(
         NBA_EXPERIENCE_DURING_GAME
     )
 
-def _encode_string_equality_as_integer(column: pd.Series, string: str) -> pd.Series:
+def _encode_equality_as_integer(column: pd.Series, value: Any) -> pd.Series:
     """
     Returns a series where each value is 1 if the value corresponding to the given series equals the given string, and 0 otherwise.  
     """
 
-    return (column == string).astype(int)
+    return (column == value).astype(int)
 
 ### SEASON TYPES: A value of 1 represents True, and a value of 0 represents False. ###
 PRESEASON = 'PRESEASON'
@@ -198,10 +199,10 @@ def add_encoded_season_type_columns(
         game_id_column: str
         ) -> pd.DataFrame:
     season_type_id = team_game_data[game_id_column].astype(str).str[0]
-    team_game_data[PRESEASON] = _encode_string_equality_as_integer(season_type_id, "1")
-    team_game_data[REGULAR_SEASON] = _encode_string_equality_as_integer(season_type_id, "2")
-    team_game_data[PLAYOFFS] = _encode_string_equality_as_integer(season_type_id, "4")
-    team_game_data[PLAY_IN] = _encode_string_equality_as_integer(season_type_id, "5")
+    team_game_data[PRESEASON] = _encode_equality_as_integer(season_type_id, "1")
+    team_game_data[REGULAR_SEASON] = _encode_equality_as_integer(season_type_id, "2")
+    team_game_data[PLAYOFFS] = _encode_equality_as_integer(season_type_id, "4")
+    team_game_data[PLAY_IN] = _encode_equality_as_integer(season_type_id, "5")
     return team_game_data
 
 def encode_win_loss_column_as_integer(
@@ -213,17 +214,32 @@ def encode_win_loss_column_as_integer(
     A value of 0 representing a loss, and a value of 1 representing a win.
     """
 
-    game_data[win_loss_column] = _encode_string_equality_as_integer(game_data[win_loss_column], "W")
+    game_data[win_loss_column] = _encode_equality_as_integer(game_data[win_loss_column], "W")
     return game_data
+
+UNKNOWN_HEIGHT = 'UNKNOWN_HEIGHT'
 
 def convert_height_to_inches(
         player_info: pd.DataFrame,
         height_column: str
         ) -> pd.DataFrame:
-    heights_split = player_info[height_column].str.split("-", expand=True)
-    feet = pd.to_numeric(heights_split[0], errors="coerce")
-    inches = pd.to_numeric(heights_split[1], errors="coerce")
+    heights = player_info[height_column]
+    heights_split = heights.str.split("-", expand=True)
+    feet = pd.to_numeric(heights_split[0], errors="coerce").fillna(0)
+    inches = pd.to_numeric(heights_split[1], errors="coerce").fillna(0)
     player_info[height_column] = feet * 12 + inches
+    player_info[UNKNOWN_HEIGHT] = _encode_equality_as_integer(heights, "")
+    return player_info
+
+UNKNOWN_WEIGHT = 'UNKNOWN_WEIGHT'
+
+def encode_unknown_weight(
+    player_info: pd.DataFrame,
+    weight_column: str    
+    ) -> pd.DataFrame:
+    weights = player_info[weight_column]
+    player_info[weight_column] = pd.to_numeric(weights, errors='coerce').fillna(0)
+    player_info[UNKNOWN_WEIGHT] = _encode_equality_as_integer(weights, "")
     return player_info
 
 ### POSITION TYPES: A value of 1 represents True, and a value of 0 represents False. ###
@@ -234,19 +250,21 @@ FORWARD_CENTER = 'Forward-Center'
 FORWARD_GUARD = 'Forward-Guard'
 GUARD = 'Guard'
 GUARD_FORWARD = 'Guard-Forward'
+UNKNOWN_POSITION = 'UNKNOWN_POSITION'
 
 def add_encoded_position_columns(
         player_info: pd.DataFrame,
         position_column: str,
         ) -> pd.DataFrame:
     position = player_info[position_column]
-    player_info[CENTER] = _encode_string_equality_as_integer(position, CENTER)
-    player_info[CENTER_FORWARD] = _encode_string_equality_as_integer(position, CENTER_FORWARD)
-    player_info[FORWARD] = _encode_string_equality_as_integer(position, FORWARD)
-    player_info[FORWARD_CENTER] = _encode_string_equality_as_integer(position, FORWARD_CENTER)
-    player_info[FORWARD_GUARD] = _encode_string_equality_as_integer(position, FORWARD_GUARD)
-    player_info[GUARD] = _encode_string_equality_as_integer(position, GUARD)
-    player_info[GUARD_FORWARD] = _encode_string_equality_as_integer(position, GUARD_FORWARD)
+    player_info[CENTER] = _encode_equality_as_integer(position, CENTER)
+    player_info[CENTER_FORWARD] = _encode_equality_as_integer(position, CENTER_FORWARD)
+    player_info[FORWARD] = _encode_equality_as_integer(position, FORWARD)
+    player_info[FORWARD_CENTER] = _encode_equality_as_integer(position, FORWARD_CENTER)
+    player_info[FORWARD_GUARD] = _encode_equality_as_integer(position, FORWARD_GUARD)
+    player_info[GUARD] = _encode_equality_as_integer(position, GUARD)
+    player_info[GUARD_FORWARD] = _encode_equality_as_integer(position, GUARD_FORWARD)
+    player_info[UNKNOWN_POSITION] = _encode_equality_as_integer(position, "")
     return player_info
 
 UNDRAFTED = 'Undrafted'
@@ -256,7 +274,7 @@ def encode_undrafted(
     draft_number_column: str, 
     ) -> pd.DataFrame:
     draft_number = player_info[draft_number_column]
-    player_info[UNDRAFTED] = _encode_string_equality_as_integer(draft_number, UNDRAFTED)
+    player_info[UNDRAFTED] = _encode_equality_as_integer(draft_number, UNDRAFTED)
     player_info[draft_number_column] = pd.to_numeric(player_info[draft_number_column].replace(UNDRAFTED, 0))
     return player_info
 

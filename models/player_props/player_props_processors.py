@@ -10,6 +10,8 @@ from src.data_preparation.data_preprocessing import rolling_category
 from src.data_preparation.data_preprocessing.rolling_category import RollingCategory
 from src.data_preparation.data_preprocessing import training_data_processing
 
+# TODO: Add 
+
 MEAN_STD_WINDOW = 20
 PAST_POINTS_MEAN = RollingCategory("PAST_POINTS_MEAN", nba_data_processing.POINTS, MEAN_STD_WINDOW, True, rolling_category.MEAN_FUNCTION)
 PAST_POINTS_STD = RollingCategory("PAST_POINTS_STD", nba_data_processing.POINTS, MEAN_STD_WINDOW, True, rolling_category.STD_FUNCTION)
@@ -107,7 +109,6 @@ def preprocess_game_data(
     if print_debug:
         print("Feature engineering isolated data...")
 
-    player_info = nba_data_processing.drop_all_rows_with_missing_info(player_info)
     player_info[player_info_database.BIRTHDATE.category_name] = pd.to_datetime(player_info[player_info_database.BIRTHDATE.category_name])
     player_info[player_info_database.FROM_YEAR.category_name] = pd.to_datetime(player_info[player_info_database.FROM_YEAR.category_name], format='%Y')
     player_info = nba_data_processing.convert_height_to_inches(
@@ -121,6 +122,10 @@ def preprocess_game_data(
     player_info = nba_data_processing.encode_undrafted(
         player_info,
         player_info_database.DRAFT_NUMBER.category_name
+    )
+    player_info = nba_data_processing.encode_unknown_weight(
+        player_info,
+        player_info_database.WEIGHT.category_name
     )
 
     player_game_data = player_game_data.drop(columns=PRE_UNUSED_PLAYER_CATEGORIES, errors='ignore')
