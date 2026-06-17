@@ -17,7 +17,7 @@ def create_lookup_table(
 
 # Represents the number of days without a game inbetween the current game and the player's last played game.
 REST = 'REST'
-MAX_REST = 7
+MAX_REST = 30
 
 def add_rest_column(
     game_data: pd.DataFrame, 

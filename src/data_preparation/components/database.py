@@ -13,6 +13,7 @@ class Database():
     """
     Simple SQLite Database
     """
+    
     def __init__(
         self, 
         filepath: str, 

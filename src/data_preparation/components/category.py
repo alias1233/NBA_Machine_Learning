@@ -21,6 +21,7 @@ class Categories():
     """
     Helper Class For Managing Categories Lists
     """
+    
     def __init__(self):
         self.categories: list[Category] = []
 

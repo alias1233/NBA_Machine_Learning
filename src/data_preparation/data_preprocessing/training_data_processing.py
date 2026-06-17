@@ -1,56 +1,45 @@
 import pandas as pd
 import numpy as np
 import torch
+from typing import cast
 from sklearn.preprocessing import StandardScaler
 
-def convert_dataframe_to_numpy(data: list[dict[str, pd.DataFrame]] | list[pd.DataFrame] | list[pd.Series], flatten: bool) -> np.ndarray:
+# TODO: Refactor processing for unflattened data with sequence and static data
+
+def convert_labeled_data_to_numpy(
+    data: list[dict[str, pd.DataFrame]] | list[pd.DataFrame] | list[pd.Series],
+    flatten: bool
+) -> np.ndarray:
     """
     Converts the given dataframes into a format that can be easily used for normalization and training.
 
-    If flatten is set to True, each element in the resulting np.ndarray should correspond to 1 dimensional structure of features. 
+    If flatten is set to True, each element in the resulting np.ndarray will correspond to a 1-dimensional structure of features.
     """
 
-    # TODO: Potentially move the type checking outside of the loop so that it runs once per dataset instead of once per data chunk.
-    
-    samples = []
+    def to_array(df: pd.DataFrame | pd.Series) -> np.ndarray:
+        arr = df.to_numpy(dtype=np.float32)
+        return arr.reshape(-1) if flatten else arr
 
-    if flatten:
-        for chunk in data:
-            if isinstance(chunk, dict):
-                chunk_data = []
-                for _, dataframe in chunk.items():
-                    try:
-                        chunk_data.append(dataframe.to_numpy(dtype=np.float32).reshape(-1))
-                    except Exception as e:
-                        print(e)
-                        print(dataframe)
+    def process_dict(chunk: dict[str, pd.DataFrame]) -> np.ndarray:
+        arrays = []
+        for _, df in chunk.items():
+            try:
+                arrays.append(to_array(df))
+            except Exception as e:
+                print(f"Error processing dataframe: {e}\n{df}")
+        return np.concatenate(arrays)
 
-                samples.append(np.concatenate(chunk_data))
+    if not data:
+        return np.empty(0, dtype=np.float32)
 
-            elif isinstance(chunk, pd.DataFrame) or isinstance(chunk, pd.Series):
-                samples.append(chunk.to_numpy(dtype=np.float32).reshape(-1))
+    first = data[0]
 
-            else:
-                raise ValueError('Inputted data is not in the specified form.')
-            
+    if isinstance(first, dict):
+        samples = [process_dict(cast(dict[str, pd.DataFrame], chunk)) for chunk in data]
+    elif isinstance(first, (pd.DataFrame, pd.Series)):
+        samples = [to_array(cast(pd.DataFrame | pd.Series, chunk)) for chunk in data]
     else:
-        for chunk in data:
-            if isinstance(chunk, dict):
-                chunk_data = []
-                for _, dataframe in chunk.items():
-                    try:
-                        chunk_data.append(dataframe.to_numpy(dtype=np.float32))
-                    except Exception as e:
-                        print(e)
-                        print(dataframe)
-
-                samples.append(np.concatenate(chunk_data))
-
-            elif isinstance(chunk, pd.DataFrame) or isinstance(chunk, pd.Series):
-                samples.append(chunk.to_numpy(dtype=np.float32))
-
-            else:
-                raise ValueError('Inputted data is not in the specified form.')
+        raise ValueError(f"Unsupported chunk type: {type(first).__name__}. Expected dict, DataFrame, or Series.")
 
     return np.stack(samples)
 
@@ -119,12 +108,12 @@ def process_raw_data_for_training(
     input scaler, output scaler)
     """
     
-    input_train_numpy = convert_dataframe_to_numpy(input_training_data, flatten)
-    output_train_numpy = convert_dataframe_to_numpy(output_training_data, flatten)
-    input_val_numpy = convert_dataframe_to_numpy(input_validation_data, flatten)
-    output_val_numpy = convert_dataframe_to_numpy(output_validation_data, flatten)
-    input_test_numpy = convert_dataframe_to_numpy(input_test_data, flatten)
-    output_test_numpy = convert_dataframe_to_numpy(output_test_data, flatten)
+    input_train_numpy = convert_labeled_data_to_numpy(input_training_data, flatten)
+    output_train_numpy = convert_labeled_data_to_numpy(output_training_data, flatten)
+    input_val_numpy = convert_labeled_data_to_numpy(input_validation_data, flatten)
+    output_val_numpy = convert_labeled_data_to_numpy(output_validation_data, flatten)
+    input_test_numpy = convert_labeled_data_to_numpy(input_test_data, flatten)
+    output_test_numpy = convert_labeled_data_to_numpy(output_test_data, flatten)
 
     (input_train_norm, output_train_norm, 
      input_val_norm, output_val_norm,
