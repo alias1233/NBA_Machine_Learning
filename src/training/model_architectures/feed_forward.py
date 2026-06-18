@@ -1,21 +1,28 @@
 import torch.nn as nn
-from typing import Any
+from typing import Any, Type
+from dataclasses import dataclass
 
 INPUT_DIM = 'input_dim'
 OUTPUT_DIM = 'output_dim'
 HIDDEN_LAYERS = 'hidden_layers'
 MODEL_STATE = 'model_state'
 
+@dataclass(frozen=True)
+class LayerParameters():
+    num_nodes: int
+    activation_function: Type[nn.Module] | None = None
+    batch_normalization: bool = False
+    dropout_rate: float = 0
+
 class FeedForward(nn.Module):
     """
-    Simple Feed Forward Model
-
-    Uses RELU activation functions after each hidden layer.
+    Simple Configurable Feed Forward Model
     """
 
-    def __init__(self, input_dim: int, output_dim: int, hidden_layers: list) -> None: 
+    def __init__(self, input_dim: int, output_dim: int, hidden_layers: list[LayerParameters]) -> None: 
         """
         Initializes the model.
+
         Args: 
             hidden_layers: holds the number of nodes for each layer, with each index corresponding to a hidden layer.
         """
@@ -28,10 +35,24 @@ class FeedForward(nn.Module):
         layers = []
         input_size = input_dim
 
-        for layer_size in hidden_layers:
-            layers.append(nn.Linear(in_features=input_size, out_features=layer_size))
-            layers.append(nn.ReLU())
-            input_size = layer_size
+        for layer_parameters in hidden_layers:
+            layers.append(
+                nn.Linear(
+                    in_features=input_size, 
+                    out_features=layer_parameters.num_nodes
+                    )
+                    )
+
+            if layer_parameters.batch_normalization:
+                layers.append(nn.BatchNorm1d(layer_parameters.num_nodes))
+            
+            if layer_parameters.activation_function:
+                layers.append(layer_parameters.activation_function())
+
+            if layer_parameters.dropout_rate > 0:
+                layers.append(nn.Dropout(layer_parameters.dropout_rate))
+
+            input_size = layer_parameters.num_nodes
 
         layers.append(nn.Linear(in_features=input_size, out_features=output_dim))
 

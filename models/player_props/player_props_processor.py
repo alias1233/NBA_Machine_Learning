@@ -10,8 +10,8 @@ from src.data_preparation.data_preprocessing import rolling_category
 from src.data_preparation.data_preprocessing.rolling_category import RollingCategory
 from src.data_preparation.data_preprocessing import training_data_processing
 
-# TODO: Add more average and std rolling data to the datasets
-# TODO: Remove useless features from the final datasets
+# TODO: Output a categorical distribution of a stat instead of the actual raw stat number and predict a probability of that stat
+# TODO: Allow for choosing which stat to predict the probabilities on, and only predict one stat at a time
 
 DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
     team_game_database.GAME_DATE.category_name,
@@ -35,9 +35,8 @@ DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES = [
 ]
 
 # STATS BY ATTRIBUTES: #
-ATTRIBUTE_COLUMNS = nba_data_processing.ALL_POSITIONS + [
-    
-]
+ATTRIBUTE_COLUMNS = nba_data_processing.ALL_POSITIONS
+
 STAT_COLUMNS = [
     nba_data_processing.POINTS,
     nba_data_processing.REBOUNDS,
@@ -46,26 +45,38 @@ STAT_COLUMNS = [
 ALL_STATS_BY_ATTRIBUTE_COLUMNS = [stat + nba_data_processing.STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute for stat in STAT_COLUMNS for attribute in ATTRIBUTE_COLUMNS]
 
 # ROLLING DATA: #
-ROLLING_WINDOW = 15
-PAST_POINTS_MEAN = RollingCategory("PAST_POINTS_MEAN", nba_data_processing.POINTS, ROLLING_WINDOW, rolling_category.MEAN_FUNCTION)
-PAST_POINTS_STD = RollingCategory("PAST_POINTS_STD", nba_data_processing.POINTS, ROLLING_WINDOW, rolling_category.STD_FUNCTION)
+PAST_CAREER_ALLOWED_PREFIX = "PAST_CAREER_"
+MEAN_PREFIX = "MEAN_"
+STD_PREFIX = "STD_"
+PAST_CAREER_STATS = [
+    RollingCategory(
+        PAST_CAREER_ALLOWED_PREFIX + MEAN_PREFIX + stat_column,
+        stat_column,
+        rolling_category.MEAN_FUNCTION,
+    ) for stat_column in STAT_COLUMNS
+] + [
+    RollingCategory(
+        PAST_CAREER_ALLOWED_PREFIX + STD_PREFIX + stat_column,
+        stat_column,
+        rolling_category.STD_FUNCTION,
+    ) for stat_column in STAT_COLUMNS
+]
 
+ROLLING_WINDOW = 20
+
+PAST_MEAN_ALLOWED_INFIX = "PAST_MEAN_ALLOWED_"
 PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS = [
     RollingCategory(
-        nba_data_processing.OPPONENT_PREFIX + "PAST_MEAN_ALLOWED_" + stat_by_attribute_column,
-        stat_by_attribute_column, 
-        ROLLING_WINDOW,
-        rolling_category.MEAN_FUNCTION
+        nba_data_processing.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat_by_attribute_column,
+        stat_by_attribute_column,
+        rolling_category.MEAN_FUNCTION,
+        ROLLING_WINDOW
         ) for stat_by_attribute_column in ALL_STATS_BY_ATTRIBUTE_COLUMNS
         ]
 
-PLAYER_ROLLING_CATEGORIES = [
+PLAYER_ROLLING_CATEGORIES = PAST_CAREER_STATS
 
-]
-
-TEAM_ROLLING_CATEGORIES = [
-
-] 
+TEAM_ROLLING_CATEGORIES = [] 
 
 OPPONENT_TEAM_ROLLING_CATEGORIES = PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS
 
@@ -78,8 +89,8 @@ INPUT_DATA_PAST_GAMES_SEQUENCE = "PAST_GAMES_SEQUENCE"
 INPUT_DATA_PAST_GAMES_AGAINST_OPPONENT_SEQUENCE = "PAST_GAMES_AGAINST_OPPONENT_SEQUENCE"
 INPUT_DATA_STATIC_DATA = "STATIC_DATA"
 
-# Players with less than this number of games will be removed from the dataset.
-MINIMUM_REQUIRED_GAMES_PLAYED = ROLLING_WINDOW + 1
+# Players with less than this number of games will be removed from the dataset
+MINIMUM_REQUIRED_GAMES_PLAYED = PAST_GAMES_PLAYED_SEQUENCE_LENGTH + 1
 
 POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
     player_info_database.PLAYER_ID.category_name,
@@ -97,9 +108,11 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE = [
     player_game_database.PLAYER_ID.category_name
 ] + (
     ALL_STATS_BY_ATTRIBUTE_COLUMNS
-    ) + [
-        nba_data_processing.OPPONENT_PREFIX + stat_by_attribute_column for stat_by_attribute_column in ALL_STATS_BY_ATTRIBUTE_COLUMNS
-    ]
+) + [
+    nba_data_processing.OPPONENT_PREFIX + stat_by_attribute_column for stat_by_attribute_column in ALL_STATS_BY_ATTRIBUTE_COLUMNS
+] + [
+    career_stat.column_name for career_stat in PLAYER_ROLLING_CATEGORIES
+]
 
 INPUT_STATIC_GAME_DATA_COLUMNS = [
     nba_data_processing.REST,
@@ -110,7 +123,11 @@ INPUT_STATIC_GAME_DATA_COLUMNS = [
     nba_data_processing.PLAYOFFS,
     nba_data_processing.PLAY_IN,
     nba_data_processing.HOME_OR_AWAY
-] + [category.column_name for category in PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS]
+] + [
+    category.column_name for category in PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS
+] + [
+    career_stat.column_name for career_stat in PLAYER_ROLLING_CATEGORIES
+]
 
 OUTPUT_COLUMNS = [
     nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
@@ -255,10 +272,8 @@ def preprocess_game_data(
     all_valid_players = player_info[player_info_database.PLAYER_ID.category_name].unique()
     accumulator = []
     for player_id, game_data in player_game_data.groupby(by=player_game_database.PLAYER_ID.category_name):
-        if len(game_data) < MINIMUM_REQUIRED_GAMES_PLAYED:
+        if len(game_data) < MINIMUM_REQUIRED_GAMES_PLAYED or player_id not in all_valid_players:
             continue
-        if player_id not in all_valid_players:
-            continue 
         
         game_data = game_data.sort_values(by=player_game_database.GAME_DATE.category_name)
         game_data = nba_data_processing.add_rest_column(
@@ -289,11 +304,12 @@ def preprocess_game_data(
         player_game_database.TEAM_ID.category_name,
         DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES
     )
-
     player_team_game_data = nba_data_processing.sort_columns_alphabetically(player_team_game_data)
 
     preprocessed_game_data = []
     for player_id, game_data in player_team_game_data.groupby(by=player_game_database.PLAYER_ID.category_name):
+        game_data = game_data.sort_values(by=team_game_database.GAME_DATE.category_name)
+        
         preprocessed_game_data.append((static_player_info_dict[player_id], game_data))
 
     if print_debug:
@@ -360,7 +376,7 @@ def get_all_player_props_input_output_labeled_data(
         for index in range(PAST_GAMES_PLAYED_SEQUENCE_LENGTH, len(player_game_data), chunk_step_size):
             current_game = player_game_data.iloc[index]
 
-            # Creating sequence of last played games against the opponent of the current game.
+            # Creating sequence of last played games against the opponent of the current game
             opponent_team_id = current_game[nba_data_processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name]
             if opponent_team_id not in opponent_game_data_dict:
                 continue
@@ -370,11 +386,13 @@ def get_all_player_props_input_output_labeled_data(
                 continue
             past_games_against_opponent = past_games_against_opponent.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
 
+            # Creating sequence of last played games by the current player 
             past_games_sequence = player_game_data.iloc[index - PAST_GAMES_PLAYED_SEQUENCE_LENGTH : index]
             past_games_sequence = past_games_sequence.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE, errors='ignore')
 
-            output_data = current_game[OUTPUT_COLUMNS].to_frame().T
             input_data_static_game_data = current_game[INPUT_STATIC_GAME_DATA_COLUMNS].to_frame().T
+
+            output_data = current_game[OUTPUT_COLUMNS].to_frame().T
 
             input_chunk = {
                 INPUT_DATA_PLAYER_INFO : static_player_info,
@@ -384,6 +402,7 @@ def get_all_player_props_input_output_labeled_data(
             }
             output_chunk = output_data
 
+            # Separating chunks into validation, test, and training sets based on date cutoffs
             if date_of_game > test_split_start_date:
                 input_test_data.append(input_chunk)
                 output_test_data.append(output_chunk)

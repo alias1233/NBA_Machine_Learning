@@ -1,13 +1,13 @@
 from datetime import datetime
 import numpy as np
-import torch
+import torch, torch.nn as nn
 from sklearn.preprocessing import StandardScaler
 
 from models import helpers
 from . import player_props_processor
 from src.training import trainer
 from src.training.model_architectures import feed_forward
-from src.training.model_architectures.feed_forward import FeedForward
+from src.training.model_architectures.feed_forward import FeedForward, LayerParameters
 
 SAVE_MODELS_DIRECTORY_PATH = 'trained_models/'
 
@@ -20,10 +20,10 @@ CHUNK_STEP_SIZE = 1
 VALIDATION_START_DATE = datetime(2026, 1, 1)
 TEST_START_DATE = datetime(2026, 3, 1)
 
-HIDDEN_LAYERS = [
-    256,
-    128,
-    64
+HIDDEN_LAYERS_PARAMETERS = [
+    LayerParameters(256, nn.ReLU, True, 0.15),
+    LayerParameters(128, nn.ReLU, True, 0.15),
+    LayerParameters(64, nn.ReLU, True, 0.15)
 ]
 
 LEARNING_RATE = 0.0005
@@ -78,8 +78,8 @@ def train(
      ) = datasets
  
     if print_debug:
-        print(f"Input feature dimensions: {input_train.shape}")
-        print(f"Output feature dimensions: {output_train.shape}")
+        print(f"Input feature dimensions: {str(input_train.shape)}")
+        print(f"Output feature dimensions: {str(output_train.shape)}")
 
     in_features = input_train.shape[1]
     out_features = output_train.shape[1]
@@ -88,7 +88,7 @@ def train(
     model = FeedForward(
         in_features,
         out_features,
-        HIDDEN_LAYERS
+        HIDDEN_LAYERS_PARAMETERS
     )
 
     optimizer = torch.optim.AdamW(
