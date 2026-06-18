@@ -48,6 +48,7 @@ lightning_logs/
 tensorboard/
 logs/
 trained_models/
+graphs/
 
 # Datasets
 data/

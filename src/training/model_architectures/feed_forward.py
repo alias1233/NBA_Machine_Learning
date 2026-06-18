@@ -19,18 +19,25 @@ class FeedForward(nn.Module):
     Simple Configurable Feed Forward Model
     """
 
-    def __init__(self, input_dim: int, output_dim: int, hidden_layers: list[LayerParameters]) -> None: 
+    def __init__(
+            self, 
+            input_dim: int, 
+            output_dim: int, 
+            hidden_layers: list[LayerParameters],
+            save_params: bool = False
+            ) -> None: 
         """
         Initializes the model.
 
         Args: 
-            hidden_layers: holds the number of nodes for each layer, with each index corresponding to a hidden layer.
+            hidden_layers: holds the number of nodes for each layer, with each index corresponding to a hidden layer.  
         """
         super().__init__()
-
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.hidden_layers = hidden_layers
+        
+        if save_params:
+            self.input_dim = input_dim
+            self.output_dim = output_dim
+            self.hidden_layers = hidden_layers
 
         layers = []
         input_size = input_dim

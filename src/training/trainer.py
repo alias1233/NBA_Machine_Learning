@@ -43,4 +43,5 @@ def train(
     with torch.no_grad():
         val_prediction = model(validation_input_data)
         val_loss = loss_function(val_prediction, validation_output_data)
+
     print(f'Final Loss Values- | Train Loss: {loss.item():.4f} | Val Loss: {val_loss.item():.4f}')

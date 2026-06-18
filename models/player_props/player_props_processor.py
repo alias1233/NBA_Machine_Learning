@@ -1,14 +1,12 @@
 import pandas as pd
 from datetime import datetime
-import torch
-from sklearn.preprocessing import StandardScaler
+from enum import Enum
 
 from src.data_preparation.data_collection import data_query as query
 from src.data_preparation.data_collection.databases import player_game_database, player_info_database, team_game_database
 from src.data_preparation.data_preprocessing import nba_data_processing
 from src.data_preparation.data_preprocessing import rolling_category
 from src.data_preparation.data_preprocessing.rolling_category import RollingCategory
-from src.data_preparation.data_preprocessing import training_data_processing
 
 # TODO: Output a categorical distribution of a stat instead of the actual raw stat number and predict a probability of that stat
 # TODO: Allow for choosing which stat to predict the probabilities on, and only predict one stat at a time
@@ -129,11 +127,10 @@ INPUT_STATIC_GAME_DATA_COLUMNS = [
     career_stat.column_name for career_stat in PLAYER_ROLLING_CATEGORIES
 ]
 
-OUTPUT_COLUMNS = [
-    nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
-    nba_data_processing.REBOUNDS + nba_data_processing.PLAYER_SUFFIX,
-    player_game_database.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
-]
+class TargetStat(Enum):
+    PLAYER_POINTS = nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX
+    PLAYER_REBOUNDS = nba_data_processing.REBOUNDS + nba_data_processing.PLAYER_SUFFIX
+    PLAYER_ASSISTS = player_game_database.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
 
 def preprocess_game_data(
         player_info: pd.DataFrame,
@@ -326,6 +323,7 @@ def get_past_games_against_opponent(opponent_game_data: pd.DataFrame, date_of_ga
     return game_data_before_game_data.iloc[-PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH:]
 
 def get_all_player_props_input_output_labeled_data(
+        target_stat: TargetStat,
         validation_split_start_date: datetime,
         test_split_start_date: datetime,
         chunk_step_size: int = 1,
@@ -354,8 +352,6 @@ def get_all_player_props_input_output_labeled_data(
 
     if print_debug:
         print("Arranging data into training chunks...")
-
-    # TODO: Add the rolling data of the opponent team based on the current game
 
     input_training_data: list[dict[str, pd.DataFrame]] = []
     output_training_data: list[pd.DataFrame] = []
@@ -392,7 +388,7 @@ def get_all_player_props_input_output_labeled_data(
 
             input_data_static_game_data = current_game[INPUT_STATIC_GAME_DATA_COLUMNS].to_frame().T
 
-            output_data = current_game[OUTPUT_COLUMNS].to_frame().T
+            output_data = current_game[[target_stat.value]].to_frame().T
 
             input_chunk = {
                 INPUT_DATA_PLAYER_INFO : static_player_info,
@@ -420,55 +416,3 @@ def get_all_player_props_input_output_labeled_data(
         print("Finished data processing.")
     
     return (input_training_data, output_training_data, input_validation_data, output_validation_data, input_test_data, output_test_data)
-
-def get_all_player_props_input_output_training_data(
-        validation_split_start_date: datetime,
-        test_split_start_date: datetime,
-        flatten: bool,
-        chunk_step_size: int = 1,
-        print_debug: bool = False,
-        print_all_datasets: bool = False
-        ) -> tuple[
-        torch.Tensor, torch.Tensor,
-        torch.Tensor, torch.Tensor,
-        torch.Tensor, torch.Tensor,
-        StandardScaler, StandardScaler,
-        ]:
-    """
-    Returns pre-processed training dataset for over/under prediction.
-
-    The returned data is in the form of a tuple consisting of:
-    (input training dataset, output training dataset, 
-    input validation data, output validation dataset, 
-    input test dataset, output test dataset, 
-    input scaler, output scaler)
-    """
-
-    labeled_datasets = get_all_player_props_input_output_labeled_data(
-        validation_split_start_date,
-        test_split_start_date,
-        chunk_step_size,
-        print_debug
-    )
-
-    if print_debug:
-        print('-----------------------------------------------------')
-        input_training_data_chunk: dict[str, pd.DataFrame] = labeled_datasets[0][0]
-        output_training_data_chunk: pd.DataFrame = labeled_datasets[1][0]
-        for label, dataframe in input_training_data_chunk.items():
-            print(f'Input- | Label: {label} | Columns: ')
-            for column_name in list(dataframe.columns):
-                print(column_name)
-
-        print('-----------------------------------------------------')
-        print(f'Output- | Columns: ')
-        for column_name in list(output_training_data_chunk.columns):
-            print(column_name)
-        print('-----------------------------------------------------')
-
-    if print_all_datasets:
-        print(labeled_datasets[0][0])
-        print(labeled_datasets[1][0])
-
-    return training_data_processing.process_raw_data_for_training(*labeled_datasets, flatten=flatten)
-

@@ -10,5 +10,6 @@ dependencies = [
     "torch>=2.4.0",
     "scikit-learn>=1.6.0",
     "nba_api",
-    "jupyter>=1.1.1"
+    "jupyter>=1.1.1",
+    "matplotlib"
 ]

@@ -40,49 +40,31 @@ def convert_labeled_data_to_numpy(
         samples = [to_array(cast(pd.DataFrame | pd.Series, chunk)) for chunk in data]
     else:
         raise ValueError(f"Unsupported chunk type: {type(first).__name__}. Expected dict, DataFrame, or Series.")
-
+    
     return np.stack(samples)
 
-
 def normalize(
-    input_train: np.ndarray,
-    output_train: np.ndarray,
-    input_val: np.ndarray,
-    output_val: np.ndarray,
-    input_test: np.ndarray,
-    output_test: np.ndarray,
-) -> tuple[
-    np.ndarray, np.ndarray,
-    np.ndarray, np.ndarray,
-    np.ndarray, np.ndarray,
-    StandardScaler, StandardScaler,
-]:
+    training_data: np.ndarray,
+    validation_data: np.ndarray,
+    test_data: np.ndarray    
+    ) -> tuple[
+        np.ndarray, 
+        np.ndarray,
+        np.ndarray,
+        StandardScaler
+    ]:
     """
-    Fit StandardScalers on the training split and transform all splits.
- 
-    Scalers are fit only on training data to prevent data leakage.
- 
-    Returns the six transformed arrays plus (input_scaler, output_scaler) so
-    they can be reused at inference time.
+    Fit StandardScalers on the training data and transform the test.
     """
 
-    input_scaler = StandardScaler()
-    output_scaler = StandardScaler()
- 
-    input_train_norm = input_scaler.fit_transform(input_train)
-    output_train_norm = output_scaler.fit_transform(output_train)
- 
-    input_val_norm = input_scaler.transform(input_val)
-    output_val_norm = output_scaler.transform(output_val)
- 
-    input_test_norm = input_scaler.transform(input_test)
-    output_test_norm = output_scaler.transform(output_test)
- 
+    scaler = StandardScaler()
+
+    train_norm = scaler.fit_transform(training_data)
+    validation_norm = scaler.transform(validation_data)
+    test_norm = scaler.transform(test_data)
+    
     return (
-        input_train_norm, output_train_norm,
-        input_val_norm, output_val_norm,
-        input_test_norm, output_test_norm,
-        input_scaler, output_scaler,
+        train_norm, validation_norm, test_norm, scaler
     )
 
 def to_tensor(array: np.ndarray) -> torch.Tensor:
@@ -95,17 +77,28 @@ def process_raw_data_for_training(
         output_validation_data: list, 
         input_test_data: list, 
         output_test_data: list,
-        flatten: bool
-    ) -> tuple:
+        flatten: bool,
+        scale_input: bool = False,
+        scale_output: bool = False
+    ) -> tuple[
+        torch.Tensor, torch.Tensor,
+        torch.Tensor, torch.Tensor,
+        torch.Tensor, torch.Tensor,
+        StandardScaler | None,
+        StandardScaler | None
+    ]:
     """
     Converts raw data in the form of lists of (dataframes or dicts of dataframes) into data for machine learning. 
-    The resulting data is normalized and in the form of tensors.
+    The resulting data can be normalized and in the form of tensors.
 
     The returned data is in the form of a tuple consisting of:
-    (input training dataset, output training dataset, 
+    (
+    input training dataset, output training dataset, 
     input validation data, output validation dataset, 
-    input test dataset, output test dataset, 
-    input scaler, output scaler)
+    input test dataset, output test dataset,
+    input_scaler if scale_input is True, otherwise None,
+    output_scaler if scale_output is True, otherwise None
+    )
     """
     
     input_train_numpy = convert_labeled_data_to_numpy(input_training_data, flatten)
@@ -115,29 +108,101 @@ def process_raw_data_for_training(
     input_test_numpy = convert_labeled_data_to_numpy(input_test_data, flatten)
     output_test_numpy = convert_labeled_data_to_numpy(output_test_data, flatten)
 
-    (input_train_norm, output_train_norm, 
-     input_val_norm, output_val_norm,
-     input_test_norm, output_test_norm,
-     input_scaler, output_scaler,
-    ) = normalize(
-        input_train_numpy,
-        output_train_numpy,
-        input_val_numpy,
-        output_val_numpy,
-        input_test_numpy,
-        output_test_numpy
-        )
+    input_scaler = None
+    output_scaler = None
+    if scale_input:
+        input_train_numpy, input_val_numpy, input_test_numpy, input_scaler = normalize(
+            input_train_numpy, input_val_numpy, input_test_numpy
+            )
+    if scale_output:
+        output_train_numpy, output_val_numpy, output_test_numpy, output_scaler = normalize(
+            output_train_numpy, output_val_numpy, output_test_numpy
+            )
 
-    input_train_tensor = to_tensor(input_train_norm)
-    output_train_tensor = to_tensor(output_train_norm)
-    input_val_tensor = to_tensor(input_val_norm)
-    output_val_tensor = to_tensor(output_val_norm)
-    input_test_tensor = to_tensor(input_test_norm)
-    output_test_tensor = to_tensor(output_test_norm)
+    input_train_tensor = to_tensor(input_train_numpy)
+    output_train_tensor = to_tensor(output_train_numpy)
+    input_val_tensor = to_tensor(input_val_numpy)
+    output_val_tensor = to_tensor(output_val_numpy)
+    input_test_tensor = to_tensor(input_test_numpy)
+    output_test_tensor = to_tensor(output_test_numpy)
 
     return (
         input_train_tensor, output_train_tensor, 
         input_val_tensor, output_val_tensor, 
-        input_test_tensor, output_test_tensor, 
+        input_test_tensor, output_test_tensor,
         input_scaler, output_scaler
+        )
+
+def process_raw_data_for_classification_training(
+        input_training_data: list, 
+        output_training_data: list, 
+        input_validation_data: list, 
+        output_validation_data: list, 
+        input_test_data: list, 
+        output_test_data: list,
+        flatten: bool,
+        min_output_value: int = 0,
+        num_classifications: int | None = None,
+        scale_input: bool = False,
+    ) -> tuple[
+        torch.Tensor, torch.Tensor,
+        torch.Tensor, torch.Tensor,
+        torch.Tensor, torch.Tensor,
+        StandardScaler | None
+    ]:
+    """
+    Converts raw data in the form of lists of (dataframes or dicts of dataframes) into data for classification with Cross Entropy Loss. 
+    The resulting data is in the form of tensors.
+    The input data can be normalized.
+    The output data will be formed into 1 dimensional long numpy arrays.
+    The output data will be subtracted by min_output_value so that the outputs start from 0.
+    The output data will be clamped by num_classifications so that there are that many total values in the dataset.
+    The output data will be squeezed to be a one dimensional tensor.
+
+    The returned data is in the form of a tuple consisting of:
+    (
+    input training dataset, output training dataset, 
+    input validation data, output validation dataset, 
+    input test dataset, output test dataset,
+    input_scaler if scale_input is True, otherwise None
+    )
+    """
+
+    (input_train, output_train, 
+     input_val, output_val, 
+     input_test, output_test, 
+     input_scaler_or_none, ALWAYS_NONE
+     ) = process_raw_data_for_training(
+         input_training_data,
+         output_training_data,
+         input_validation_data,
+         output_validation_data,
+         input_test_data,
+         output_test_data,
+         flatten,
+         scale_input,
+         False
+         )
+    
+    output_train = output_train.squeeze(-1).long()
+    output_val = output_val.squeeze(-1).long()
+    output_test = output_test.squeeze(-1).long()
+
+    output_train = output_train.sub(min_output_value)
+    output_val = output_val.sub(min_output_value)
+    output_test = output_test.sub(min_output_value)
+
+    if num_classifications is not None:
+        output_train = output_train.clamp(max=num_classifications - 1)
+        output_val = output_val.clamp(max=num_classifications - 1)
+        output_test = output_test.clamp(max=num_classifications - 1)
+    
+    return (
+        input_train, 
+        output_train,
+        input_val,
+        output_val, 
+        input_test,
+        output_test, 
+        input_scaler_or_none
         )
