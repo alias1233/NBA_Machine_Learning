@@ -2,14 +2,14 @@ import requests
 import time
 
 from nba_api.stats.static import teams, players
-from nba_api.stats.library.parameters import Season, SeasonTypeAllStar, PlayerOrTeamAbbreviation
-from nba_api.stats.endpoints import boxscoretraditionalv3, playergamelog, commonplayerinfo, leaguegamelog
+from nba_api.stats.library.parameters import Season, SeasonTypeAllStar
 
 def retry(func, retries: int = 3, timeout: int = 5):
     """
     Wrapper to retry a function call [retries] times as originally defined in:
     https://github.com/swar/nba_api/blob/master/docs/examples/Home%20Team%20Win-Loss%20Modeling/Home%20Team%20Win-Loss%20Data%20Prep.ipynb
     """
+
     def retry_wrapper(*args, **kwargs):
         attempts = 0
         while attempts < retries:
@@ -24,7 +24,7 @@ def retry(func, retries: int = 3, timeout: int = 5):
 
 class NBAData():
     """
-    Handles Retrieving NBA Data
+    Helpers for getting NBA stats data.
     """
 
     @staticmethod
@@ -92,55 +92,3 @@ class NBAData():
             return None
         
         return player_data['full_name']
-    
-    @staticmethod
-    @retry
-    def get_common_player_info(player_id: str):
-        return commonplayerinfo.CommonPlayerInfo(
-            player_id=player_id
-        ).get_data_frames()
-    
-    @staticmethod
-    @retry
-    def get_game_box_score_stats(game_id: str):
-        return boxscoretraditionalv3.BoxScoreTraditionalV3(
-            game_id=game_id
-            ).get_data_frames()
-    
-    @staticmethod
-    @retry
-    def get_player_season_game_logs(player_id: str, season_year: int, season_type: str):
-        try:
-            return playergamelog.PlayerGameLog(
-                player_id=player_id,
-                season=NBAData.convert_year_to_NBA_season(season_year),
-                season_type_all_star=season_type
-            ).get_data_frames()
-        except Exception as e:
-            print(f"player id {player_id} in the {season_year} season with {season_type} season type is invalid.")
-            print(f"Error Message: {e}")
-
-    @staticmethod
-    @retry
-    def get_all_teams_season_game_logs(season_year: int, season_type: str):
-        try:
-            return leaguegamelog.LeagueGameLog(
-                season=NBAData.convert_year_to_NBA_season(season_year),
-                season_type_all_star=season_type
-            ).get_data_frames()
-        except Exception as e:
-            print(f"The year {season_year} with {season_type} season type is invalid")
-            print(f"Error Message: {e}")
-
-    @staticmethod
-    @retry
-    def get_all_players_season_game_logs(season_year: int, season_type: str):
-        try:
-            return leaguegamelog.LeagueGameLog(
-                player_or_team_abbreviation=PlayerOrTeamAbbreviation.player,
-                season=NBAData.convert_year_to_NBA_season(season_year),
-                season_type_all_star=season_type
-            ).get_data_frames()
-        except Exception as e:
-            print(f"The year {season_year} with {season_type} season type is invalid")
-            print(f"Error Message: {e}")

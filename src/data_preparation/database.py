@@ -36,7 +36,7 @@ class Database():
         self.cursor = self.connection.cursor()
 
     @staticmethod
-    def get_categories_index_dict(categories: list[Category]) -> dict:
+    def get_categories_index_dict(categories: list[Category]) -> dict[str, int]:
         return {category.category_name : index for index, category in enumerate(categories)}
 
     @staticmethod
@@ -136,7 +136,7 @@ class Database():
         command = f"""SELECT {query_columns} FROM {self.name}"""
         if SQL_condition:
             command = f"{command} WHERE {SQL_condition}"
-        if limit:
+        if limit is not None:
             command += f""" LIMIT {limit}"""
         if condition_params:
             string_dict = self.category_to_category_name_dict(condition_params)
@@ -153,7 +153,7 @@ class Database():
             limit: int | None = None
             ) -> pd.DataFrame:
         """
-        Identical to [query] except that the values are returned as a pandas.DataFrame.
+        Identical to [query] except that the values are returned as a labeled pandas.DataFrame.
         """
 
         data = self.query(SQL_condition, condition_params, categories, limit)
@@ -177,10 +177,17 @@ class Database():
     def get_category_names(self) -> list[str]:
         return self.category_names
 
-    def get_property_from_value(
+    def get_value_from_category(
             self, 
             value: list, 
             category_name: str
             ):
         
         return value[self.categories_index_dict[category_name]]
+    
+    def __enter__(self):
+        self.initialize_components()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False

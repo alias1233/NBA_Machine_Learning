@@ -4,15 +4,12 @@ import torch, torch.nn as nn
 from sklearn.preprocessing import StandardScaler
 from dataclasses import dataclass
 
-from models import helpers
-from . import player_props_processor
-from src.data_preparation.data_preprocessing import training_data_processing
-from src.training import trainer
+from . import data_processor
+from src.data_preprocessing import training_data_processing
+from src.training import trainer, helpers
 from src.training.model_architectures import feed_forward
 from src.training.model_architectures.feed_forward import FeedForward, LayerParameters
 from src.training.loss_functions.gaussian_smoothed_cross_entropy_loss import GaussianSmoothedCrossEntropyLoss
-
-# TODO: Implement gaussian loss function instead of cross entropy (?)
 
 SAVE_GRAPHS_DIRECTOR_PATH = "graphs/player_prop"
 
@@ -23,11 +20,11 @@ SAVE_TEST_MODEL_FILE_PATH = TEST_MODEL_DIRECTORY_PATH + 'model.pth'
 
 RANDOM_SEED = 5
 
-TARGET_STAT = player_props_processor.TargetStat.PLAYER_POINTS
+TARGET_STAT = data_processor.TargetStat.PLAYER_POINTS
 MINIMUM_OF_STAT = 0
 NUM_STAT_CLASSIFICATIONS = 60
 
-CHUNK_STEP_SIZE = 1
+CHUNK_STEP_SIZE = 100
 VALIDATION_START_DATE = datetime(2026, 1, 1)
 TEST_START_DATE = datetime(2026, 3, 1)
 
@@ -71,7 +68,7 @@ def train(
     np.random.seed(RANDOM_SEED)    
 
     # Fetching and rearranging training data
-    labeled_datasets = player_props_processor.get_all_player_props_input_output_labeled_data(
+    labeled_datasets = data_processor.get_all_player_props_input_output_labeled_data(
         TARGET_STAT,
         VALIDATION_START_DATE,
         TEST_START_DATE,

@@ -2,7 +2,7 @@ import torch
 from sklearn.preprocessing import StandardScaler
 from dataclasses import dataclass
 
-from . import player_props_processor
+from . import data_processor
 
 from src.training.model_architectures import feed_forward
 from src.training.model_architectures.feed_forward import FeedForward
@@ -14,13 +14,13 @@ INPUT_SCALER = 'input_scaler'
 @dataclass
 class ModelStructure():
     name: str
-    target_stat: player_props_processor.TargetStat
+    target_stat: data_processor.TargetStat
     minimum_of_stat: int
     number_of_stat_classifications: int
 
 PLAYER_PROPS_POINTS_MODEL = ModelStructure(
     "Points",
-    player_props_processor.TargetStat.PLAYER_POINTS,
+    data_processor.TargetStat.PLAYER_POINTS,
     0,
     60
     )

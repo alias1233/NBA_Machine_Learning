@@ -2,21 +2,20 @@ import pandas as pd
 from datetime import datetime
 from enum import Enum
 
-from src.data_preparation.data_collection import data_query as query
-from src.data_preparation.data_collection.databases import player_game_database, player_info_database, team_game_database
-from src.data_preparation.data_preprocessing import nba_data_processing
-from src.data_preparation.data_preprocessing import rolling_category
-from src.data_preparation.data_preprocessing.rolling_category import RollingCategory
+from modules.data_managers import player_game_data_manager, player_info_manager, team_game_data_manager
+from src.data_preprocessing import nba_data_processing
+from src.data_preprocessing import rolling_category
+from src.data_preprocessing.rolling_category import RollingCategory
 
 # TODO: Output a categorical distribution of a stat instead of the actual raw stat number and predict a probability of that stat
 # TODO: Allow for choosing which stat to predict the probabilities on, and only predict one stat at a time
 # TODO: Add average opponet allowed points, rebounds, and assists in total to the dataset
 
 DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
-    team_game_database.GAME_DATE.category_name,
-    team_game_database.WIN_LOSS.category_name,
-    team_game_database.MATCHUP.category_name,
-    team_game_database.MINUTES_PLAYED.category_name,
+    team_game_data_manager.GAME_DATE.category_name,
+    team_game_data_manager.WIN_LOSS.category_name,
+    team_game_data_manager.MATCHUP.category_name,
+    team_game_data_manager.MINUTES_PLAYED.category_name,
     nba_data_processing.HOME_OR_AWAY,
     nba_data_processing.PRESEASON,
     nba_data_processing.REGULAR_SEASON,
@@ -25,12 +24,12 @@ DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
 ]
 
 PRE_UNUSED_PLAYER_CATEGORIES = [
-    player_game_database.MATCHUP.category_name,
-    player_game_database.WIN_LOSS.category_name
+    player_game_data_manager.MATCHUP.category_name,
+    player_game_data_manager.WIN_LOSS.category_name
 ]
 
 DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES = [
-    player_game_database.GAME_DATE.category_name
+    player_game_data_manager.GAME_DATE.category_name
 ]
 
 # STATS BY ATTRIBUTES: #
@@ -39,7 +38,7 @@ ATTRIBUTE_COLUMNS = nba_data_processing.ALL_POSITIONS
 STAT_COLUMNS = [
     nba_data_processing.POINTS,
     nba_data_processing.REBOUNDS,
-    player_game_database.ASSISTS.category_name
+    player_game_data_manager.ASSISTS.category_name
 ]
 ALL_STATS_BY_ATTRIBUTE_COLUMNS = [stat + nba_data_processing.STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute for stat in STAT_COLUMNS for attribute in ATTRIBUTE_COLUMNS]
 
@@ -92,19 +91,19 @@ INPUT_DATA_STATIC_DATA = "STATIC_DATA"
 MINIMUM_REQUIRED_GAMES_PLAYED = PAST_GAMES_PLAYED_SEQUENCE_LENGTH + 1
 
 POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
-    player_info_database.PLAYER_ID.category_name,
-    player_info_database.POSITION.category_name,
-    player_info_database.FROM_YEAR.category_name,
-    player_info_database.TO_YEAR.category_name,
-    player_info_database.BIRTHDATE.category_name
+    player_info_manager.PLAYER_ID.category_name,
+    player_info_manager.POSITION.category_name,
+    player_info_manager.FROM_YEAR.category_name,
+    player_info_manager.TO_YEAR.category_name,
+    player_info_manager.BIRTHDATE.category_name
 ]
 POST_UNUSED_TRAINING_DATA_COLUMNS_SEQUENCE = [
-    team_game_database.TEAM_ID.category_name, nba_data_processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name,
-    team_game_database.GAME_DATE.category_name,
-    team_game_database.GAME_ID.category_name,
-    team_game_database.MATCHUP.category_name,
-    team_game_database.WIN_LOSS.category_name,
-    player_game_database.PLAYER_ID.category_name
+    team_game_data_manager.TEAM_ID.category_name, nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name,
+    team_game_data_manager.GAME_DATE.category_name,
+    team_game_data_manager.GAME_ID.category_name,
+    team_game_data_manager.MATCHUP.category_name,
+    team_game_data_manager.WIN_LOSS.category_name,
+    player_game_data_manager.PLAYER_ID.category_name
 ] + (
     ALL_STATS_BY_ATTRIBUTE_COLUMNS
 ) + [
@@ -131,7 +130,7 @@ INPUT_STATIC_GAME_DATA_COLUMNS = [
 class TargetStat(Enum):
     PLAYER_POINTS = nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX
     PLAYER_REBOUNDS = nba_data_processing.REBOUNDS + nba_data_processing.PLAYER_SUFFIX
-    PLAYER_ASSISTS = player_game_database.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
+    PLAYER_ASSISTS = player_game_data_manager.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
 
 def preprocess_game_data(
         player_info: pd.DataFrame,
@@ -148,101 +147,101 @@ def preprocess_game_data(
     if print_debug:
         print("Feature engineering isolated data...")
 
-    player_info[player_info_database.BIRTHDATE.category_name] = pd.to_datetime(player_info[player_info_database.BIRTHDATE.category_name])
-    player_info[player_info_database.FROM_YEAR.category_name] = pd.to_datetime(player_info[player_info_database.FROM_YEAR.category_name], format='%Y')
+    player_info[player_info_manager.BIRTHDATE.category_name] = pd.to_datetime(player_info[player_info_manager.BIRTHDATE.category_name])
+    player_info[player_info_manager.FROM_YEAR.category_name] = pd.to_datetime(player_info[player_info_manager.FROM_YEAR.category_name], format='%Y')
     player_info = nba_data_processing.convert_height_to_inches(
         player_info,
-        player_info_database.HEIGHT.category_name
+        player_info_manager.HEIGHT.category_name
     )
     player_info = nba_data_processing.add_encoded_position_columns(
         player_info,
-        player_info_database.POSITION.category_name
+        player_info_manager.POSITION.category_name
         )
     player_info = nba_data_processing.encode_undrafted(
         player_info,
-        player_info_database.DRAFT_NUMBER.category_name
+        player_info_manager.DRAFT_NUMBER.category_name
     )
     player_info = nba_data_processing.encode_unknown_weight(
         player_info,
-        player_info_database.WEIGHT.category_name
+        player_info_manager.WEIGHT.category_name
     )
 
     player_game_data = player_game_data.drop(columns=PRE_UNUSED_PLAYER_CATEGORIES, errors='ignore')
-    player_game_data[player_game_database.GAME_DATE.category_name] = pd.to_datetime(player_game_data[player_game_database.GAME_DATE.category_name])
+    player_game_data[player_game_data_manager.GAME_DATE.category_name] = pd.to_datetime(player_game_data[player_game_data_manager.GAME_DATE.category_name])
     player_game_data = nba_data_processing.add_points_column(
         player_game_data, 
-        player_game_database.FIELD_GOALS_MADE.category_name, 
-        player_game_database.THREE_POINTERS_MADE.category_name, 
-        player_game_database.FREE_THROWS_MADE.category_name
+        player_game_data_manager.FIELD_GOALS_MADE.category_name, 
+        player_game_data_manager.THREE_POINTERS_MADE.category_name, 
+        player_game_data_manager.FREE_THROWS_MADE.category_name
         )
     player_game_data = nba_data_processing.add_total_rebounds_column(
         player_game_data,
-        player_game_database.OFFENSIVE_REBOUNDS.category_name,
-        player_game_database.DEFENSIVE_REBOUNDS.category_name
+        player_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
+        player_game_data_manager.DEFENSIVE_REBOUNDS.category_name
         )
     player_game_data = nba_data_processing.add_age_during_game_column(
         player_game_data,
         player_info,
-        player_info_database.PLAYER_ID.category_name,
-        player_game_database.PLAYER_ID.category_name,
-        player_info_database.BIRTHDATE.category_name,
-        player_game_database.GAME_DATE.category_name
+        player_info_manager.PLAYER_ID.category_name,
+        player_game_data_manager.PLAYER_ID.category_name,
+        player_info_manager.BIRTHDATE.category_name,
+        player_game_data_manager.GAME_DATE.category_name
     )
     player_game_data = nba_data_processing.add_years_NBA_experience_during_game_column(
         player_game_data,
         player_info,
-        player_info_database.PLAYER_ID.category_name,
-        player_game_database.PLAYER_ID.category_name,
-        player_info_database.FROM_YEAR.category_name,
-        player_game_database.GAME_DATE.category_name
+        player_info_manager.PLAYER_ID.category_name,
+        player_game_data_manager.PLAYER_ID.category_name,
+        player_info_manager.FROM_YEAR.category_name,
+        player_game_data_manager.GAME_DATE.category_name
     )
 
-    team_game_data[team_game_database.GAME_DATE.category_name] = pd.to_datetime(team_game_data[team_game_database.GAME_DATE.category_name])
+    team_game_data[team_game_data_manager.GAME_DATE.category_name] = pd.to_datetime(team_game_data[team_game_data_manager.GAME_DATE.category_name])
     team_game_data = nba_data_processing.add_points_column(
         team_game_data,
-        team_game_database.FIELD_GOALS_MADE.category_name, 
-        team_game_database.THREE_POINTERS_MADE.category_name, 
-        team_game_database.FREE_THROWS_MADE.category_name
+        team_game_data_manager.FIELD_GOALS_MADE.category_name, 
+        team_game_data_manager.THREE_POINTERS_MADE.category_name, 
+        team_game_data_manager.FREE_THROWS_MADE.category_name
         )
     team_game_data = nba_data_processing.add_total_rebounds_column(
         team_game_data,
-        team_game_database.OFFENSIVE_REBOUNDS.category_name,
-        team_game_database.DEFENSIVE_REBOUNDS.category_name
+        team_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
+        team_game_data_manager.DEFENSIVE_REBOUNDS.category_name
         )
     team_game_data = nba_data_processing.add_possessions_column(
         team_game_data,
-        team_game_database.FIELD_GOALS_ATTEMPTED.category_name,
-        team_game_database.FREE_THROWS_ATTEMPTED.category_name,
-        team_game_database.OFFENSIVE_REBOUNDS.category_name,
-        team_game_database.TURNOVERS.category_name
+        team_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name,
+        team_game_data_manager.FREE_THROWS_ATTEMPTED.category_name,
+        team_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
+        team_game_data_manager.TURNOVERS.category_name
         )
     team_game_data = nba_data_processing.add_encoded_season_type_columns(
         team_game_data,
-        team_game_database.GAME_ID.category_name
+        team_game_data_manager.GAME_ID.category_name
         )
     team_game_data = nba_data_processing.add_encoded_home_or_away_column(
         team_game_data,
-        team_game_database.MATCHUP.category_name
+        team_game_data_manager.MATCHUP.category_name
         )
     team_game_data = nba_data_processing.encode_win_loss_column_as_integer(
         team_game_data,
-        team_game_database.WIN_LOSS.category_name
+        team_game_data_manager.WIN_LOSS.category_name
     )
     team_game_data = nba_data_processing.add_total_player_stats_per_game_by_attribute(
         team_game_data,
         player_game_data,
         player_info,
-        player_info_database.PLAYER_ID.category_name,
-        player_game_database.PLAYER_ID.category_name,
-        team_game_database.GAME_ID.category_name,
-        team_game_database.TEAM_ID.category_name,
+        player_info_manager.PLAYER_ID.category_name,
+        player_game_data_manager.PLAYER_ID.category_name,
+        team_game_data_manager.GAME_ID.category_name,
+        team_game_data_manager.TEAM_ID.category_name,
         ATTRIBUTE_COLUMNS,
         STAT_COLUMNS
     )
     team_game_data = nba_data_processing.add_opponent_stat_columns(
         team_game_data,
-        team_game_database.GAME_ID.category_name,
-        team_game_database.TEAM_ID.category_name,
+        team_game_data_manager.GAME_ID.category_name,
+        team_game_data_manager.TEAM_ID.category_name,
         DUPLICATE_OPPONENT_MERGED_CATEGORIES
         )
 
@@ -250,8 +249,8 @@ def preprocess_game_data(
         print("Feature engineering historical-context-dependant game data...")
 
     accumulator = []
-    for _, game_data in team_game_data.groupby(by=team_game_database.TEAM_ID.category_name):
-        game_data = game_data.sort_values(by=team_game_database.GAME_DATE.category_name)
+    for _, game_data in team_game_data.groupby(by=team_game_data_manager.TEAM_ID.category_name):
+        game_data = game_data.sort_values(by=team_game_data_manager.GAME_DATE.category_name)
         game_data = rolling_category.add_rolling_function_columns(game_data, TEAM_ROLLING_CATEGORIES)
 
         accumulator.append(game_data)
@@ -259,24 +258,24 @@ def preprocess_game_data(
     team_game_data = pd.concat(accumulator)
 
     accumulator = []
-    for _, game_data in team_game_data.groupby(by=nba_data_processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name):
-        game_data = game_data.sort_values(by=team_game_database.GAME_DATE.category_name)
+    for _, game_data in team_game_data.groupby(by=nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name):
+        game_data = game_data.sort_values(by=team_game_data_manager.GAME_DATE.category_name)
         game_data = rolling_category.add_rolling_function_columns(game_data, OPPONENT_TEAM_ROLLING_CATEGORIES)
         
         accumulator.append(game_data)
     
     team_game_data = pd.concat(accumulator)
 
-    all_valid_players = player_info[player_info_database.PLAYER_ID.category_name].unique()
+    all_valid_players = player_info[player_info_manager.PLAYER_ID.category_name].unique()
     accumulator = []
-    for player_id, game_data in player_game_data.groupby(by=player_game_database.PLAYER_ID.category_name):
+    for player_id, game_data in player_game_data.groupby(by=player_game_data_manager.PLAYER_ID.category_name):
         if len(game_data) < MINIMUM_REQUIRED_GAMES_PLAYED or player_id not in all_valid_players:
             continue
         
-        game_data = game_data.sort_values(by=player_game_database.GAME_DATE.category_name)
+        game_data = game_data.sort_values(by=player_game_data_manager.GAME_DATE.category_name)
         game_data = nba_data_processing.add_rest_column(
             game_data,
-            player_game_database.GAME_DATE.category_name
+            player_game_data_manager.GAME_DATE.category_name
             )
         game_data = rolling_category.add_rolling_function_columns(game_data, PLAYER_ROLLING_CATEGORIES)
 
@@ -290,23 +289,23 @@ def preprocess_game_data(
     player_info = nba_data_processing.sort_columns_alphabetically(player_info)
     static_player_info_dict = nba_data_processing.create_lookup_table(
         player_info,
-        player_info_database.PLAYER_ID.category_name
+        player_info_manager.PLAYER_ID.category_name
     )
     
     player_team_game_data = nba_data_processing.merge_player_team_game_data(
         player_game_data,
         team_game_data,
-        team_game_database.GAME_ID.category_name,
-        player_game_database.GAME_ID.category_name,
-        team_game_database.TEAM_ID.category_name,
-        player_game_database.TEAM_ID.category_name,
+        team_game_data_manager.GAME_ID.category_name,
+        player_game_data_manager.GAME_ID.category_name,
+        team_game_data_manager.TEAM_ID.category_name,
+        player_game_data_manager.TEAM_ID.category_name,
         DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES
     )
     player_team_game_data = nba_data_processing.sort_columns_alphabetically(player_team_game_data)
 
     preprocessed_game_data = []
-    for player_id, game_data in player_team_game_data.groupby(by=player_game_database.PLAYER_ID.category_name):
-        game_data = game_data.sort_values(by=team_game_database.GAME_DATE.category_name)
+    for player_id, game_data in player_team_game_data.groupby(by=player_game_data_manager.PLAYER_ID.category_name):
+        game_data = game_data.sort_values(by=team_game_data_manager.GAME_DATE.category_name)
         
         preprocessed_game_data.append((static_player_info_dict[player_id], game_data))
 
@@ -316,7 +315,7 @@ def preprocess_game_data(
     return preprocessed_game_data
 
 def get_past_games_against_opponent(opponent_game_data: pd.DataFrame, date_of_game: datetime) -> pd.DataFrame | None:
-    game_data_before_game_data = opponent_game_data[opponent_game_data[team_game_database.GAME_DATE.category_name] < date_of_game]
+    game_data_before_game_data = opponent_game_data[opponent_game_data[team_game_data_manager.GAME_DATE.category_name] < date_of_game]
     
     if len(game_data_before_game_data) < PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH:
         return None
@@ -340,13 +339,13 @@ def get_all_player_props_input_output_labeled_data(
     if print_debug:
         print("Querying data from databases...")
 
-    all_player_info: pd.DataFrame = query.get_all_players_info()
+    all_player_info: pd.DataFrame = player_info_manager.get_all_players_info()
     all_player_info = all_player_info.dropna()
 
-    all_player_game_data: pd.DataFrame = query.get_all_player_game_data()
+    all_player_game_data: pd.DataFrame = player_game_data_manager.get_all_player_game_data()
     all_player_game_data = all_player_game_data.dropna()
 
-    all_team_game_data: pd.DataFrame = query.get_all_team_game_data()
+    all_team_game_data: pd.DataFrame = team_game_data_manager.get_all_team_game_data()
     all_team_game_data = all_team_game_data.dropna()
 
     data_per_player = preprocess_game_data(all_player_info, all_player_game_data, all_team_game_data, print_debug)
@@ -367,17 +366,17 @@ def get_all_player_props_input_output_labeled_data(
 
         opponent_game_data_dict = nba_data_processing.create_lookup_table(
             player_game_data, 
-            nba_data_processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name
+            nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name
         )
 
         for index in range(PAST_GAMES_PLAYED_SEQUENCE_LENGTH, len(player_game_data), chunk_step_size):
             current_game = player_game_data.iloc[index]
 
             # Creating sequence of last played games against the opponent of the current game
-            opponent_team_id = current_game[nba_data_processing.OPPONENT_PREFIX + team_game_database.TEAM_ID.category_name]
+            opponent_team_id = current_game[nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name]
             if opponent_team_id not in opponent_game_data_dict:
                 continue
-            date_of_game: datetime = current_game[team_game_database.GAME_DATE.category_name]
+            date_of_game: datetime = current_game[team_game_data_manager.GAME_DATE.category_name]
             past_games_against_opponent = get_past_games_against_opponent(opponent_game_data_dict[opponent_team_id], date_of_game)
             if past_games_against_opponent is None:
                 continue

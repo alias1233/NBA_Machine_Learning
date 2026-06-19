@@ -1,7 +1,7 @@
 from enum import Enum
 
-from src.data_preparation.data_collection import data_collection
-from src.data_preparation.components.nba_data import NBAData
+from modules.data_managers import player_game_data_manager, team_game_data_manager, player_info_manager
+from src.data_preparation.nba_data import NBAData
 
 class NBADataUser():
     """
@@ -41,7 +41,7 @@ class NBADataUser():
     @staticmethod
     def get_season_user() -> int | None:
         def get_season_user():
-            season = int(input("Input the season year: "))
+            season = int(input("Input the season year, or q to quit: "))
             oldest_season = NBAData.get_oldest_season_with_all_player_box_score_data_data()
             current_season = NBAData.get_current_nba_season()
             invalid_input = season < oldest_season or season > current_season
@@ -156,13 +156,13 @@ def collect_player_info_data_user():
             player_ids.append(player_id)
         return player_ids
     
-    return collect_data_user(get_player_ids_user, data_collection.collect_player_info_data)
+    return collect_data_user(get_player_ids_user, player_info_manager.collect_player_info_data)
 
 def collect_player_game_data_user():
-    return collect_data_user(get_seasons_user, data_collection.collect_player_game_data)
+    return collect_data_user(get_seasons_user, player_game_data_manager.collect_player_game_data)
 
 def collect_team_game_data_user():
-    return collect_data_user(get_seasons_user, data_collection.collect_team_game_data)
+    return collect_data_user(get_seasons_user, team_game_data_manager.collect_team_game_data)
 
 def begin_collect_data_user():
     data_category_input = input("""Input the category of data to collect:
