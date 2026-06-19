@@ -10,6 +10,7 @@ from src.data_preparation.data_preprocessing import training_data_processing
 from src.training import trainer
 from src.training.model_architectures import feed_forward
 from src.training.model_architectures.feed_forward import FeedForward, LayerParameters
+from src.training.loss_functions.gaussian_smoothed_cross_entropy_loss import GaussianSmoothedCrossEntropyLoss
 
 # TODO: Implement gaussian loss function instead of cross entropy (?)
 
@@ -17,15 +18,10 @@ SAVE_GRAPHS_DIRECTOR_PATH = "graphs/player_prop"
 
 SAVE_MODELS_DIRECTORY_PATH = 'trained_models/'
 
-# Finish this to allow for training for rebounds/assists
-@dataclass
-class ModelParameters():
-    NAME: str
-
 TEST_MODEL_DIRECTORY_PATH = SAVE_MODELS_DIRECTORY_PATH + 'player_prop/'
 SAVE_TEST_MODEL_FILE_PATH = TEST_MODEL_DIRECTORY_PATH + 'model.pth'
 
-RANDOM_SEED = 1
+RANDOM_SEED = 5
 
 TARGET_STAT = player_props_processor.TargetStat.PLAYER_POINTS
 MINIMUM_OF_STAT = 0
@@ -36,15 +32,15 @@ VALIDATION_START_DATE = datetime(2026, 1, 1)
 TEST_START_DATE = datetime(2026, 3, 1)
 
 HIDDEN_LAYERS_PARAMETERS = [
-    LayerParameters(256, nn.ReLU, True, 0.15),
-    LayerParameters(256, nn.ReLU, True, 0.15),
-    LayerParameters(128, nn.ReLU, True, 0.15),
-    LayerParameters(128, nn.ReLU, True, 0.15)
+    LayerParameters(256, nn.ReLU, True, 0.25),
+    LayerParameters(256, nn.ReLU, True, 0.25),
+    LayerParameters(256, nn.ReLU, True, 0.25),
+    LayerParameters(256, nn.ReLU, True, 0.25)
 ]
 
 LEARNING_RATE = 0.0005
-EPOCHS = 80
-LOSS_FUNCTION = torch.nn.CrossEntropyLoss()
+EPOCHS = 120
+LOSS_FUNCTION = GaussianSmoothedCrossEntropyLoss(NUM_STAT_CLASSIFICATIONS, 1)
 LOG_LOSS_INTERVAL = 10
 
 INPUT_SCALER = 'input_scaler'
@@ -62,9 +58,9 @@ def load_model() -> tuple[torch.nn.Module, StandardScaler]:
     return (model, full_model_params[INPUT_SCALER])
     
 def train(
-        print_debug: bool = False,
+        print_debug: bool = False, 
         print_all_debug: bool = False
-          ):
+        ):
     
     if print_all_debug:
         import pandas as pd
@@ -83,6 +79,7 @@ def train(
         print_debug
     )
 
+    # TODO: Move this print debugging somewhere else
     if print_debug:
         print('-----------------------------------------------------')
         input_training_data_chunk: dict[str, pd.DataFrame] = labeled_datasets[0][0]
@@ -123,7 +120,7 @@ def train(
         print(f"Output feature dimensions: {str(output_train.shape)}")
 
     in_features = input_train.shape[1]
-    out_features = 60
+    out_features = NUM_STAT_CLASSIFICATIONS
 
     # Creating model and training
     model = FeedForward(
@@ -172,6 +169,6 @@ def train(
         predictions,
         actuals,
         label=TARGET_STAT.value,
-        output_size=15,
+        output_size=20,
         save_graph_directory_path=SAVE_GRAPHS_DIRECTOR_PATH
     )

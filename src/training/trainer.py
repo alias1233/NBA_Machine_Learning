@@ -1,5 +1,14 @@
 import torch
 import torch.nn as nn
+from typing import Protocol
+
+class LossFunction(Protocol):
+    def __call__(
+        self, 
+        prediction: torch.Tensor, 
+        target: torch.Tensor
+    ) -> torch.Tensor:
+        ...
 
 def train(
         model: nn.Module,
@@ -9,7 +18,7 @@ def train(
         output_data: torch.Tensor,
         validation_input_data: torch.Tensor, 
         validation_output_data: torch.Tensor,
-        loss_function,
+        loss_function: LossFunction,
         log_loss_interval: int = 0
         ):
     

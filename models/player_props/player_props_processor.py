@@ -10,6 +10,7 @@ from src.data_preparation.data_preprocessing.rolling_category import RollingCate
 
 # TODO: Output a categorical distribution of a stat instead of the actual raw stat number and predict a probability of that stat
 # TODO: Allow for choosing which stat to predict the probabilities on, and only predict one stat at a time
+# TODO: Add average opponet allowed points, rebounds, and assists in total to the dataset
 
 DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
     team_game_database.GAME_DATE.category_name,
@@ -60,7 +61,7 @@ PAST_CAREER_STATS = [
     ) for stat_column in STAT_COLUMNS
 ]
 
-ROLLING_WINDOW = 20
+ROLLING_WINDOW = 25
 
 PAST_MEAN_ALLOWED_INFIX = "PAST_MEAN_ALLOWED_"
 PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS = [

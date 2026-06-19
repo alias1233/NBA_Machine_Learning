@@ -51,6 +51,7 @@ def output_test_evaluation_classification(
 
     class_indices = np.arange(predicted_probabilities.shape[1])
     expected_values = np.sum(predicted_probabilities * class_indices, axis=1)
+
     mae = np.mean(np.abs(expected_values - actuals), axis=0)
     rmse = np.sqrt(np.mean((expected_values - actuals) ** 2, axis=0))
 
@@ -67,15 +68,30 @@ def output_test_evaluation_classification(
         probabilities = predicted_probabilities[idx]
         actual_value = actuals[idx].item()
 
+        highest_probability_value = np.argmax(probabilities).item()
+        expected_value = np.sum(probabilities * class_indices).item()
+
         plt.figure(figsize=(10, 4))
-        plt.bar(range(len(probabilities)), probabilities)
+        plt.bar(
+            range(len(probabilities)),
+            probabilities,
+            color='black'
+            )
         
         plt.axvline(
             x=actual_value,
             color='red',
-            linestyle='--',
+            linestyle='-',
             linewidth=2,
             label=f'Actual: {actual_value}'
+        )
+
+        plt.axvline(
+            x=expected_value,
+            color='green',
+            linestyle='-',
+            linewidth=2,
+            label=f'Expected Value: {expected_value}'
         )
 
         plt.legend()
