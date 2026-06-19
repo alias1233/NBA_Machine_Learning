@@ -5,6 +5,13 @@ from scipy import special
 import matplotlib.pyplot as plt
 import os
 
+def get_best_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
 def save_dictionary_data_to_file(file_path: str, model_data: list[dict] | dict):
     directory_path = file_path.rpartition('/')[0]
 
@@ -28,12 +35,12 @@ def output_test_evaluation_classification(
         save_graph_directory_path: str | None = None
     ):
     """
-    Prints out information about the predicted classification and the actual classifications of model predictions.
+    Graphs information about the predicted classification and the actual classifications of model predictions.
 
     Args:
         predictions should be the outputted logits of the model.
         actuals should be the true classification of the values. 
-        save_graph_directory_path is a string path to a directory to save the evaluation graphs to.
+        save_graph_directory_path if set is a string path to a directory to save the evaluation graphs to.
     """
 
     print("\n===== TEST RESULTS =====")
@@ -67,8 +74,6 @@ def output_test_evaluation_classification(
     for loop_count, idx in enumerate(indices):
         probabilities = predicted_probabilities[idx]
         actual_value = actuals[idx].item()
-
-        highest_probability_value = np.argmax(probabilities).item()
         expected_value = np.sum(probabilities * class_indices).item()
 
         plt.figure(figsize=(10, 4))

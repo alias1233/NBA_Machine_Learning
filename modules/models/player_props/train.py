@@ -2,7 +2,6 @@ from datetime import datetime
 import numpy as np
 import torch, torch.nn as nn
 from sklearn.preprocessing import StandardScaler
-from dataclasses import dataclass
 
 from . import data_processor
 from src.data_preprocessing import training_data_processing
@@ -24,7 +23,7 @@ TARGET_STAT = data_processor.TargetStat.PLAYER_POINTS
 MINIMUM_OF_STAT = 0
 NUM_STAT_CLASSIFICATIONS = 60
 
-CHUNK_STEP_SIZE = 100
+CHUNK_STEP_SIZE = 1
 VALIDATION_START_DATE = datetime(2026, 1, 1)
 TEST_START_DATE = datetime(2026, 3, 1)
 
@@ -36,9 +35,14 @@ HIDDEN_LAYERS_PARAMETERS = [
 ]
 
 LEARNING_RATE = 0.0005
-EPOCHS = 120
-LOSS_FUNCTION = GaussianSmoothedCrossEntropyLoss(NUM_STAT_CLASSIFICATIONS, 1)
-LOG_LOSS_INTERVAL = 10
+EPOCHS = 100
+LOSS_FUNCTION = GaussianSmoothedCrossEntropyLoss(NUM_STAT_CLASSIFICATIONS, 0.75)
+EVALUATION_INTERVAL = 1
+BATCH_SIZE = 512
+PATIENCE = -1
+MIN_DELTA = 0.001
+DEVICE = helpers.get_best_device()
+LOG_LOSS_INTERVAL = 1
 
 INPUT_SCALER = 'input_scaler'
 
@@ -55,7 +59,7 @@ def load_model() -> tuple[torch.nn.Module, StandardScaler]:
     return (model, full_model_params[INPUT_SCALER])
     
 def train(
-        print_debug: bool = False, 
+        print_debug: bool = True, 
         print_all_debug: bool = False
         ):
     
@@ -134,14 +138,19 @@ def train(
 
     trainer.train(
         model,
-        optimizer,
-        EPOCHS,
         input_train,
         output_train,
         input_val,
         output_val,
-        LOSS_FUNCTION,
-        LOG_LOSS_INTERVAL
+        optimizer,
+        loss_function=LOSS_FUNCTION,
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE,
+        patience=PATIENCE,
+        min_delta=MIN_DELTA,
+        device=DEVICE,
+        evaluation_interval=EVALUATION_INTERVAL,
+        log_loss_interval=LOG_LOSS_INTERVAL
     )
 
     # Saving model data

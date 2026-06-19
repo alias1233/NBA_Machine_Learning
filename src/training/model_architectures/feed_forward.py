@@ -30,7 +30,7 @@ class FeedForward(nn.Module):
         Initializes the model.
 
         Args: 
-            hidden_layers: holds the number of nodes for each layer, with each index corresponding to a hidden layer.  
+            hidden_layers: holds the parameters for each hidden layer, with each index corresponding to a seperate hidden layer.  
         """
         super().__init__()
         

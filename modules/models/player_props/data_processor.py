@@ -10,6 +10,8 @@ from src.data_preprocessing.rolling_category import RollingCategory
 # TODO: Output a categorical distribution of a stat instead of the actual raw stat number and predict a probability of that stat
 # TODO: Allow for choosing which stat to predict the probabilities on, and only predict one stat at a time
 # TODO: Add average opponet allowed points, rebounds, and assists in total to the dataset
+# TODO: See which stats actually matter
+# TODO: Implement another model architecture such as transformmers or VAEs.
 
 DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
     team_game_data_manager.GAME_DATE.category_name,
