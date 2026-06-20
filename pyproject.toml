@@ -3,13 +3,15 @@ name = "NBA_Machine_Learning_Framework"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11, < 3.12"
+requires-python = ">=3.11,<3.12"
+
 dependencies = [
     "numpy==1.26.4",
     "pandas==2.2.2",
-    "torch>=2.4.0",
     "scikit-learn>=1.6.0",
-    "nba_api",
+    "nba_api>=1.11.4",
     "jupyter>=1.1.1",
-    "matplotlib"
+    "matplotlib",
+    "requests>=2.32.3",
+    "torch>=2.4.0"
 ]

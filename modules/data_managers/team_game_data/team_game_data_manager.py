@@ -24,8 +24,9 @@ PERSONAL_FOULS = ALL_CATEGORIES.add_category("PF", DataType.INTEGER)
 
 # Database
 from src.data_preparation.database import Database, DataConflictHandler
+from modules.data_managers import directories
 
-FILEPATH = "data/team_game_data.db"
+FILEPATH = directories.DATABASE_DIRECTORY + "team_game_data.db"
 NAME = "teams"
 PRIMARY_KEYS = [
     TEAM_ID,

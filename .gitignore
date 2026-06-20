@@ -52,10 +52,12 @@ graphs/
 
 # Datasets
 data/
+databases/
 datasets/
 cache/
 .huggingface/
 transformers_cache/
+training_data_preprocessed/
 
 # Large binary files
 *.h5

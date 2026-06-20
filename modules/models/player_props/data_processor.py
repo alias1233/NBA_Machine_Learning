@@ -2,16 +2,16 @@ import pandas as pd
 from datetime import datetime
 from enum import Enum
 
-from modules.data_managers import player_game_data_manager, player_info_manager, team_game_data_manager
+from modules.data_managers.team_game_data import team_game_data_manager
+from modules.data_managers.player_game_data import player_game_data_manager
+from modules.data_managers.player_info_data import player_info_manager
 from src.data_preprocessing import nba_data_processing
 from src.data_preprocessing import rolling_category
 from src.data_preprocessing.rolling_category import RollingCategory
 
-# TODO: Output a categorical distribution of a stat instead of the actual raw stat number and predict a probability of that stat
-# TODO: Allow for choosing which stat to predict the probabilities on, and only predict one stat at a time
 # TODO: Add average opponet allowed points, rebounds, and assists in total to the dataset
 # TODO: See which stats actually matter
-# TODO: Implement another model architecture such as transformmers or VAEs.
+# TODO: Implement another model architecture such as transformmers or VAEs
 
 DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
     team_game_data_manager.GAME_DATE.category_name,
@@ -62,7 +62,7 @@ PAST_CAREER_STATS = [
     ) for stat_column in STAT_COLUMNS
 ]
 
-ROLLING_WINDOW = 25
+ROLLING_WINDOW = 30
 
 PAST_MEAN_ALLOWED_INFIX = "PAST_MEAN_ALLOWED_"
 PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS = [

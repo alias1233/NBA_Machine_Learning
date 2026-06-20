@@ -13,8 +13,9 @@ DRAFT_NUMBER = ALL_CATEGORIES.add_category("DRAFT_NUMBER", DataType.INTEGER)
 
 # Database
 from src.data_preparation.database import Database, DataConflictHandler
+from modules.data_managers import directories
 
-FILEPATH = "data/player_info.db"
+FILEPATH = directories.DATABASE_DIRECTORY + "player_info.db"
 NAME = "player_info"
 PRIMARY_KEYS = [
     PLAYER_ID

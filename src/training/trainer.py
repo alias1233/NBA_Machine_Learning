@@ -67,6 +67,7 @@ class EarlyStopper():
 
 # TODO: Allow for custom schedulers
 # TODO: Potentally use gradient clipping (?)
+# TODO: Try ReduceLROnPlateau
 def train(
     model: nn.Module,
     input_data: torch.Tensor, 
@@ -120,7 +121,7 @@ def train(
 
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
-        max_lr=optimizer.param_groups[0]["lr"],
+        max_lr=optimizer.param_groups[0]["lr"] * 10,
         total_steps=epochs * len(training_loader),
         pct_start=0.3,
         anneal_strategy="cos",

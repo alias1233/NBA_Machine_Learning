@@ -1,6 +1,8 @@
 from enum import Enum
 
-from modules.data_managers import player_game_data_manager, team_game_data_manager, player_info_manager
+from modules.data_managers.team_game_data import team_game_data_manager
+from modules.data_managers.player_game_data import player_game_data_manager
+from modules.data_managers.player_info_data import player_info_manager
 from src.data_preparation.nba_data import NBAData
 
 class NBADataUser():
