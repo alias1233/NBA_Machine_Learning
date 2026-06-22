@@ -14,12 +14,10 @@ def get_best_device() -> torch.device:
         return torch.device("mps")
     return torch.device("cpu")
 
-def load_dictionary_data_from_file(file_path: str) -> dict:
+def load_data_from_file(file_path: str):
     return torch.load(file_path, weights_only=False)
 
 def save_dictionary_data_to_file(file_path: str, model_data: list[dict] | dict):
-    directory_path = file_path.rpartition('/')[0]
-
     save_data = {}
     if isinstance(model_data, list):
         for d in model_data:
@@ -28,6 +26,10 @@ def save_dictionary_data_to_file(file_path: str, model_data: list[dict] | dict):
     else:
         save_data = model_data
 
+    save_data_to_file(file_path, save_data)
+
+def save_data_to_file(file_path: str, save_data):
+    directory_path = file_path.rpartition('/')[0]
     save_model_path = Path(directory_path)
     save_model_path.mkdir(parents=True, exist_ok=True)
     torch.save(save_data, file_path)
@@ -36,33 +38,68 @@ def save_dictionary_data_to_file(file_path: str, model_data: list[dict] | dict):
 
 # TODO: Add brier error aswell
 
-def expected_calibration_error(
-    predicted_probabilities: np.ndarray,
-    actuals: np.ndarray,
-    n_bins: int = 7
-    ):
-    confidences = predicted_probabilities.max(axis=1)
-    predictions = predicted_probabilities.argmax(axis=1)
-    correctness = (predictions == actuals)
+def _calculate_binary_ece(
+    confidences: np.ndarray,
+    correctness: np.ndarray,
+    n_bins: int
+    ) -> float:
 
+    n_samples = len(confidences)
     bins = np.linspace(0, 1, n_bins + 1)
     ece = 0.0
-
     for i in range(n_bins):
-        if i == n_bins - 1:
+        if i == 0:
             in_bin = (confidences >= bins[i]) & (confidences <= bins[i + 1])
+
         else:
-            in_bin = (confidences >= bins[i]) & (confidences < bins[i + 1])
+            in_bin = (confidences > bins[i]) & (confidences <= bins[i + 1])
 
         if not np.any(in_bin):
             continue
 
+        bin_size = in_bin.sum()
         accuracy = correctness[in_bin].mean()
         confidence = confidences[in_bin].mean()
 
-        ece += (in_bin.sum() / len(actuals)) * abs(accuracy - confidence)
+        ece += (bin_size / n_samples) * abs(accuracy - confidence)
 
     return float(ece)
+
+def expected_calibration_error_top_label(
+    predicted_probabilities: np.ndarray,
+    actuals: np.ndarray,
+    n_bins: int = 7
+    ) -> float:
+
+    confidences = predicted_probabilities.max(axis=1)
+    predicted_classes = predicted_probabilities.argmax(axis=1)
+    correctness = (predicted_classes == actuals)
+    
+    return _calculate_binary_ece(
+        confidences,
+        correctness,
+        n_bins
+        )
+
+def expected_calibration_error_classwise(
+    predicted_probabilities: np.ndarray,
+    actuals: np.ndarray,
+    n_bins: int = 7
+    ) -> float:
+    
+    n_classes: int = predicted_probabilities.shape[1]
+    total_ece: float = 0.0
+    for class_idx in range(n_classes):
+        class_confidences = predicted_probabilities[:, class_idx]
+        correctness = (actuals == class_idx)
+
+        total_ece += _calculate_binary_ece(
+            class_confidences,
+            correctness,
+            n_bins
+        )
+
+    return total_ece / n_classes
 
 def plot_calibration(
         predicted_probabilities: np.ndarray,
@@ -73,7 +110,7 @@ def plot_calibration(
         save_graph_directory_path: str | None = None
         ):
     """
-    For each class, plot a reliability diagram, paginated across multiple figures.
+    For each classification, plot a reliability diagram depicted the accuracy of a predicted probability.
     predicted_probabilities: shape (n_samples, n_classes)
     actuals: shape (n_samples,) with integer class labels
     row_columns: Num of rows and columns of graphs per page
@@ -94,7 +131,7 @@ def plot_calibration(
         page_classes = list(range(start, end))
         n_on_page = len(page_classes)
 
-        fig, axes = plt.subplots(
+        _, axes = plt.subplots(
             n_rows,
             n_cols,
             figsize=(5 * n_cols, 4 * n_rows),
@@ -185,11 +222,16 @@ def output_test_evaluation_classification(
     print(f'MAE: {mae}')
     print(f'RMSE: {rmse}')
 
-    ece = expected_calibration_error(
+    ece_top_label = expected_calibration_error_top_label(
         predicted_probabilities,
         actuals
     )
-    print(f"Expected Calibration Error: {ece}")
+    ece_classwise = expected_calibration_error_classwise(
+        predicted_probabilities,
+        actuals
+    )
+    print(f"Expected Calibration Error Top Label: {ece_top_label}")
+    print(f"Expected Calibration Error Classwise: {ece_classwise}")
 
     print("\n===== SAMPLE PREDICTIONS =====")
 

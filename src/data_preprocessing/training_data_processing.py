@@ -43,7 +43,7 @@ def convert_labeled_data_to_numpy(
     
     return np.stack(samples)
 
-def normalize(
+def standardize(
     training_data: np.ndarray,
     validation_data: np.ndarray,
     test_data: np.ndarray    
@@ -78,8 +78,8 @@ def process_raw_data_for_training(
         input_test_data: list, 
         output_test_data: list,
         flatten: bool,
-        scale_input: bool = False,
-        scale_output: bool = False
+        standardize_input: bool = False,
+        standardize_output: bool = False
     ) -> tuple[
         torch.Tensor, torch.Tensor,
         torch.Tensor, torch.Tensor,
@@ -110,12 +110,12 @@ def process_raw_data_for_training(
 
     input_scaler = None
     output_scaler = None
-    if scale_input:
-        input_train_numpy, input_val_numpy, input_test_numpy, input_scaler = normalize(
+    if standardize_input:
+        input_train_numpy, input_val_numpy, input_test_numpy, input_scaler = standardize(
             input_train_numpy, input_val_numpy, input_test_numpy
             )
-    if scale_output:
-        output_train_numpy, output_val_numpy, output_test_numpy, output_scaler = normalize(
+    if standardize_output:
+        output_train_numpy, output_val_numpy, output_test_numpy, output_scaler = standardize(
             output_train_numpy, output_val_numpy, output_test_numpy
             )
 
@@ -143,7 +143,7 @@ def process_raw_data_for_classification_training(
         flatten: bool,
         min_output_value: int = 0,
         num_classifications: int | None = None,
-        scale_input: bool = False,
+        standardize_input: bool = False,
     ) -> tuple[
         torch.Tensor, torch.Tensor,
         torch.Tensor, torch.Tensor,
@@ -180,7 +180,7 @@ def process_raw_data_for_classification_training(
          input_test_data,
          output_test_data,
          flatten,
-         scale_input,
+         standardize_input,
          False
          )
     

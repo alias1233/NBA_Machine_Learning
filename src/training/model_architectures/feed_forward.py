@@ -69,6 +69,12 @@ class FeedForward(nn.Module):
         return self.network(x)
     
     def get_save_parameters_dict(self) -> dict[str, Any]:
+        """
+        Returns a dictionary containing the parameters of this model for loading and saving.
+
+        Only functions if this model was initialized with save_params = True.
+        """
+
         params = {
             INPUT_DIM : self.input_dim,
             OUTPUT_DIM : self.output_dim,

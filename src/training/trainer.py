@@ -126,10 +126,9 @@ def train(
         pct_start=0.3,
         anneal_strategy="cos",
         div_factor=25.0,
-        final_div_factor=10000,
+        final_div_factor=1000,
     )
 
-    mean_training_loss: float = 0
     epoch: int = 0
     evaluations: int = 0
     for epoch in range(epochs):
@@ -175,6 +174,17 @@ def train(
     with torch.no_grad():
         val_prediction = model(val_x)
         val_loss = loss_function(val_prediction, val_y).item()
+
+        total_loss: float = 0
+        num_batches: int = 0
+        for batch_x, batch_y in training_loader:
+            train_prediction = model(batch_x)
+            train_loss = loss_function(train_prediction, batch_y)
+
+            total_loss += train_loss.item()
+            num_batches += 1
+        
+        mean_training_loss = total_loss / max(num_batches, 1)
 
     if epoch:
         print(f"Stopping at epoch: {epoch}")

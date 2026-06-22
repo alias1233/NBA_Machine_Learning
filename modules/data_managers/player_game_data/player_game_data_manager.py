@@ -87,7 +87,7 @@ def collect_player_game_data(
         data = []
         for game in player_game_data.itertuples(index=False):
             data_dict = {
-                category: getattr(game, category.category_name) 
+                category: getattr(game, category.private_name) 
                 for category 
                 in ALL_CATEGORIES.get_categories()
                 }

@@ -54,7 +54,11 @@ def collect_player_info_data(
         player_data: pd.DataFrame = get_common_player_info(player_id)
 
         for player in player_data.itertuples(index=False):
-            data_dict = {category: getattr(player, category.category_name) for category in DATABASE.get_categories()}
+            data_dict = {
+                category: getattr(player, category.private_name) 
+                for category in 
+                DATABASE.get_categories()
+                }
 
             DATABASE.add_value(data_dict)
     

@@ -3,6 +3,13 @@ from typing import Any
 
 # TODO: Fix errors concerning pandas: A value is trying to be set on a copy of a slice from a DataFrame.
 
+def _encode_equality_as_integer(column: pd.Series, value: Any) -> pd.Series:
+    """
+    Returns a series where each value is 1 if the value corresponding to the given series equals the given string, and 0 otherwise.  
+    """
+
+    return (column == value).astype(int)
+
 def sort_columns_alphabetically(dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe.sort_index(axis=1)
 
@@ -11,37 +18,46 @@ def create_lookup_table(
     key_column: str
     ) -> dict[Any, pd.DataFrame]:
     lookup_table = {}
-    for key, data in dataframe.groupby(by=key_column):
+    for key, data in dataframe.groupby(by=key_column, sort=False):
         lookup_table[key] = data
     return lookup_table
 
 # Represents the number of days without a game inbetween the current game and the player's last played game.
 REST = 'REST'
-MAX_REST = 30
-
-def add_rest_column(
+MAX_REST = 7
+LONG_BREAK = 'LONG_BREAK'
+LONG_BREAK_THRESHOLD = 25
+def add_rest_and_long_break_columns(
     game_data: pd.DataFrame, 
-    game_date_column: str, 
-    group_by_id: str | None = None
+    game_date_column: str
     ) -> pd.DataFrame:
     """
-    Adds rest column to the given game_data. 
-    The given game_data must be sorted by game date, and the game_date column must be in datetime form.
+    Adds rest and long break columns to the given game_data. 
+    The given game_data must be sorted by game date, grouped by id, and the game_date column must be in datetime form.
     The value of rest is clamped to MAX_REST.
     If it is the first game that has ever been played, the value for 'rest' will be MAX_REST.
+    Long break is set to 1 if the player has not played a game in more than or equal to LONG_BREAK_THRESHOLD days, and 0 otherwise.
     """
 
-    game_dates = None
-    if group_by_id:
-        game_dates = game_data.groupby(group_by_id, sort=False)
-    else:
-        game_dates = game_data
-
-    game_data[REST] = (game_dates[game_date_column].diff().dt.days - 1).fillna(MAX_REST).clip(upper=MAX_REST)
+    game_data[REST] = (game_data[game_date_column].diff().dt.days - 1).fillna(LONG_BREAK_THRESHOLD)
+    game_data[LONG_BREAK] = (game_data[REST] >= LONG_BREAK_THRESHOLD).astype(int)
+    game_data[REST] = game_data[REST].clip(upper=MAX_REST)
     return game_data
 
-POINTS = 'POINTS'
+CHANGED_TEAM = 'CHANGED_TEAM'
+def add_changed_team_column(
+    player_game_data: pd.DataFrame,
+    team_id_column: pd.DataFrame
+    ) -> pd.DataFrame:
+    """
+    The given game_data must be sorted by game date and grouped by player id.
+    """
+    team_id = player_game_data[team_id_column]
+    previous_team_id = team_id.shift(1)
+    player_game_data[CHANGED_TEAM] = ((team_id != previous_team_id) & previous_team_id.notna()).astype(int)
+    return player_game_data
 
+POINTS = 'POINTS'
 def add_points_column(
     game_data: pd.DataFrame, 
     fgm_column: str, 
@@ -55,7 +71,6 @@ def add_points_column(
     return game_data
 
 REBOUNDS = 'REBOUNDS'
-
 def add_total_rebounds_column(
     game_data: pd.DataFrame, 
     orb_column: str, 
@@ -68,7 +83,6 @@ def add_total_rebounds_column(
 
 
 POSSESSIONS = 'POSSESSIONS'
-
 def add_possessions_column(
     team_game_data: pd.DataFrame, 
     fga_column: str, 
@@ -83,9 +97,48 @@ def add_possessions_column(
     team_game_data[POSSESSIONS] = fga + (0.44 * fta) - orb + tov
     return team_game_data
 
+def _add_percentage_column(
+    dataframe: pd.DataFrame,
+    part_column: str,
+    whole_column: str,
+    new_column_name: str
+    ) -> pd.DataFrame:
+    part = dataframe[part_column]
+    whole = dataframe[whole_column]
+    dataframe[new_column_name] = part.div(whole, fill_value=0)
+    return dataframe
+
+FIELD_GOAL_PERCENTAGE = 'FIELD_GOAL_PERCENTAGE'
+def add_field_goal_percentage_column(
+    game_data: pd.DataFrame,
+    fgm_column: str,
+    fga_column: str
+    ) -> pd.DataFrame:
+    return _add_percentage_column(game_data, fgm_column, fga_column, FIELD_GOAL_PERCENTAGE)
+
+THREE_POINT_PERCENTAGE = 'THREE_POINT_PERCENTAGE'
+def add_three_point_percentage_column(
+    game_data: pd.DataFrame,
+    fg3m_column: str,
+    fg3a_column: str
+    ) -> pd.DataFrame:
+    return _add_percentage_column(game_data, fg3m_column, fg3a_column, THREE_POINT_PERCENTAGE)
+
+TRUE_SHOOTING_PERCENTAGE = 'TRUE_SHOOTING_PERCENTAGE'
+def add_true_shooting_percentage_column(
+    game_data: pd.DataFrame,
+    points_column: str,
+    fga_column: str,
+    fta_column: str
+    ) -> pd.DataFrame:
+    points = game_data[points_column]
+    fga = game_data[fga_column]
+    fta = game_data[fta_column]
+    game_data[TRUE_SHOOTING_PERCENTAGE] = points.div(2 * (fga + 0.44 * fta), fill_value=0)
+    return game_data
+
 # A value of 0 represents home, and a value of 1 represents away.
 HOME_OR_AWAY = 'HOME_OR_AWAY'
-
 def add_encoded_home_or_away_column(
     team_game_data: pd.DataFrame, 
     matchup_column: str
@@ -99,7 +152,6 @@ def add_encoded_home_or_away_column(
 
 PLAYER_SUFFIX = '_PLAYER'
 TEAM_SUFFIX = '_TEAM'
-
 def merge_player_team_game_data(
     player_game_data: pd.DataFrame,
     team_game_data: pd.DataFrame,
@@ -145,7 +197,6 @@ def merge_player_game_info_data(
     return player_game_data.merge(right=player_info_data, left_on=player_id_column_game, right_on=player_id_column_info)
 
 OPPONENT_PREFIX = 'OPP_'
-
 def add_opponent_stat_columns(
     team_game_data: pd.DataFrame, 
     game_id_column: str, 
@@ -170,10 +221,16 @@ def add_opponent_stat_columns(
     merged = merged[merged[team_id_column] != merged[OPPONENT_PREFIX + team_id_column]]
     return merged
 
-# TODO: Support bucketing on continuous data such as weight and height for by-attribute stat columns.
-
 STATS_BASED_ON_ATTRIBUTE_SUFFIX = "_BY_"
-
+def get_all_stats_by_attribute_columns(
+    attribute_columns: list[str],
+    stat_columns: list[str]
+    ) -> list[str]:
+    return [
+        stat + STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute 
+        for stat in stat_columns 
+        for attribute in attribute_columns
+    ]   
 def add_total_player_stats_per_game_by_attribute(
     team_game_data: pd.DataFrame,
     player_game_data: pd.DataFrame,
@@ -188,7 +245,8 @@ def add_total_player_stats_per_game_by_attribute(
     """
     Adds columns corresponding to the total stats of every player with the given attribute of each game to the team game dataframe.
 
-    THe attribute column must be a hot encoded column in player_info, where every value at each row index is 0 or 1 corresponding to whether the player has that attribute.
+    THe attribute column must be a hot encoded column in player_info, 
+    where every value at each row index is 0 or 1 corresponding to whether the player has that attribute.
     """
 
     for attribute_column in attribute_columns:
@@ -199,7 +257,7 @@ def add_total_player_stats_per_game_by_attribute(
 
         total_player_stats_in_game_by_attribute = (
             player_game_data_with_attribute.groupby(
-                by=[game_id_column, team_id_column])
+                by=[game_id_column, team_id_column], sort=False)
                 [stat_columns]
                 .sum()
                 .reset_index()
@@ -218,6 +276,86 @@ def add_total_player_stats_per_game_by_attribute(
 
     return team_game_data
 
+OVER_BUCKET_BOUNDARY_PREFIX = "_OVER_"
+BETWEEN_BUCKET_BOUNDARY_PREFIX = "_BETWEEN_"
+BETWEEN_SPACE = "_"
+UNDER_BUCKET_BOUNDARY_PREFIX = "_UNDER_"
+def get_all_stats_by_bucket_columns(
+    bucket_column: str,
+    bucket_boundaries: list[float],
+    stat_columns: list[str]
+    ) -> list[str]:
+    temp_attribute_columns: list[str] = []
+    lower_bucket_boundary: float | None = None
+    for upper_bucket_boundary in bucket_boundaries:
+        temp_attribute_column: str = ""
+        if lower_bucket_boundary is None:
+            temp_attribute_column = bucket_column + UNDER_BUCKET_BOUNDARY_PREFIX + str(upper_bucket_boundary)
+
+        else:
+            temp_attribute_column = bucket_column + BETWEEN_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary) + BETWEEN_SPACE + str(upper_bucket_boundary)
+        
+        lower_bucket_boundary = upper_bucket_boundary
+        temp_attribute_columns.append(temp_attribute_column)
+
+    temp_attribute_column = bucket_column + OVER_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary)
+    temp_attribute_columns.append(temp_attribute_column)
+
+    return get_all_stats_by_attribute_columns(
+        temp_attribute_columns,
+        stat_columns
+    )
+
+def add_total_player_stats_per_game_by_bucket(
+    team_game_data: pd.DataFrame,
+    player_game_data: pd.DataFrame,
+    player_info: pd.DataFrame,
+    player_id_column_info: str,
+    player_id_column_player: str,
+    game_id_column: str,
+    team_id_column: str,
+    bucket_column: str,
+    bucket_boundaries: list[float],
+    stat_columns: list[str]
+    ) -> pd.DataFrame:
+
+    temp_player_info = player_info.copy()
+
+    bucket = temp_player_info[bucket_column]
+
+    temp_attribute_columns: list[str] = []
+    lower_bucket_boundary: float | None = None
+    for upper_bucket_boundary in bucket_boundaries:
+        temp_attribute_column: str = ""
+        if lower_bucket_boundary is None:
+            temp_attribute_column = bucket_column + UNDER_BUCKET_BOUNDARY_PREFIX + str(upper_bucket_boundary)
+            temp_player_info[temp_attribute_column] = (bucket < upper_bucket_boundary).astype(int)
+
+        else:
+            temp_attribute_column = bucket_column + BETWEEN_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary) + BETWEEN_SPACE + str(upper_bucket_boundary)
+            temp_player_info[temp_attribute_column] = ((bucket < upper_bucket_boundary) & (bucket >= lower_bucket_boundary)).astype(int)
+        
+        lower_bucket_boundary = upper_bucket_boundary
+        temp_attribute_columns.append(temp_attribute_column)
+
+    temp_attribute_column = bucket_column + OVER_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary)
+    temp_player_info[temp_attribute_column] = (bucket >= lower_bucket_boundary).astype(int)
+    temp_attribute_columns.append(temp_attribute_column)
+
+    team_game_data = add_total_player_stats_per_game_by_attribute(
+        team_game_data,
+        player_game_data,
+        temp_player_info,
+        player_id_column_info,
+        player_id_column_player,
+        game_id_column,
+        team_id_column,
+        temp_attribute_columns,
+        stat_columns
+    )
+
+    return team_game_data
+
 def _add_years_between_static_player_event_and_game_column(
     game_data: pd.DataFrame,
     player_info: pd.DataFrame,
@@ -232,9 +370,7 @@ def _add_years_between_static_player_event_and_game_column(
     The static event's dates are represented inside of a dataframe where each player_id corresponds to the static event's time.
     The static_player_event_time and game_date columns must be represented in datetime form.
     """
-
     TEMP = 'TEMP'
-
     player_id_to_static_event_time = player_info.set_index(player_id_column_player_info)[static_player_event_time_column].to_dict()
     game_data[TEMP] = game_data[player_id_column_game_data].map(player_id_to_static_event_time, na_action='ignore')
     game_data[new_column_name] = ((game_data[game_date_column] - game_data[TEMP]).dt.days / 365.25).astype(float)
@@ -242,7 +378,6 @@ def _add_years_between_static_player_event_and_game_column(
     return game_data
 
 AGE_DURING_GAME = 'AGE_DURING_GAME'
-
 def add_age_during_game_column(
     game_data: pd.DataFrame,
     player_info: pd.DataFrame,
@@ -266,7 +401,6 @@ def add_age_during_game_column(
     )
 
 NBA_EXPERIENCE_DURING_GAME = 'NBA_EXPERIENCE_DURING_GAME'
-
 def add_years_NBA_experience_during_game_column(
     game_data: pd.DataFrame,
     player_info: pd.DataFrame,
@@ -289,19 +423,17 @@ def add_years_NBA_experience_during_game_column(
         NBA_EXPERIENCE_DURING_GAME
     )
 
-def _encode_equality_as_integer(column: pd.Series, value: Any) -> pd.Series:
-    """
-    Returns a series where each value is 1 if the value corresponding to the given series equals the given string, and 0 otherwise.  
-    """
-
-    return (column == value).astype(int)
-
 ### SEASON TYPES: A value of 1 represents True, and a value of 0 represents False. ###
 PRESEASON = 'PRESEASON'
 REGULAR_SEASON = 'REGULAR_SEASON'
 PLAYOFFS = 'PLAYOFFS'
 PLAY_IN = 'PLAY_IN'
-
+ALL_SEASONS = [
+    PRESEASON,
+    REGULAR_SEASON,
+    PLAYOFFS,
+    PLAY_IN
+]
 def add_encoded_season_type_columns(
     team_game_data: pd.DataFrame,
     game_id_column: str
@@ -326,7 +458,6 @@ def encode_win_loss_column_as_integer(
     return game_data
 
 UNKNOWN_HEIGHT = 'UNKNOWN_HEIGHT'
-
 def convert_height_to_inches(
     player_info: pd.DataFrame,
     height_column: str
@@ -340,7 +471,6 @@ def convert_height_to_inches(
     return player_info
 
 UNKNOWN_WEIGHT = 'UNKNOWN_WEIGHT'
-
 def encode_unknown_weight(
     player_info: pd.DataFrame,
     weight_column: str    
@@ -369,7 +499,6 @@ ALL_POSITIONS = [
     GUARD_FORWARD,
     UNKNOWN_POSITION
 ]
-
 def add_encoded_position_columns(
     player_info: pd.DataFrame,
     position_column: str,
@@ -386,7 +515,6 @@ def add_encoded_position_columns(
     return player_info
 
 UNDRAFTED = 'Undrafted'
-
 def encode_undrafted(
     player_info: pd.DataFrame,
     draft_number_column: str, 

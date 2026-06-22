@@ -78,7 +78,11 @@ def collect_team_game_data(
         
         data = []
         for game in team_game_data.itertuples(index=False):
-            data_dict = {category : getattr(game, category.category_name) for category in DATABASE.get_categories()}
+            data_dict = {
+                category : getattr(game, category.private_name) 
+                for category 
+                in DATABASE.get_categories()
+                }
 
             data.append(data_dict)
 
