@@ -19,9 +19,9 @@ MODEL_SAVE_GRAPHS_DIRECTORY_PATH = directories.SAVE_GRAPHS_DIRECTORY_PATH + MODE
 
 SAVE_PROCESSED_TRAINING_DATA_PATH = directories.SAVE_PROCESSED_TRAINING_DATA_PATH + MODEL_NAME + '/training_data.pth'
 SAVE_PROCESSED_TRAINING_DATA = True
-LOAD_SAVED_PROCESSED_TRAINING_DATA = False
+LOAD_SAVED_PROCESSED_TRAINING_DATA = True
 
-RANDOM_SEED = 150
+RANDOM_SEED = 563654638
 
 TARGET_STAT = data_processor.TargetStat.PLAYER_POINTS
 MINIMUM_OF_STAT = 0
@@ -41,7 +41,7 @@ LEARNING_RATE = 0.00001
 EPOCHS = 25
 LOSS_FUNCTION: trainer.LossFunction = torch.nn.CrossEntropyLoss()
 EVALUATION_INTERVAL = 1
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 PATIENCE = -1
 MIN_DELTA = 0.001
 DEVICE = helpers.get_best_device()
@@ -188,6 +188,11 @@ def train(
 
     # Final evaluation on validation dataset
     model, input_scaler = load_model()
+
+    # TESTING FOR LARGER TRAINING DATASET
+    input_test = torch.concat((input_test, input_val))
+    output_test = torch.concat((output_test, output_val))
+    # END TEST
 
     model.eval()
     with torch.no_grad():

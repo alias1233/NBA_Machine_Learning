@@ -457,6 +457,7 @@ def encode_win_loss_column_as_integer(
     game_data[win_loss_column] = _encode_equality_as_integer(game_data[win_loss_column], "W")
     return game_data
 
+# TODO: Add option to instead fill in missing weights/heights/positions with the average positions/heights/weights
 UNKNOWN_HEIGHT = 'UNKNOWN_HEIGHT'
 def convert_height_to_inches(
     player_info: pd.DataFrame,
@@ -480,6 +481,7 @@ def encode_unknown_weight(
     player_info[UNKNOWN_WEIGHT] = _encode_equality_as_integer(weights, "")
     return player_info
 
+# TODO: Compress to just 5 positions, combining center_forward and forward_center, and forward_guard and guard_forward.
 ### POSITION TYPES: A value of 1 represents True, and a value of 0 represents False. ###
 CENTER = 'Center'
 CENTER_FORWARD = 'Center-Forward'

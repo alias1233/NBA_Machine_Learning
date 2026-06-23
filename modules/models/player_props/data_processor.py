@@ -9,9 +9,8 @@ from src.data_preprocessing import nba_data_processing
 from src.data_preprocessing import rolling_category
 from src.data_preprocessing.rolling_category import RollingCategory
 
-# TODO: See which stats actually matter
 # TODO: Implement another model architecture such as transformmers or VAEs
-# TODO: Add season time column, along with current seed (?)
+# TODO: Add season time column, along with current team seed (?)
 
 DUPLICATE_OPPONENT_MERGED_CATEGORIES = [
     team_game_data_manager.GAME_DATE.category_name,
@@ -37,7 +36,7 @@ DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES = [
 # STATS BY ATTRIBUTES/BUCKETS: #
 ATTRIBUTE_COLUMNS = nba_data_processing.ALL_POSITIONS
 STAT_COLUMNS = [
-    nba_data_processing.POINTS, player_game_data_manager.OFFENSIVE_REBOUNDS.category_name
+    nba_data_processing.POINTS
 ]
 ALL_STATS_BY_ATTRIBUTE_COLUMNS = nba_data_processing.get_all_stats_by_attribute_columns(
     ATTRIBUTE_COLUMNS,
@@ -62,32 +61,36 @@ ALL_STATS_BY_WEIGHT_BUCKET_COLUMNS = nba_data_processing.get_all_stats_by_bucket
 ALL_STATS_BY_ATTRIBUTE_AND_BUCKET_COLUMNS = ALL_STATS_BY_ATTRIBUTE_COLUMNS + ALL_STATS_BY_HEIGHT_BUCKET_COLUMNS + ALL_STATS_BY_WEIGHT_BUCKET_COLUMNS
 
 # ROLLING DATA: #
-PAST_CAREER_PREFIX = "PAST_CAREER_"
-MEAN_PREFIX = "MEAN_"
-STD_PREFIX = "STD_"
+PAST_CAREER_MEAN_PREFIX = "PAST_CAREER_MEAN_"
+PAST_CAREER_STD_PREFIX = "PAST_CAREER_STD_"
+PAST_CAREER_CALCULATED_FROM_STATS = [
+    nba_data_processing.POINTS
+]
 PAST_CAREER_STATS = [
     RollingCategory(
-        PAST_CAREER_PREFIX + MEAN_PREFIX + stat_column,
+        PAST_CAREER_MEAN_PREFIX + stat_column,
         stat_column,
         rolling_category.MEAN_FUNCTION,
-    ) for stat_column in STAT_COLUMNS
+    ) for stat_column in PAST_CAREER_CALCULATED_FROM_STATS
 ] + [
     RollingCategory(
-        PAST_CAREER_PREFIX + STD_PREFIX + stat_column,
+        PAST_CAREER_STD_PREFIX + stat_column,
         stat_column,
         rolling_category.STD_FUNCTION,
-    ) for stat_column in STAT_COLUMNS
+    ) for stat_column in PAST_CAREER_CALCULATED_FROM_STATS
 ]
 
-ROLLING_WINDOW = 25
+ROLLING_WINDOW = 20
 
 PAST_MEAN_ALLOWED_INFIX = "PAST_MEAN_ALLOWED_"
 PAST_MEAN_ALLOWED_STATS = [
-    nba_data_processing.POINTS, 
+    nba_data_processing.POINTS,
+    team_game_data_manager.TURNOVERS.category_name, 
     team_game_data_manager.OFFENSIVE_REBOUNDS.category_name, team_game_data_manager.ASSISTS.category_name,
     team_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name, team_game_data_manager.FIELD_GOALS_MADE.category_name,
     team_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name, team_game_data_manager.THREE_POINTERS_MADE.category_name,
-    team_game_data_manager.FREE_THROWS_ATTEMPTED.category_name
+    team_game_data_manager.FREE_THROWS_ATTEMPTED.category_name,
+    team_game_data_manager.PERSONAL_FOULS.category_name
 ]
 PAST_OPPONENT_ALLOWED_MEAN_STATS = [
     RollingCategory(
@@ -106,9 +109,23 @@ PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS = [
         ) for stat_by_attribute_column in ALL_STATS_BY_ATTRIBUTE_AND_BUCKET_COLUMNS
         ]
 
+PAST_MEAN_PREFIX = "PAST_MEAN_"
+PAST_TEAM_STATS = [
+    nba_data_processing.POSSESSIONS, 
+    team_game_data_manager.STEALS.category_name, team_game_data_manager.BLOCKS.category_name
+]
+PAST_MEAN_TEAM_STATS = [
+    RollingCategory(
+        PAST_MEAN_PREFIX + stat,
+        stat,
+        rolling_category.MEAN_FUNCTION,
+        ROLLING_WINDOW
+    ) for stat in PAST_TEAM_STATS
+]
+
 PLAYER_ROLLING_CATEGORIES = PAST_CAREER_STATS
 
-TEAM_ROLLING_CATEGORIES = [] 
+TEAM_ROLLING_CATEGORIES = PAST_MEAN_TEAM_STATS
 
 OPPONENT_TEAM_ROLLING_CATEGORIES = (
     PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS
@@ -129,7 +146,11 @@ MINIMUM_REQUIRED_GAMES_PLAYED = PAST_GAMES_PLAYED_SEQUENCE_LENGTH + 1
 
 STAT_TO_KEEP_SEQUENCE = [
     nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
+    nba_data_processing.POINTS + nba_data_processing.TEAM_SUFFIX, nba_data_processing.OPPONENT_PREFIX + nba_data_processing.POINTS,
+    player_game_data_manager.MINUTES_PLAYED.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.PLUS_MINUS.category_name,
     player_game_data_manager.OFFENSIVE_REBOUNDS.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.PERSONAL_FOULS.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.FIELD_GOALS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
@@ -137,24 +158,29 @@ STAT_TO_KEEP_SEQUENCE = [
     player_game_data_manager.FREE_THROWS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.FREE_THROWS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
     nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
-    nba_data_processing.CHANGED_TEAM
+    nba_data_processing.CHANGED_TEAM,
+    nba_data_processing.POSSESSIONS
 ] + (
     nba_data_processing.ALL_SEASONS
 ) + [
     category.column_name for category in PAST_OPPONENT_ALLOWED_MEAN_STATS
+] + [
+    nba_data_processing.OPPONENT_PREFIX + category.column_name for category in PAST_MEAN_TEAM_STATS
 ]
 STAT_TO_KEEP_SEQUENCE.sort()
 
 STATS_TO_KEEP_STATIC = [
     nba_data_processing.AGE_DURING_GAME, nba_data_processing.NBA_EXPERIENCE_DURING_GAME, 
-    PAST_CAREER_PREFIX + MEAN_PREFIX + nba_data_processing.POINTS,
-    PAST_CAREER_PREFIX + STD_PREFIX + nba_data_processing.POINTS,
     nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
     nba_data_processing.CHANGED_TEAM
 ] + (
     nba_data_processing.ALL_SEASONS
 ) + [
     category.column_name for category in OPPONENT_TEAM_ROLLING_CATEGORIES
+] + [
+    category.column_name for category in PAST_CAREER_STATS
+] + [
+    nba_data_processing.OPPONENT_PREFIX + category.column_name for category in PAST_MEAN_TEAM_STATS
 ]
 STATS_TO_KEEP_STATIC.sort()
 
@@ -302,12 +328,6 @@ def preprocess_game_data(
         WEIGHT_BOUNDARIES,
         STAT_COLUMNS
     )
-    team_game_data = nba_data_processing.add_opponent_stat_columns(
-        team_game_data,
-        team_game_data_manager.GAME_ID.category_name,
-        team_game_data_manager.TEAM_ID.category_name,
-        DUPLICATE_OPPONENT_MERGED_CATEGORIES
-        )
 
     if print_debug:
         print("Feature engineering historical-context-dependant game data...")
@@ -320,6 +340,12 @@ def preprocess_game_data(
         accumulator.append(game_data)
     
     team_game_data = pd.concat(accumulator)
+    team_game_data = nba_data_processing.add_opponent_stat_columns(
+        team_game_data,
+        team_game_data_manager.GAME_ID.category_name,
+        team_game_data_manager.TEAM_ID.category_name,
+        DUPLICATE_OPPONENT_MERGED_CATEGORIES
+        )
 
     accumulator = []
     for _, game_data in team_game_data.groupby(by=nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name):
