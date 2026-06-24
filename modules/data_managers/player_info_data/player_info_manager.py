@@ -25,19 +25,21 @@ DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
 
 # Collection
-import time
 import pandas as pd
 
 from nba_api.stats.endpoints.commonplayerinfo import CommonPlayerInfo
-from nba_api.stats.library.parameters import PlayerOrTeamAbbreviation
 from src.data_preparation.repeater import repeater
-from src.data_preparation.nba_data import NBAData, retry
+from src.data_preparation import nba_data_helpers
+from src.data_preparation.nba_data_helpers import retry
 
 @retry
-def get_common_player_info(player_id: str) -> pd.DataFrame:
-    return CommonPlayerInfo(
-        player_id=player_id
-    ).get_data_frames()[0]
+def get_common_player_info(player_id: str) -> pd.DataFrame | None:
+    try:
+        return CommonPlayerInfo(
+            player_id=player_id
+        ).get_data_frames()[0]
+    except Exception as e:
+        print(f"Error: {e} thrown for player_id: {player_id}")
 
 def collect_player_info_data(
         wait_interval: float, 
@@ -47,11 +49,13 @@ def collect_player_info_data(
 
     # If no parameters are given, use every player's ids.
     if not player_ids:
-        players = NBAData.get_all_players()
+        players = nba_data_helpers.get_all_players()
         player_ids = [player['id'] for player in players]
 
     def _add_player_data(player_id: str):
-        player_data: pd.DataFrame = get_common_player_info(player_id)
+        player_data: pd.DataFrame | None = get_common_player_info(player_id)
+        if player_data is None:
+            return
 
         for player in player_data.itertuples(index=False):
             data_dict = {

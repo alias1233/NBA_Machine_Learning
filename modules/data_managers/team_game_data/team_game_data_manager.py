@@ -42,7 +42,8 @@ import pandas as pd
 
 from nba_api.stats.endpoints.leaguegamelog import LeagueGameLog
 from src.data_preparation.repeater import repeater
-from src.data_preparation.nba_data import NBAData, retry
+from src.data_preparation import nba_data_helpers
+from src.data_preparation.nba_data_helpers import retry
 
 @retry
 def get_all_teams_season_game_logs(
@@ -51,7 +52,7 @@ def get_all_teams_season_game_logs(
     ) -> pd.DataFrame | None:
     try:
         return LeagueGameLog(
-            season=NBAData.convert_year_to_NBA_season(season_year),
+            season=nba_data_helpers.convert_year_to_NBA_season(season_year),
             season_type_all_star=season_type
         ).get_data_frames()[0]
     except Exception as e:
@@ -67,9 +68,9 @@ def collect_team_game_data(
 
     # If no parameters are given, then use values for retreiving all games over all seasons.
     if not seasons:
-        seasons = [i for i in range(NBAData.get_oldest_season_with_all_player_box_score_data_data(), NBAData.get_current_nba_season() + 1)]
+        seasons = [i for i in range(nba_data_helpers.get_oldest_season_with_all_player_box_score_data_data(), nba_data_helpers.get_current_nba_season() + 1)]
     if not season_types:
-        season_types = NBAData.get_all_season_types()
+        season_types = nba_data_helpers.get_all_season_types()
 
     def _add_season_game_data(season: int, season_type: str):
         team_game_data = get_all_teams_season_game_logs(season, season_type)
@@ -115,6 +116,8 @@ def collect_team_game_data(
     return index_reached
 
 # Query
+from datetime import datetime
+
 def get_all_team_game_data() -> pd.DataFrame:
     with DATABASE:
         data = DATABASE.query_dataframe()
@@ -122,13 +125,25 @@ def get_all_team_game_data() -> pd.DataFrame:
     return data
 
 # TODO: Add an optional season parameter
-def get_team_game_data(team_id: str) -> pd.DataFrame:
+def get_specifc_team_game_data(team_id: str) -> pd.DataFrame:
     SQL_condition = f"{TEAM_ID.category_name} = :{TEAM_ID.category_name}"
     condition_params = {TEAM_ID : team_id}
 
     with DATABASE:
         data = DATABASE.query_dataframe(
             SQL_condition=SQL_condition, 
+            condition_params=condition_params
+        )
+
+    return data
+
+def get_game_data_after_date(date_start: datetime) -> pd.DataFrame:
+    SQL_condtition = f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
+    condition_params = {GAME_DATE : nba_data_helpers.convert_datetime_to_str_nba_date_format(date_start)}
+
+    with DATABASE:
+        data = DATABASE.query_dataframe(
+            SQL_condition=SQL_condtition,
             condition_params=condition_params
         )
 

@@ -43,7 +43,7 @@ ALL_STATS_BY_ATTRIBUTE_COLUMNS = nba_data_processing.get_all_stats_by_attribute_
     STAT_COLUMNS
 )
 HEIGHT_BOUNDARIES: list[float] = [
-    73, 76, 78, 80, 83
+    75, 78, 80, 82
 ]
 ALL_STATS_BY_HEIGHT_BUCKET_COLUMNS = nba_data_processing.get_all_stats_by_bucket_columns(
     player_info_manager.HEIGHT.category_name,
@@ -51,7 +51,7 @@ ALL_STATS_BY_HEIGHT_BUCKET_COLUMNS = nba_data_processing.get_all_stats_by_bucket
     STAT_COLUMNS
 )
 WEIGHT_BOUNDARIES: list[float] = [
-    190, 200, 215, 230, 240
+    195, 215, 230, 245
 ]
 ALL_STATS_BY_WEIGHT_BUCKET_COLUMNS = nba_data_processing.get_all_stats_by_bucket_columns(
     player_info_manager.WEIGHT.category_name,
@@ -112,6 +112,7 @@ PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS = [
 PAST_MEAN_PREFIX = "PAST_MEAN_"
 PAST_TEAM_STATS = [
     nba_data_processing.POSSESSIONS, 
+    team_game_data_manager.MINUTES_PLAYED.category_name,
     team_game_data_manager.STEALS.category_name, team_game_data_manager.BLOCKS.category_name
 ]
 PAST_MEAN_TEAM_STATS = [
@@ -142,7 +143,7 @@ INPUT_DATA_PAST_GAMES_AGAINST_OPPONENT_SEQUENCE = "PAST_GAMES_AGAINST_OPPONENT_S
 INPUT_DATA_STATIC_DATA = "STATIC_DATA"
 
 # Players with less than this number of games will be removed from the dataset
-MINIMUM_REQUIRED_GAMES_PLAYED = PAST_GAMES_PLAYED_SEQUENCE_LENGTH + 1
+MINIMUM_REQUIRED_GAMES_PLAYED = PAST_GAMES_PLAYED_SEQUENCE_LENGTH
 
 STAT_TO_KEEP_SEQUENCE = [
     nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
@@ -159,7 +160,9 @@ STAT_TO_KEEP_SEQUENCE = [
     player_game_data_manager.FREE_THROWS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
     nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
     nba_data_processing.CHANGED_TEAM,
-    nba_data_processing.POSSESSIONS
+    nba_data_processing.POSSESSIONS,
+    team_game_data_manager.MINUTES_PLAYED.category_name + nba_data_processing.TEAM_SUFFIX,
+    nba_data_processing.ROSTER_ADD_CORE_PLAYER, nba_data_processing.ROSTER_REMOVE_CORE_PLAYER
 ] + (
     nba_data_processing.ALL_SEASONS
 ) + [
@@ -172,7 +175,8 @@ STAT_TO_KEEP_SEQUENCE.sort()
 STATS_TO_KEEP_STATIC = [
     nba_data_processing.AGE_DURING_GAME, nba_data_processing.NBA_EXPERIENCE_DURING_GAME, 
     nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
-    nba_data_processing.CHANGED_TEAM
+    nba_data_processing.CHANGED_TEAM,
+    nba_data_processing.ROSTER_ADD_CORE_PLAYER, nba_data_processing.ROSTER_REMOVE_CORE_PLAYER
 ] + (
     nba_data_processing.ALL_SEASONS
 ) + [
@@ -217,19 +221,22 @@ def preprocess_game_data(
     player_info[player_info_manager.FROM_YEAR.category_name] = pd.to_datetime(player_info[player_info_manager.FROM_YEAR.category_name], format='%Y')
     player_info = nba_data_processing.convert_height_to_inches(
         player_info,
-        player_info_manager.HEIGHT.category_name
+        player_info_manager.HEIGHT.category_name,
+        fill_unknown_with_mean=True
     )
     player_info = nba_data_processing.add_encoded_position_columns(
         player_info,
-        player_info_manager.POSITION.category_name
+        player_info_manager.POSITION.category_name,
+        fill_unknown_with_position=nba_data_processing.FORWARD
         )
     player_info = nba_data_processing.encode_undrafted(
         player_info,
         player_info_manager.DRAFT_NUMBER.category_name
     )
-    player_info = nba_data_processing.encode_unknown_weight(
+    player_info = nba_data_processing.handle_unknown_weight(
         player_info,
-        player_info_manager.WEIGHT.category_name
+        player_info_manager.WEIGHT.category_name,
+        fill_unknown_with_mean=True
     )
 
     player_game_data = player_game_data.drop(columns=PRE_UNUSED_PLAYER_CATEGORIES, errors='ignore')
@@ -327,6 +334,16 @@ def preprocess_game_data(
         player_info_manager.WEIGHT.category_name,
         WEIGHT_BOUNDARIES,
         STAT_COLUMNS
+    )
+    team_game_data = nba_data_processing.add_core_roster_change_columns(
+        team_game_data,
+        player_game_data,
+        player_game_data_manager.PLAYER_ID.category_name,
+        player_game_data_manager.GAME_ID.category_name,
+        team_game_data_manager.GAME_ID.category_name,
+        player_game_data_manager.TEAM_ID.category_name,
+        team_game_data_manager.TEAM_ID.category_name,
+        player_game_data_manager.MINUTES_PLAYED.category_name
     )
 
     if print_debug:

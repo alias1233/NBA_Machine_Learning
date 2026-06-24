@@ -21,7 +21,7 @@ SAVE_PROCESSED_TRAINING_DATA_PATH = directories.SAVE_PROCESSED_TRAINING_DATA_PAT
 SAVE_PROCESSED_TRAINING_DATA = True
 LOAD_SAVED_PROCESSED_TRAINING_DATA = True
 
-RANDOM_SEED = 563654638
+RANDOM_SEED = 20348
 
 TARGET_STAT = data_processor.TargetStat.PLAYER_POINTS
 MINIMUM_OF_STAT = 0
@@ -32,16 +32,16 @@ VALIDATION_START_DATE = datetime(2026, 1, 1)
 TEST_START_DATE = datetime(2026, 3, 1)
 
 HIDDEN_LAYERS_PARAMETERS = [
-    LayerParameters(512, nn.ReLU, True, 0.5),
-    LayerParameters(256, nn.ReLU, True, 0.5),
-    LayerParameters(128, nn.ReLU, True, 0.5)
+    LayerParameters(512, nn.ReLU, True, 0.2),
+    LayerParameters(256, nn.ReLU, True, 0.15),
+    LayerParameters(128, nn.ReLU, True, 0.1)
 ]
 
-LEARNING_RATE = 0.00001
+LEARNING_RATE = 0.000005
 EPOCHS = 25
 LOSS_FUNCTION: trainer.LossFunction = torch.nn.CrossEntropyLoss()
 EVALUATION_INTERVAL = 1
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 PATIENCE = -1
 MIN_DELTA = 0.001
 DEVICE = helpers.get_best_device()

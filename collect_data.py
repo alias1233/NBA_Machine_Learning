@@ -1,14 +1,27 @@
 from enum import Enum
+from datetime import datetime
 
 from modules.data_managers.team_game_data import team_game_data_manager
 from modules.data_managers.player_game_data import player_game_data_manager
 from modules.data_managers.player_info_data import player_info_manager
-from src.data_preparation.nba_data import NBAData
+from src.data_preparation import nba_data_helpers
 
 class NBADataUser():
     """
     Helper class for user prompting with NBA data
     """
+
+    @staticmethod
+    def get_player_ids_user() -> list[str]:
+        use_id = input("Input whether to search for players by id or by full name: (i/n) ").capitalize() == 'I'
+        player_ids = []
+        while True:
+            player_id = NBADataUser.get_player_id_user(use_id)
+            if player_id is None:
+                break 
+            player_ids.append(player_id)
+        
+        return player_ids
 
     @staticmethod
     def get_player_id_user(use_id: bool) -> str | None:
@@ -22,12 +35,12 @@ class NBADataUser():
         if player.capitalize() == "Q":
             return None
 
-        player_ids = NBAData.player_name_to_ids(player)
+        player_ids = nba_data_helpers.player_name_to_ids(player)
         while not player_ids:
             player = input("Player name does not correspond with a player. Input the player name or q to quit: ")
             if player.capitalize() == "Q":
                 return None
-            player_ids = NBAData.player_name_to_ids(player)
+            player_ids = nba_data_helpers.player_name_to_ids(player)
 
         player_id = 0
         if len(player_ids) == 1:
@@ -44,8 +57,8 @@ class NBADataUser():
     def get_season_user() -> int | None:
         def get_season_user():
             season = int(input("Input the season year, or q to quit: "))
-            oldest_season = NBAData.get_oldest_season_with_all_player_box_score_data_data()
-            current_season = NBAData.get_current_nba_season()
+            oldest_season = nba_data_helpers.get_oldest_season_with_all_player_box_score_data_data()
+            current_season = nba_data_helpers.get_current_nba_season()
             invalid_input = season < oldest_season or season > current_season
             if invalid_input:
                 raise ValueError
@@ -61,8 +74,8 @@ class NBADataUser():
         def get_season_range_user():
             start_season = int(input("Input the start season year: "))
             end_season = int(input("Input the end season year: "))
-            oldest_season = NBAData.get_oldest_season_with_all_player_box_score_data_data()
-            current_season = NBAData.get_current_nba_season()
+            oldest_season = nba_data_helpers.get_oldest_season_with_all_player_box_score_data_data()
+            current_season = nba_data_helpers.get_current_nba_season()
             invalid_input = (end_season < start_season) or (start_season < oldest_season or end_season < oldest_season) or (start_season > current_season or end_season > current_season)
             if invalid_input:
                 raise ValueError
@@ -109,7 +122,7 @@ class NBADataUser():
                     if (team.capitalize() == "Q"):
                         return None
                     try:
-                        return NBAData.team_abb_to_id(team)
+                        return nba_data_helpers.team_abb_to_id(team)
                     except:
                         print("Team abbreviation does not correspond with a team.")
             case NBADataUser.TeamChooseSchema.FULL_NAME:
@@ -118,7 +131,7 @@ class NBADataUser():
                     if (team.capitalize() == "Q"):
                         return None
                     try:
-                        return NBAData.team_name_to_id(team)
+                        return nba_data_helpers.team_name_to_id(team)
                     except:
                         print("Team name does not correspond with a team.")
 
@@ -148,15 +161,17 @@ def collect_data_user(user_choice_function, collect_data_function) -> int:
     return collect_data_function(wait_interval, starting_index, choice_data)
 
 def collect_player_info_data_user():
-    def get_player_ids_user() -> list:
-        use_id = input("Input whether to search for players by id or by full name: (i/n) ").capitalize() == 'I'
-        player_ids = []
-        while True:
-            player_id = NBADataUser.get_player_id_user(use_id)
-            if player_id is None:
-                break 
-            player_ids.append(player_id)
-        return player_ids
+    def get_player_ids_user() -> list[str]:
+        search_by_date = input("Input whether to search by individual players or by date: (i/d) ").capitalize() == "D"
+
+        if search_by_date:
+            FORMAT = "%Y-%m-%d"
+            date = input("Input the starting date in the format " + FORMAT.replace("%", "") + ": ")
+            date = datetime.strptime(date, FORMAT)
+            game_data = player_game_data_manager.get_game_data_after_date(date)
+            return game_data[player_game_data_manager.PLAYER_ID.category_name].unique().tolist()
+        else:
+            return NBADataUser.get_player_ids_user()
     
     return collect_data_user(get_player_ids_user, player_info_manager.collect_player_info_data)
 

@@ -169,7 +169,6 @@ def plot_calibration(
             axes[i].set_ylabel('Actual Frequency')
             axes[i].legend()
 
-        # Hide unused subplots on the last page
         for i in range(n_on_page, len(axes)):
             axes[i].set_visible(False)
 
@@ -194,8 +193,8 @@ def output_test_evaluation_classification(
     Graphs information about the predicted classification and the actual classifications of model predictions.
 
     Args:
-        predictions should be the outputted logits of the model.
-        actuals should be the true classification of the values. 
+        predictions are be the outputted logits of the model.
+        actuals are the true classification of the values. 
         save_graph_directory_path if set is a string path to a directory to save the evaluation graphs to.
     """
 

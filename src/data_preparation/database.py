@@ -132,6 +132,7 @@ class Database():
             categories: The specified returned categories of the fetched values. An input value of None will return all categories.
             limit: The maximum number of returned values. An input value of None corresponds to no limit.
         """
+        
         query_columns = self.get_query_columns(categories)
         command = f"""SELECT {query_columns} FROM {self.name}"""
         if SQL_condition:

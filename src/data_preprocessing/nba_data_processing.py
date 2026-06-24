@@ -356,6 +356,103 @@ def add_total_player_stats_per_game_by_bucket(
 
     return team_game_data
 
+ROSTER_ADD_CORE_PLAYER = "ROSTER_ADD_CORE_PLAYER"
+ROSTER_REMOVE_CORE_PLAYER = "ROSTER_REMOVE_CORE_PLAYER"
+def add_core_roster_change_columns(
+    team_game_data: pd.DataFrame,
+    player_game_data: pd.DataFrame,
+    player_id_column: str,
+    game_id_column_player: str,
+    game_id_column_team: str,
+    team_id_column_player: str,
+    team_id_column_team: str,
+    minutes_played_column: str,
+    core_player_minutes_cutoff: int = 25
+    ) -> pd.DataFrame:
+    """
+    Adds columns to team_game_data that encode whether the team completely gained a core player or completely loss a core player from the previous games.
+    """
+
+    PREV_PREFIX = "PREV"
+    PLAYERS_ON_TEAM_IN_GAME = "PLAYERS_ON_TEAM_IN_GAME"
+    CORE_PLAYERS_ON_TEAM_IN_GAME = "CORE_PLAYERS_ON_TEAM_IN_GAME"
+
+    team_games = team_game_data[[game_id_column_team, team_id_column_team]]
+
+    players_roster_data = player_game_data[[game_id_column_player, team_id_column_player, player_id_column, minutes_played_column]]
+    core_players_in_game_dataframe = players_roster_data.loc[players_roster_data[minutes_played_column] >= core_player_minutes_cutoff]
+
+    replace_missing_with_empty_set = lambda x : x if isinstance(x, set) else set()
+
+    players_in_game = (
+        players_roster_data.groupby(by=[game_id_column_player, team_id_column_player])
+        [player_id_column]
+        .agg(set)
+        .reset_index(name=PLAYERS_ON_TEAM_IN_GAME)
+    )
+    core_players_in_game = (
+        core_players_in_game_dataframe.groupby(by=[game_id_column_player, team_id_column_player])
+        [player_id_column]
+        .agg(set)
+        .reset_index(name=CORE_PLAYERS_ON_TEAM_IN_GAME)
+    )
+
+    team_games = team_games.merge(
+        right=players_in_game,
+        how='left',
+        left_on=[game_id_column_team, team_id_column_team],
+        right_on=[game_id_column_player, team_id_column_player]
+    )
+    team_games = team_games.merge(
+        right=core_players_in_game,
+        how='left',
+        left_on=[game_id_column_team, team_id_column_team],
+        right_on=[game_id_column_player, team_id_column_player]
+    )
+
+    team_games[CORE_PLAYERS_ON_TEAM_IN_GAME] = team_games[CORE_PLAYERS_ON_TEAM_IN_GAME].map(replace_missing_with_empty_set)
+    team_games[PLAYERS_ON_TEAM_IN_GAME] = team_games[PLAYERS_ON_TEAM_IN_GAME].map(replace_missing_with_empty_set)
+
+    team_games[PREV_PREFIX + PLAYERS_ON_TEAM_IN_GAME] = (
+        team_games.groupby(by=team_id_column_team)
+            [PLAYERS_ON_TEAM_IN_GAME]
+            .shift(1)
+            .map(replace_missing_with_empty_set)
+        )
+    team_games[PREV_PREFIX + CORE_PLAYERS_ON_TEAM_IN_GAME] = (
+        team_games.groupby(by=team_id_column_team)
+            [CORE_PLAYERS_ON_TEAM_IN_GAME]
+            .shift(1)
+            .map(replace_missing_with_empty_set)
+        )
+
+    team_game_data[ROSTER_ADD_CORE_PLAYER] = team_games.apply(
+        lambda row : 0.0 if len(row[CORE_PLAYERS_ON_TEAM_IN_GAME].difference(row[PREV_PREFIX + PLAYERS_ON_TEAM_IN_GAME])) == 0 else 1.0,
+        axis=1
+    )
+    team_game_data[ROSTER_REMOVE_CORE_PLAYER] = team_games.apply(
+        lambda row : 0.0 if len(row[PREV_PREFIX + CORE_PLAYERS_ON_TEAM_IN_GAME].difference(row[PLAYERS_ON_TEAM_IN_GAME])) == 0 else 1.0,
+        axis=1
+    )
+
+    return team_game_data
+
+# TODO: Implement
+def add_net_expected_stat_changes_from_roster_change_columns(
+    player_game_data: pd.DataFrame,
+    team_game_data: pd.DataFrame,
+    player_id_column_info: str,
+    player_id_column_player: str,
+    game_id_column: str,
+    team_id_column: str,
+    stat_columns: list[str],
+    core_player_minutes_cutoff: int = 25
+    ) -> pd.DataFrame:
+    """
+    Adds columnns to team_game_data containing the expected net change in the given stats based on the change in 
+    """
+    return team_game_data
+
 def _add_years_between_static_player_event_and_game_column(
     game_data: pd.DataFrame,
     player_info: pd.DataFrame,
@@ -457,63 +554,85 @@ def encode_win_loss_column_as_integer(
     game_data[win_loss_column] = _encode_equality_as_integer(game_data[win_loss_column], "W")
     return game_data
 
-# TODO: Add option to instead fill in missing weights/heights/positions with the average positions/heights/weights
 UNKNOWN_HEIGHT = 'UNKNOWN_HEIGHT'
 def convert_height_to_inches(
     player_info: pd.DataFrame,
-    height_column: str
+    height_column: str,
+    add_unknown_heights_column: bool = False,
+    fill_unknown_with_mean: bool = False
     ) -> pd.DataFrame:
     heights = player_info[height_column]
     heights_split = heights.str.split("-", expand=True)
-    feet = pd.to_numeric(heights_split[0], errors="coerce").fillna(0)
-    inches = pd.to_numeric(heights_split[1], errors="coerce").fillna(0)
+    feet = pd.to_numeric(heights_split[0], errors="coerce")
+    inches = pd.to_numeric(heights_split[1], errors="coerce")
     player_info[height_column] = feet * 12 + inches
-    player_info[UNKNOWN_HEIGHT] = _encode_equality_as_integer(heights, "")
+    
+    if add_unknown_heights_column:
+        player_info[UNKNOWN_HEIGHT] = _encode_equality_as_integer(heights, "")
+
+    if fill_unknown_with_mean:
+        player_info[height_column] = player_info[height_column].fillna(player_info[height_column].mean())
+
     return player_info
 
 UNKNOWN_WEIGHT = 'UNKNOWN_WEIGHT'
-def encode_unknown_weight(
+def handle_unknown_weight(
     player_info: pd.DataFrame,
-    weight_column: str    
+    weight_column: str,
+    add_unknown_weights_column: bool = False,
+    fill_unknown_with_mean: bool = False
     ) -> pd.DataFrame:
     weights = player_info[weight_column]
-    player_info[weight_column] = pd.to_numeric(weights, errors='coerce').fillna(0)
-    player_info[UNKNOWN_WEIGHT] = _encode_equality_as_integer(weights, "")
+    player_info[weight_column] = pd.to_numeric(weights, errors='coerce')
+
+    if add_unknown_weights_column:
+        player_info[UNKNOWN_WEIGHT] = _encode_equality_as_integer(weights, "")
+        player_info[weight_column] = player_info[weight_column].fillna(0)
+
+    if fill_unknown_with_mean:
+        player_info[weight_column] = player_info[weight_column].fillna(player_info[weight_column].mean())
+
     return player_info
 
-# TODO: Compress to just 5 positions, combining center_forward and forward_center, and forward_guard and guard_forward.
 ### POSITION TYPES: A value of 1 represents True, and a value of 0 represents False. ###
 CENTER = 'Center'
 CENTER_FORWARD = 'Center-Forward'
 FORWARD = 'Forward'
-FORWARD_CENTER = 'Forward-Center'
-FORWARD_GUARD = 'Forward-Guard'
+_FORWARD_CENTER = 'Forward-Center'
+_FORWARD_GUARD = 'Forward-Guard'
 GUARD = 'Guard'
 GUARD_FORWARD = 'Guard-Forward'
 UNKNOWN_POSITION = 'UNKNOWN_POSITION'
 ALL_POSITIONS = [
     CENTER,
-    CENTER_FORWARD,
     FORWARD,
-    FORWARD_CENTER,
-    FORWARD_GUARD,
     GUARD,
     GUARD_FORWARD,
-    UNKNOWN_POSITION
+    CENTER_FORWARD
 ]
 def add_encoded_position_columns(
     player_info: pd.DataFrame,
     position_column: str,
+    add_unknown_position_column: bool = False,
+    fill_unknown_with_position: str | None = None
     ) -> pd.DataFrame:
     position = player_info[position_column]
-    player_info[CENTER] = _encode_equality_as_integer(position, CENTER)
-    player_info[CENTER_FORWARD] = _encode_equality_as_integer(position, CENTER_FORWARD)
-    player_info[FORWARD] = _encode_equality_as_integer(position, FORWARD)
-    player_info[FORWARD_CENTER] = _encode_equality_as_integer(position, FORWARD_CENTER)
-    player_info[FORWARD_GUARD] = _encode_equality_as_integer(position, FORWARD_GUARD)
+
+    forward_center = _encode_equality_as_integer(position, _FORWARD_CENTER)
+    forward_guard = _encode_equality_as_integer(position, _FORWARD_GUARD)
+
     player_info[GUARD] = _encode_equality_as_integer(position, GUARD)
-    player_info[GUARD_FORWARD] = _encode_equality_as_integer(position, GUARD_FORWARD)
-    player_info[UNKNOWN_POSITION] = _encode_equality_as_integer(position, "")
+    player_info[GUARD_FORWARD] = _encode_equality_as_integer(position, GUARD_FORWARD) + forward_guard
+    player_info[FORWARD] = _encode_equality_as_integer(position, FORWARD)
+    player_info[CENTER_FORWARD] = _encode_equality_as_integer(position, CENTER_FORWARD) + forward_center
+    player_info[CENTER] = _encode_equality_as_integer(position, CENTER)
+
+    if fill_unknown_with_position is not None:
+        player_info[fill_unknown_with_position] += _encode_equality_as_integer(position, "")
+
+    if add_unknown_position_column:
+        player_info[UNKNOWN_POSITION] = _encode_equality_as_integer(position, "")
+
     return player_info
 
 UNDRAFTED = 'Undrafted'
