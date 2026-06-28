@@ -428,7 +428,7 @@ def add_core_roster_change_columns(
     game_id_column_team: str,
     team_id_column_player: str,
     team_id_column_team: str,
-    minutes_played_column: str,
+    minutes_played_column: str, # TODO: Potentially use previous rolling mean minutes played
     core_player_minutes_cutoff: int = 25
     ) -> pd.DataFrame:
     """
@@ -439,12 +439,12 @@ def add_core_roster_change_columns(
     PLAYERS_ON_TEAM_IN_GAME = "PLAYERS_ON_TEAM_IN_GAME"
     CORE_PLAYERS_ON_TEAM_IN_GAME = "CORE_PLAYERS_ON_TEAM_IN_GAME"
 
+    replace_missing_with_empty_set = lambda x : x if isinstance(x, set) else set()
+
     team_games = team_game_data[[game_id_column_team, team_id_column_team]]
 
     players_roster_data = player_game_data[[game_id_column_player, team_id_column_player, player_id_column, minutes_played_column]]
     core_players_in_game_dataframe = players_roster_data.loc[players_roster_data[minutes_played_column] >= core_player_minutes_cutoff]
-
-    replace_missing_with_empty_set = lambda x : x if isinstance(x, set) else set()
 
     players_in_game = (
         players_roster_data.groupby(by=[game_id_column_player, team_id_column_player])
@@ -587,21 +587,27 @@ PRESEASON = 'PRESEASON'
 REGULAR_SEASON = 'REGULAR_SEASON'
 PLAYOFFS = 'PLAYOFFS'
 PLAY_IN = 'PLAY_IN'
-ALL_SEASONS = [
+ALL_SEASON_TYPES = [
     PRESEASON,
     REGULAR_SEASON,
     PLAYOFFS,
     PLAY_IN
 ]
+SEASON_ENCODINGS = {
+    PRESEASON : "1",
+    REGULAR_SEASON : "2",
+    PLAYOFFS : "4",
+    PLAY_IN : "5"
+}
 def add_encoded_season_type_columns(
     team_game_data: pd.DataFrame,
     game_id_column: str
     ) -> pd.DataFrame:
     season_type_id = team_game_data[game_id_column].astype(str).str[0]
-    team_game_data[PRESEASON] = _encode_equality_as_integer(season_type_id, "1")
-    team_game_data[REGULAR_SEASON] = _encode_equality_as_integer(season_type_id, "2")
-    team_game_data[PLAYOFFS] = _encode_equality_as_integer(season_type_id, "4")
-    team_game_data[PLAY_IN] = _encode_equality_as_integer(season_type_id, "5")
+
+    for season_type in ALL_SEASON_TYPES:
+        team_game_data[season_type] = _encode_equality_as_integer(season_type_id, SEASON_ENCODINGS[season_type])
+
     return team_game_data
 
 def encode_win_loss_column_as_integer(

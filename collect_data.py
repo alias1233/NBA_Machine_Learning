@@ -51,7 +51,7 @@ class NBADataUser():
                 print(player_ids)
                 id_index = int(input("Input the index of the id to use: "))
             player_id = player_ids[id_index]
-        return player_id
+        return str(player_id)
     
     @staticmethod
     def get_season_user() -> int | None:
@@ -122,7 +122,7 @@ class NBADataUser():
                     if (team.capitalize() == "Q"):
                         return None
                     try:
-                        return nba_data_helpers.team_abb_to_id(team)
+                        return str(nba_data_helpers.team_abb_to_id(team))
                     except:
                         print("Team abbreviation does not correspond with a team.")
             case NBADataUser.TeamChooseSchema.FULL_NAME:
@@ -131,7 +131,7 @@ class NBADataUser():
                     if (team.capitalize() == "Q"):
                         return None
                     try:
-                        return nba_data_helpers.team_name_to_id(team)
+                        return str(nba_data_helpers.team_name_to_id(team))
                     except:
                         print("Team name does not correspond with a team.")
 

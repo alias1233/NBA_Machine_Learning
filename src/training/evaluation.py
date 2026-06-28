@@ -164,6 +164,7 @@ def output_classification_ordinal_errors(
         predicted_probabilities: np.ndarray,
         actuals: np.ndarray
     ):
+    
     highest_probability_predictions = np.argmax(predicted_probabilities, axis=1)
 
     mae, rmse = calculate_mae_and_rmse_error(

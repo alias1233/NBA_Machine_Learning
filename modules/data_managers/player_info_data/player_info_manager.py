@@ -103,3 +103,15 @@ def get_player_info(player_id: str) -> pd.DataFrame:
         )
 
     return data
+
+def get_player_info_after_year(year_start: int) -> pd.DataFrame:
+    SQL_condtition = f"{TO_YEAR.category_name} >= :{TO_YEAR.category_name}"
+    condition_params = {TO_YEAR : year_start}
+
+    with DATABASE:
+        data = DATABASE.query_dataframe(
+            SQL_condition=SQL_condtition,
+            condition_params=condition_params
+        )
+
+    return data

@@ -208,11 +208,10 @@ def process_labeled_data_for_classification_training(
         )
 
 def process_labeled_input(
-    input: pd.DataFrame,
+    input,
     flatten: bool
-    ) -> torch.Tensor:
+    ) -> np.ndarray:
     
     input_numpy = convert_labeled_data_to_numpy([input], flatten)
-    input_tensor = to_tensor(input_numpy)
-    
-    return input_tensor
+
+    return input_numpy

@@ -1,9 +1,16 @@
 import requests
 import time
 from datetime import datetime
+from enum import Enum
 
 from nba_api.stats.static import teams, players
 from nba_api.stats.library.parameters import Season, SeasonTypeAllStar
+
+class SeasonTypes(Enum):
+    PRESEASON = SeasonTypeAllStar.preseason
+    REGULAR_SEASON = SeasonTypeAllStar.regular
+    PLAYIN = SeasonTypeAllStar.playin
+    PLAYOFFS = SeasonTypeAllStar.playoffs
 
 def get_oldest_season_with_all_player_box_score_data_data():
     return 1996
@@ -27,7 +34,7 @@ def get_all_season_types() -> list[str]:
 def get_all_teams():
     return teams.get_teams()
 
-def team_abb_to_id(abbreviation: str) -> str:
+def team_abb_to_id(abbreviation: str) -> int:
     team = teams.find_team_by_abbreviation(abbreviation)
     if team != None:
         return team["id"]
@@ -35,7 +42,7 @@ def team_abb_to_id(abbreviation: str) -> str:
         f"{abbreviation} does not correspond with a team."
     )
 
-def team_name_to_id(name: str) -> str:
+def team_name_to_id(name: str) -> int:
     team = teams.find_teams_by_full_name(name)
     if team == []:
         raise ValueError(
@@ -57,7 +64,7 @@ def get_all_players():
 
     return players.get_players()
 
-def player_name_to_ids(name: str) -> list:
+def player_name_to_ids(name: str) -> list[int]:
     players_data = players.find_players_by_full_name(name)
     ids = []
     for player in players_data:

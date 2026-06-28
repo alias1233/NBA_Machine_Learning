@@ -1,6 +1,8 @@
 import pandas as pd
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from enum import Enum
+from typing import Any
 
 from modules.data_managers.team_game_data import team_game_data_manager
 from modules.data_managers.player_game_data import player_game_data_manager
@@ -8,6 +10,7 @@ from modules.data_managers.player_info_data import player_info_manager
 from src.data_preprocessing import nba_data_processing
 from src.data_preprocessing import rolling_category
 from src.data_preprocessing.rolling_category import RollingCategory
+from src.data_preparation import nba_data_helpers
 
 # TODO: Implement another model architecture such as transformmers or VAEs
 # TODO: Add season time column, along with current team seed (?)
@@ -189,7 +192,7 @@ STAT_TO_KEEP_SEQUENCE = [
     team_game_data_manager.MINUTES_PLAYED.category_name + nba_data_processing.TEAM_SUFFIX,
     nba_data_processing.ROSTER_ADD_CORE_PLAYER, nba_data_processing.ROSTER_REMOVE_CORE_PLAYER
 ] + (
-    nba_data_processing.ALL_SEASONS
+    nba_data_processing.ALL_SEASON_TYPES
 ) + [
     category.column_name for category in PAST_OPPONENT_ALLOWED_MEAN_STATS
 ] + [
@@ -208,7 +211,7 @@ STATS_TO_KEEP_STATIC = [
     nba_data_processing.CHANGED_TEAM,
     nba_data_processing.ROSTER_ADD_CORE_PLAYER, nba_data_processing.ROSTER_REMOVE_CORE_PLAYER
 ] + (
-    nba_data_processing.ALL_SEASONS
+    nba_data_processing.ALL_SEASON_TYPES
 ) + [
     category.column_name for category in OPPONENT_TEAM_ROLLING_CATEGORIES
 ] + [
@@ -231,15 +234,15 @@ class TargetStat(Enum):
     PLAYER_REBOUNDS = nba_data_processing.REBOUNDS + nba_data_processing.PLAYER_SUFFIX
     PLAYER_ASSISTS = player_game_data_manager.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
 
-def preprocess_game_data(
+def _preprocess_game_data(
         player_info: pd.DataFrame,
         player_game_data: pd.DataFrame,
         team_game_data: pd.DataFrame,
         print_debug: bool = False
-        ) -> list[tuple[pd.DataFrame, pd.DataFrame, dict[str, pd.DataFrame]]]:
+        ) -> dict[int, tuple[pd.DataFrame, pd.DataFrame, dict[int, pd.DataFrame]]]:
     """
-    Returns a list of tuples containing: 
-    (dataframe containing static information about a player,
+    Returns a dict of tuples mapping each player id to: 
+    (dataframe containing static information about the player,
       dataframe containing data for every game played by that corresponding player,
       dictionary mapping each opponent team's id to the games the corresponding player played against that team.)
     """
@@ -455,7 +458,7 @@ def preprocess_game_data(
     )
     player_team_game_data = nba_data_processing.sort_columns_alphabetically(player_team_game_data)
 
-    preprocessed_game_data = []
+    preprocessed_game_data = {}
     for player_id, game_data in player_team_game_data.groupby(by=player_game_data_manager.PLAYER_ID.category_name):
         game_data = game_data.sort_values(by=team_game_data_manager.GAME_DATE.category_name)
 
@@ -469,20 +472,51 @@ def preprocess_game_data(
 
             opponent_game_data_dict[opponent_team_id] = opponent_game_data
         
-        preprocessed_game_data.append((static_player_info_dict[player_id], game_data, opponent_game_data_dict))
+        preprocessed_game_data[player_id] = ((static_player_info_dict[player_id], game_data, opponent_game_data_dict))
 
     if print_debug:
         print("Finished generating game data.")
 
     return preprocessed_game_data
 
-def get_past_games_against_opponent(opponent_game_data: pd.DataFrame, date_of_game: datetime) -> pd.DataFrame | None:
+def _get_past_games_against_opponent(opponent_game_data: pd.DataFrame, date_of_game: datetime) -> pd.DataFrame | None:
     game_data_before_game_data = opponent_game_data[opponent_game_data[team_game_data_manager.GAME_DATE.category_name] < date_of_game]
-    
+
     if len(game_data_before_game_data) < PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH:
         return None
     
     return game_data_before_game_data.iloc[-PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH:]
+
+def _get_input_data_chunk(
+        player_team_game_data: pd.DataFrame,
+        opponent_game_data_dict: dict[int, pd.DataFrame],
+        static_player_info: pd.DataFrame,
+        current_game: pd.Series,
+        date_of_game: datetime,
+        index: int
+    ) -> dict[str, pd.DataFrame] | None:
+
+    # Creating sequence of last played games against the opponent of the current game
+    opponent_team_id = current_game[nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name]
+    if opponent_team_id not in opponent_game_data_dict:
+        return None
+    past_games_against_opponent = _get_past_games_against_opponent(opponent_game_data_dict[opponent_team_id], date_of_game)
+    if past_games_against_opponent is None:
+        return None
+
+    # Creating sequence of last played games by the current player 
+    past_games_sequence = player_team_game_data.iloc[index - PAST_GAMES_PLAYED_SEQUENCE_LENGTH : index]
+
+    past_games_sequence = past_games_sequence[STAT_TO_KEEP_SEQUENCE]
+    past_games_against_opponent = past_games_against_opponent[STAT_TO_KEEP_PREV_OPPONENT_SEQUENCE]
+    input_data_static_game_data = current_game[STATS_TO_KEEP_STATIC].to_frame().T # TODO: add days between games played for opponent game history
+    
+    return {
+        INPUT_DATA_PLAYER_INFO : static_player_info,
+        INPUT_DATA_PAST_GAMES_SEQUENCE : past_games_sequence,
+        INPUT_DATA_PAST_GAMES_AGAINST_OPPONENT_SEQUENCE : past_games_against_opponent,
+        INPUT_DATA_STATIC_DATA : input_data_static_game_data
+    }
 
 def get_all_player_props_input_output_labeled_data(
         target_stat: TargetStat,
@@ -490,7 +524,14 @@ def get_all_player_props_input_output_labeled_data(
         test_split_start_date: datetime,
         chunk_step_size: int = 1,
         print_debug: bool = False
-        ) -> tuple[list, list, list, list, list, list]:
+        ) -> tuple[
+            list[dict[str, pd.DataFrame]], 
+            list[pd.DataFrame], 
+            list[dict[str, pd.DataFrame]], 
+            list[pd.DataFrame],
+            list[dict[str, pd.DataFrame]], 
+            list[pd.DataFrame]
+            ]:
     """
     Returns a labeled training dataset for over/under prediction.
 
@@ -510,7 +551,7 @@ def get_all_player_props_input_output_labeled_data(
     all_team_game_data: pd.DataFrame = team_game_data_manager.get_all_team_game_data()
     all_team_game_data = all_team_game_data.dropna()
 
-    data_per_player = preprocess_game_data(all_player_info, all_player_game_data, all_team_game_data, print_debug)
+    data_per_player = _preprocess_game_data(all_player_info, all_player_game_data, all_team_game_data, print_debug)
 
     if print_debug:
         print("Arranging data into training chunks...")
@@ -523,38 +564,25 @@ def get_all_player_props_input_output_labeled_data(
     output_test_data: list[pd.DataFrame] = []
 
     count: int = 0
-    for player_data in data_per_player:
-        static_player_info, player_game_data, opponent_game_data_dict = player_data
+    for _, player_data in data_per_player.items():
+        static_player_info, player_team_game_data, opponent_game_data_dict = player_data
         static_player_info = static_player_info.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC, errors='ignore')
 
-        for index in range(PAST_GAMES_PLAYED_SEQUENCE_LENGTH, len(player_game_data), chunk_step_size):
-            current_game = player_game_data.iloc[index]
-
-            # Creating sequence of last played games against the opponent of the current game
-            opponent_team_id = current_game[nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name]
-            if opponent_team_id not in opponent_game_data_dict:
-                continue
+        for index in range(PAST_GAMES_PLAYED_SEQUENCE_LENGTH, len(player_team_game_data), chunk_step_size):
+            current_game = player_team_game_data.iloc[index]
             date_of_game: datetime = current_game[team_game_data_manager.GAME_DATE.category_name]
-            past_games_against_opponent = get_past_games_against_opponent(opponent_game_data_dict[opponent_team_id], date_of_game)
-            if past_games_against_opponent is None:
+
+            input_chunk = _get_input_data_chunk(
+                player_team_game_data,
+                opponent_game_data_dict,
+                static_player_info,
+                current_game,
+                date_of_game,
+                index
+            )
+            if input_chunk is None:
                 continue
-
-            # Creating sequence of last played games by the current player 
-            past_games_sequence = player_game_data.iloc[index - PAST_GAMES_PLAYED_SEQUENCE_LENGTH : index]
-
-            past_games_sequence = past_games_sequence[STAT_TO_KEEP_SEQUENCE]
-            past_games_against_opponent = past_games_against_opponent[STAT_TO_KEEP_PREV_OPPONENT_SEQUENCE]
-            input_data_static_game_data = current_game[STATS_TO_KEEP_STATIC].to_frame().T # TODO: add days between games played for opponent game history
-
-            output_data = current_game[[target_stat.value]].to_frame().T
-            
-            input_chunk = {
-                INPUT_DATA_PLAYER_INFO : static_player_info,
-                INPUT_DATA_PAST_GAMES_SEQUENCE : past_games_sequence,
-                INPUT_DATA_PAST_GAMES_AGAINST_OPPONENT_SEQUENCE : past_games_against_opponent,
-                INPUT_DATA_STATIC_DATA : input_data_static_game_data
-            }
-            output_chunk = output_data
+            output_chunk = current_game[[target_stat.value]].to_frame().T
 
             if print_debug:
                 if count % 25000 == 0:
@@ -580,3 +608,157 @@ def get_all_player_props_input_output_labeled_data(
         print("Finished data processing.")
     
     return (input_training_data, output_training_data, input_validation_data, output_validation_data, input_test_data, output_test_data)
+
+def get_player_prop_inference_labeled_input_data(
+    target_stat: TargetStat,
+    target_player_id: int,
+    target_player_team_id: int,
+    target_player_opponent_team_id: int,
+    target_game_date: datetime,
+    target_game_season_type: nba_data_helpers.SeasonTypes,
+    target_player_removed_core_teammate_player_ids: set[int],
+    target_player_added_core_teammate_player_ids: set[int],
+    historical_window_length_years: int = 5,
+    print_debug: bool = False
+    ) -> dict[str, pd.DataFrame]:
+    """
+    Creates input data for a given target game for inferencing.
+
+    Args:
+        target_player_removed_core_teammate_player_ids hold a set of players who played more than 25 minutes in the previous game for the target team,
+        and are not playing for the target game.
+
+        target_player_added_core_teammate_player_ids hold a set of players who did not play in the previous game for the target team, but
+        are now projected to play more than 25 minutes for the target game.
+    """
+    
+    if print_debug:
+        print("Querying data from databases...")
+
+    historical_window_start_date: datetime = target_game_date - relativedelta(years=historical_window_length_years)
+
+    player_info: pd.DataFrame = player_info_manager.get_player_info_after_year(historical_window_start_date.year)
+    player_info = player_info.dropna()
+
+    player_game_data: pd.DataFrame = player_game_data_manager.get_game_data_after_date(historical_window_start_date)
+    player_game_data = player_game_data.dropna()
+
+    team_game_data: pd.DataFrame = team_game_data_manager.get_game_data_after_date(historical_window_start_date)
+    team_game_data = team_game_data.dropna()
+
+    if print_debug:
+        print("Getting previous game player ids...")
+    
+    # Get all player ids that played for the target team in the target team's most recent game.
+    team_game_data_temp = team_game_data.copy()
+    player_game_data_temp = player_game_data.copy()
+    team_game_data_temp[team_game_data_manager.GAME_DATE.category_name] = pd.to_datetime(
+            team_game_data_temp[team_game_data_manager.GAME_DATE.category_name]
+            )
+    previous_game_data = (
+        team_game_data_temp[team_game_data_temp[team_game_data_manager.TEAM_ID.category_name] == target_player_team_id]
+        .sort_values(by=team_game_data_manager.GAME_DATE.category_name, ascending=False)
+        .iloc[0]
+    )
+    previous_game_id: int = previous_game_data[team_game_data_manager.GAME_ID.category_name]
+    previous_team_id: int = previous_game_data[team_game_data_manager.TEAM_ID.category_name]
+    previous_game_team_player_ids: set[int] = (
+        player_game_data_temp[
+        (player_game_data_temp[player_game_data_manager.TEAM_ID.category_name] == previous_team_id)
+        & (player_game_data_temp[player_game_data_manager.GAME_ID.category_name] == previous_game_id)
+        ]
+        [player_game_data_manager.PLAYER_ID.category_name]
+        .agg(set)
+    )
+    target_game_team_player_ids = (
+        previous_game_team_player_ids.union(target_player_added_core_teammate_player_ids)
+        .difference(target_player_removed_core_teammate_player_ids)
+    )
+    target_game_team_player_ids.add(target_player_id)
+
+    match target_game_season_type:
+        case nba_data_helpers.SeasonTypes.PRESEASON:
+            season_type = nba_data_processing.PRESEASON
+        case nba_data_helpers.SeasonTypes.REGULAR_SEASON:
+            season_type = nba_data_processing.REGULAR_SEASON
+        case nba_data_helpers.SeasonTypes.PLAYIN:
+            season_type = nba_data_processing.PLAY_IN
+        case nba_data_helpers.SeasonTypes.PLAYOFFS:
+            season_type = nba_data_processing.PLAYOFFS
+
+    target_game_placeholder_id = nba_data_processing.SEASON_ENCODINGS[season_type]
+
+    target_game_date_str = nba_data_helpers.convert_datetime_to_str_nba_date_format(target_game_date)
+
+    if print_debug:
+        print("Creating placeholder rows...")
+
+    predicted_game_known_info_player_game_data_row: dict[str, Any] = {
+        player_game_data_manager.TEAM_ID.category_name : target_player_team_id,
+        player_game_data_manager.GAME_DATE.category_name : target_game_date_str,
+        player_game_data_manager.GAME_ID.category_name : target_game_placeholder_id
+    }
+    predicted_game_known_info_player_game_data_rows = []
+
+    for player_id in target_game_team_player_ids:
+        predicted_game_known_info_player_teammate_game_data_row = predicted_game_known_info_player_game_data_row.copy()
+        predicted_game_known_info_player_teammate_game_data_row[player_game_data_manager.PLAYER_ID.category_name] = player_id
+
+        predicted_game_known_info_player_game_data_rows.append(predicted_game_known_info_player_teammate_game_data_row)
+
+    predicted_game_known_info_player_game_data = pd.DataFrame(predicted_game_known_info_player_game_data_rows)
+    player_game_data = pd.concat([player_game_data, predicted_game_known_info_player_game_data], ignore_index=True)
+
+    predicted_game_known_info_team_game_data_row = {
+        team_game_data_manager.TEAM_ID.category_name : target_player_team_id,
+        team_game_data_manager.GAME_DATE.category_name : target_game_date_str,
+        team_game_data_manager.GAME_ID.category_name : target_game_placeholder_id
+    }
+    predicted_game_known_info_opponent_team_game_data_row = predicted_game_known_info_team_game_data_row.copy()
+    predicted_game_known_info_opponent_team_game_data_row[team_game_data_manager.TEAM_ID.category_name] = target_player_opponent_team_id
+    predicted_game_known_info_team_game_data = pd.DataFrame(
+        [predicted_game_known_info_team_game_data_row, predicted_game_known_info_opponent_team_game_data_row]
+        )
+    team_game_data = pd.concat([team_game_data, predicted_game_known_info_team_game_data], ignore_index=True)
+
+    if print_debug:
+        print("Processing data...")
+
+    data_per_player = _preprocess_game_data(player_info, player_game_data, team_game_data)
+
+    static_player_info, player_team_game_data, opponent_game_data_dict = data_per_player[target_player_id]
+
+    # Get target game index in dataframe
+    target_label = int(
+        (player_team_game_data[team_game_data_manager.GAME_ID.category_name] == target_game_placeholder_id)
+        .idxmax()
+        )
+    target_index = player_team_game_data.index.get_loc(target_label)
+    if not isinstance(target_index, int):
+        raise ValueError()
+    
+
+    static_player_info = static_player_info.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC, errors='ignore')
+
+    if print_debug:
+        print("Creating input chunk...")
+
+    target_game = player_team_game_data.iloc[target_index]
+    date_of_game: datetime = target_game[team_game_data_manager.GAME_DATE.category_name]
+
+    input_data = _get_input_data_chunk(
+        player_team_game_data,
+        opponent_game_data_dict,
+        static_player_info,
+        target_game,
+        date_of_game,
+        target_index
+    )
+
+    if input_data is None:
+        raise ValueError()
+    
+    if print_debug:
+        print("Completed input data creation...")
+    
+    return input_data
