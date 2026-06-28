@@ -196,14 +196,20 @@ def add_differences_columns(
 
 # A value of 0 represents home, and a value of 1 represents away.
 HOME_OR_AWAY = 'HOME_OR_AWAY'
+HOME = "HOME"
+AWAY = "AWAY"
+HOME_OR_AWAY_ENCODING = {
+    HOME : '@',
+    AWAY : "vs."
+}
 def add_encoded_home_or_away_column(
     team_game_data: pd.DataFrame, 
     matchup_column: str
     ) -> pd.DataFrame:
     matchup = team_game_data[matchup_column]
     home_or_away = pd.Series(index=matchup.index, dtype='Int64')
-    home_or_away[matchup.str.contains('@', regex=False, na=False)] = 1
-    home_or_away[matchup.str.contains('vs.', regex=False, na=False)] = 0
+    home_or_away[matchup.str.contains(HOME_OR_AWAY_ENCODING[HOME], regex=False, na=False)] = 1
+    home_or_away[matchup.str.contains(HOME_OR_AWAY_ENCODING[AWAY], regex=False, na=False)] = 0
     team_game_data[HOME_OR_AWAY] = home_or_away
     return team_game_data
 
@@ -420,6 +426,7 @@ def add_total_player_stats_per_game_by_bucket(
 
 ROSTER_ADD_CORE_PLAYER = "ROSTER_ADD_CORE_PLAYER"
 ROSTER_REMOVE_CORE_PLAYER = "ROSTER_REMOVE_CORE_PLAYER"
+CORE_PLAYER_MINUTES_CUTOFF = 25
 def add_core_roster_change_columns(
     team_game_data: pd.DataFrame,
     player_game_data: pd.DataFrame,
@@ -428,8 +435,7 @@ def add_core_roster_change_columns(
     game_id_column_team: str,
     team_id_column_player: str,
     team_id_column_team: str,
-    minutes_played_column: str, # TODO: Potentially use previous rolling mean minutes played
-    core_player_minutes_cutoff: int = 25
+    minutes_played_column: str # TODO: Potentially use previous rolling mean minutes played
     ) -> pd.DataFrame:
     """
     Adds columns to team_game_data that encode whether the team completely gained a core player or completely lost a core player from the previous game.
@@ -444,7 +450,7 @@ def add_core_roster_change_columns(
     team_games = team_game_data[[game_id_column_team, team_id_column_team]]
 
     players_roster_data = player_game_data[[game_id_column_player, team_id_column_player, player_id_column, minutes_played_column]]
-    core_players_in_game_dataframe = players_roster_data.loc[players_roster_data[minutes_played_column] >= core_player_minutes_cutoff]
+    core_players_in_game_dataframe = players_roster_data.loc[players_roster_data[minutes_played_column] >= CORE_PLAYER_MINUTES_CUTOFF]
 
     players_in_game = (
         players_roster_data.groupby(by=[game_id_column_player, team_id_column_player])

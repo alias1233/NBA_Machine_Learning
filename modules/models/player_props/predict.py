@@ -15,6 +15,7 @@ def predict(
     target_player_opponent_team_id: int,
     target_game_date: datetime,
     target_game_season_type: nba_data_helpers.SeasonTypes,
+    target_game_at_home: bool,
     target_player_removed_core_teammate_player_ids: set[int],
     target_player_added_core_teammate_player_ids: set[int],
     ) -> list[float]:
@@ -26,6 +27,7 @@ def predict(
         target_player_opponent_team_id,
         target_game_date,
         target_game_season_type,
+        target_game_at_home,
         target_player_removed_core_teammate_player_ids,
         target_player_added_core_teammate_player_ids,
         print_debug=True
