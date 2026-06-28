@@ -70,7 +70,7 @@ def standardize(
 def to_tensor(array: np.ndarray) -> torch.Tensor:
     return torch.tensor(array, dtype=torch.float32)
 
-def process_raw_data_for_training(
+def process_labeled_data_for_training(
         input_training_data: list, 
         output_training_data: list, 
         input_validation_data: list, 
@@ -88,7 +88,7 @@ def process_raw_data_for_training(
         StandardScaler | None
     ]:
     """
-    Converts raw data in the form of lists of (dataframes or dicts of dataframes) into data for machine learning. 
+    Converts labeled data in the form of lists of (dataframes or dicts of dataframes) into data for machine learning. 
     The resulting data can be normalized and in the form of tensors.
 
     The returned data is in the form of a tuple consisting of:
@@ -133,7 +133,7 @@ def process_raw_data_for_training(
         input_scaler, output_scaler
         )
 
-def process_raw_data_for_classification_training(
+def process_labeled_data_for_classification_training(
         input_training_data: list, 
         output_training_data: list, 
         input_validation_data: list, 
@@ -151,7 +151,7 @@ def process_raw_data_for_classification_training(
         StandardScaler | None
     ]:
     """
-    Converts raw data in the form of lists of (dataframes or dicts of dataframes) into data for classification with Cross Entropy Loss. 
+    Converts labeled data in the form of lists of (dataframes or dicts of dataframes) into data for classification with Cross Entropy Loss. 
     The resulting data is in the form of tensors.
     The input data can be normalized.
     The output data will be formed into 1 dimensional long numpy arrays.
@@ -172,7 +172,7 @@ def process_raw_data_for_classification_training(
      input_val, output_val, 
      input_test, output_test, 
      input_scaler_or_none, ALWAYS_NONE
-     ) = process_raw_data_for_training(
+     ) = process_labeled_data_for_training(
          input_training_data,
          output_training_data,
          input_validation_data,
@@ -206,3 +206,13 @@ def process_raw_data_for_classification_training(
         output_test, 
         input_scaler_or_none
         )
+
+def process_labeled_input(
+    input: pd.DataFrame,
+    flatten: bool
+    ) -> torch.Tensor:
+    
+    input_numpy = convert_labeled_data_to_numpy([input], flatten)
+    input_tensor = to_tensor(input_numpy)
+    
+    return input_tensor

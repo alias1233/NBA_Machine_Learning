@@ -1,5 +1,5 @@
 import torch.nn as nn
-from typing import Any, Type
+from typing import Any, Self
 from dataclasses import dataclass
 
 INPUT_DIM = 'input_dim'
@@ -10,7 +10,7 @@ MODEL_STATE = 'model_state'
 @dataclass(frozen=True)
 class LayerParameters():
     num_nodes: int
-    activation_function: Type[nn.Module] | None = None
+    activation_function: nn.Module | None = None
     batch_normalization: bool = False
     dropout_rate: float = 0
 
@@ -53,8 +53,8 @@ class FeedForward(nn.Module):
             if layer_parameters.batch_normalization:
                 layers.append(nn.BatchNorm1d(layer_parameters.num_nodes))
             
-            if layer_parameters.activation_function:
-                layers.append(layer_parameters.activation_function())
+            if layer_parameters.activation_function is not None:
+                layers.append(layer_parameters.activation_function)
 
             if layer_parameters.dropout_rate > 0:
                 layers.append(nn.Dropout(layer_parameters.dropout_rate))
@@ -67,6 +67,16 @@ class FeedForward(nn.Module):
 
     def forward(self, x):
         return self.network(x)
+    
+    @classmethod
+    def load_from_saved_parameters_dict(cls, parameters_dict: dict[str, Any]) -> Self:
+        instance = cls(
+            parameters_dict[INPUT_DIM],
+            parameters_dict[OUTPUT_DIM],
+            parameters_dict[HIDDEN_LAYERS]
+        )
+        instance.load_state_dict(parameters_dict[MODEL_STATE])
+        return instance
     
     def get_save_parameters_dict(self) -> dict[str, Any]:
         """

@@ -1,14 +1,12 @@
 from datetime import datetime
 import numpy as np
 import torch, torch.nn as nn
-from sklearn.preprocessing import StandardScaler
 import pandas as pd
 
 from . import data_processor
 from modules.models import directories
 from src.data_preprocessing import training_data_processing
-from src.training import trainer, helpers
-from src.training.model_architectures import feed_forward
+from src.training import trainer, helpers, evaluation
 from src.training.model_architectures.feed_forward import FeedForward, LayerParameters
 
 MODEL_NAME = "player_prop_points"
@@ -21,7 +19,7 @@ SAVE_PROCESSED_TRAINING_DATA_PATH = directories.SAVE_PROCESSED_TRAINING_DATA_PAT
 SAVE_PROCESSED_TRAINING_DATA = True
 LOAD_SAVED_PROCESSED_TRAINING_DATA = True
 
-RANDOM_SEED = 20348
+RANDOM_SEED = 12156666
 
 TARGET_STAT = data_processor.TargetStat.PLAYER_POINTS
 MINIMUM_OF_STAT = 0
@@ -32,12 +30,18 @@ VALIDATION_START_DATE = datetime(2026, 1, 1)
 TEST_START_DATE = datetime(2026, 3, 1)
 
 HIDDEN_LAYERS_PARAMETERS = [
-    LayerParameters(512, nn.ReLU, True, 0.2),
-    LayerParameters(256, nn.ReLU, True, 0.15),
-    LayerParameters(128, nn.ReLU, True, 0.1)
+    LayerParameters(512, nn.ReLU(), True, 0.45),
+    LayerParameters(256, nn.ReLU(), True, 0.35),
+    LayerParameters(128, nn.ReLU(), True, 0.3),
 ]
 
-LEARNING_RATE = 0.000005
+HIDDEN_LAYERS_PARAMETERS = [
+    LayerParameters(512, nn.LeakyReLU(), True, 0.45),
+    LayerParameters(256, nn.LeakyReLU(), True, 0.35),
+    LayerParameters(256, nn.LeakyReLU(), True, 0.3),
+]
+
+LEARNING_RATE = 0.00001
 EPOCHS = 25
 LOSS_FUNCTION: trainer.LossFunction = torch.nn.CrossEntropyLoss()
 EVALUATION_INTERVAL = 1
@@ -49,22 +53,10 @@ LOG_LOSS_INTERVAL = 1
 
 INPUT_SCALER = 'input_scaler'
 
-def load_model() -> tuple[torch.nn.Module, StandardScaler]:
-    full_model_params: dict = helpers.load_data_from_file(SAVE_MODEL_FILE_PATH)
-    model = FeedForward(
-        full_model_params[feed_forward.INPUT_DIM],
-        full_model_params[feed_forward.OUTPUT_DIM],
-        full_model_params[feed_forward.HIDDEN_LAYERS]
-    )
-    model.load_state_dict(
-        full_model_params[feed_forward.MODEL_STATE]
-    )
-    return (model, full_model_params[INPUT_SCALER])
-
 # Move somewhere else
 def get_preprocessed_training_data(
-        print_debug: bool,
-        print_all_debug: bool
+        print_debug: bool = False,
+        print_all_debug: bool = False
         ) -> tuple:
     
     if LOAD_SAVED_PROCESSED_TRAINING_DATA:
@@ -81,27 +73,9 @@ def get_preprocessed_training_data(
         print_debug
     )
 
-    # TODO: Move this print debugging somewhere else
-    if print_debug:
-        print('-----------------------------------------------------')
-        input_training_data_chunk: dict[str, pd.DataFrame] = labeled_datasets[0][0]
-        output_training_data_chunk: pd.DataFrame = labeled_datasets[1][0]
-        for label, dataframe in input_training_data_chunk.items():
-            print(f'Input- | Label: {label} | Columns: ')
-            for column_name in list(dataframe.columns):
-                print(column_name)
+    helpers.print_labeled_dataset(labeled_datasets, print_all_debug, print_debug)
 
-        print('-----------------------------------------------------')
-        print(f'Output- | Columns: ')
-        for column_name in list(output_training_data_chunk.columns):
-            print(column_name)
-        print('-----------------------------------------------------')
-
-    if print_all_debug:
-        print(labeled_datasets[0][0])
-        print(labeled_datasets[1][0])
-
-    datasets = training_data_processing.process_raw_data_for_classification_training(
+    datasets = training_data_processing.process_labeled_data_for_classification_training(
         *labeled_datasets, 
         flatten=True,
         standardize_input=True,
@@ -187,12 +161,10 @@ def train(
     helpers.save_dictionary_data_to_file(SAVE_MODEL_FILE_PATH, [model_params, scaler_params])
 
     # Final evaluation on validation dataset
-    model, input_scaler = load_model()
-
-    # TESTING FOR LARGER TRAINING DATASET
-    input_test = torch.concat((input_test, input_val))
-    output_test = torch.concat((output_test, output_val))
-    # END TEST
+    parameters_dict = helpers.load_data_from_file(SAVE_MODEL_FILE_PATH)
+    model = FeedForward.load_from_saved_parameters_dict(
+        parameters_dict
+    )
 
     model.eval()
     with torch.no_grad():
@@ -206,10 +178,11 @@ def train(
     predictions_numpy = predictions.numpy()
     actuals_numpy = output_test.numpy()
 
-    helpers.output_test_evaluation_classification(
+    evaluation.output_test_evaluation_classification(
         predictions_numpy,
         actuals_numpy,
         label=TARGET_STAT.value,
+        ordinal=True,
         output_size=20,
         save_graph_directory_path=MODEL_SAVE_GRAPHS_DIRECTORY_PATH
     )

@@ -1,8 +1,6 @@
 import pandas as pd
 from typing import Any
 
-# TODO: Fix errors concerning pandas: A value is trying to be set on a copy of a slice from a DataFrame.
-
 def _encode_equality_as_integer(column: pd.Series, value: Any) -> pd.Series:
     """
     Returns a series where each value is 1 if the value corresponding to the given series equals the given string, and 0 otherwise.  
@@ -22,14 +20,13 @@ def create_lookup_table(
         lookup_table[key] = data
     return lookup_table
 
-# Represents the number of days without a game inbetween the current game and the player's last played game.
 REST = 'REST'
-MAX_REST = 7
 LONG_BREAK = 'LONG_BREAK'
-LONG_BREAK_THRESHOLD = 25
 def add_rest_and_long_break_columns(
     game_data: pd.DataFrame, 
-    game_date_column: str
+    game_date_column: str,
+    max_rest: int = 7,
+    long_break_threshold: int = 25
     ) -> pd.DataFrame:
     """
     Adds rest and long break columns to the given game_data. 
@@ -39,19 +36,35 @@ def add_rest_and_long_break_columns(
     Long break is set to 1 if the player has not played a game in more than or equal to LONG_BREAK_THRESHOLD days, and 0 otherwise.
     """
 
-    game_data[REST] = (game_data[game_date_column].diff().dt.days - 1).fillna(LONG_BREAK_THRESHOLD)
-    game_data[LONG_BREAK] = (game_data[REST] >= LONG_BREAK_THRESHOLD).astype(int)
-    game_data[REST] = game_data[REST].clip(upper=MAX_REST)
+    game_data[REST] = (game_data[game_date_column].diff().dt.days - 1).fillna(long_break_threshold)
+    game_data[LONG_BREAK] = (game_data[REST] >= long_break_threshold).astype(int)
+    game_data[REST] = game_data[REST].clip(upper=max_rest)
+    return game_data
+
+DAYS_BEFORE_LAST_GAME = 'DAYS_BEFORE_LAST_GAME'
+def add_days_between_games_columns(
+    game_data: pd.DataFrame, 
+    game_date_column: str,
+    max_interval: int = 100
+    ) -> pd.DataFrame:
+    """
+    Adds days before last game columns to the given game_data. 
+    The given game_data must be sorted by game date, grouped by id, and the game_date column must be in datetime form.
+    If it is the first game that has ever been played, the value will be max_interval.
+    """
+
+    game_data[DAYS_BEFORE_LAST_GAME] = (game_data[game_date_column].diff().dt.days - 1).fillna(max_interval).clip(upper=max_interval)
     return game_data
 
 CHANGED_TEAM = 'CHANGED_TEAM'
 def add_changed_team_column(
     player_game_data: pd.DataFrame,
-    team_id_column: pd.DataFrame
+    team_id_column: str
     ) -> pd.DataFrame:
     """
     The given game_data must be sorted by game date and grouped by player id.
     """
+
     team_id = player_game_data[team_id_column]
     previous_team_id = team_id.shift(1)
     player_game_data[CHANGED_TEAM] = ((team_id != previous_team_id) & previous_team_id.notna()).astype(int)
@@ -80,7 +93,6 @@ def add_total_rebounds_column(
     drb = game_data[drb_column]
     game_data[REBOUNDS] = orb + drb
     return game_data
-
 
 POSSESSIONS = 'POSSESSIONS'
 def add_possessions_column(
@@ -136,6 +148,51 @@ def add_true_shooting_percentage_column(
     fta = game_data[fta_column]
     game_data[TRUE_SHOOTING_PERCENTAGE] = points.div(2 * (fga + 0.44 * fta), fill_value=0)
     return game_data
+
+PER_INFIX = "_PER_"
+def get_all_stat_per_stat_columns(
+    part_stat_columns: list[str],
+    whole_stat_columns: list[str]
+    ) -> list[str]:
+    return [
+        part_stat_column + PER_INFIX + whole_stat_column
+        for part_stat_column in part_stat_columns
+        for whole_stat_column in whole_stat_columns
+    ]
+def add_stat_per_stat_columns(
+    dataframe: pd.DataFrame,
+    part_stat_columns: list[str],
+    whole_stat_columns: list[str]
+    ) -> pd.DataFrame:
+    for part_stat_column in part_stat_columns:
+        for whole_stat_column in whole_stat_columns:
+            dataframe = _add_percentage_column(
+                dataframe,
+                part_stat_column,
+                whole_stat_column,
+                part_stat_column + PER_INFIX + whole_stat_column
+            )
+
+    return dataframe
+
+DIFFERENCE_INFIX = "_DIFF_FROM_"
+def get_all_differences_columns(
+    stat_columns: list[tuple[str, str]]
+    ) -> list[str]:
+    return [minuend_column + DIFFERENCE_INFIX + subtrahend_column for minuend_column, subtrahend_column in stat_columns]
+def add_differences_columns(
+    dataframe: pd.DataFrame,
+    stat_columns: list[tuple[str, str]]
+) -> pd.DataFrame:
+    """
+    For each entry in stat_columns, add a column containing the difference between the first column and the second column.
+    """
+    
+    for minuend_column, subtrahend_column in stat_columns:
+        dataframe[minuend_column + DIFFERENCE_INFIX + subtrahend_column] = (
+            dataframe[minuend_column] - dataframe[subtrahend_column]
+        )
+    return dataframe
 
 # A value of 0 represents home, and a value of 1 represents away.
 HOME_OR_AWAY = 'HOME_OR_AWAY'
@@ -263,12 +320,17 @@ def add_total_player_stats_per_game_by_attribute(
                 .reset_index()
                 )
         
+        rename_map = {
+            stat: stat + STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute_column
+            for stat in stat_columns
+        }
+        total_player_stats_in_game_by_attribute = total_player_stats_in_game_by_attribute.rename(columns=rename_map)
+        
         team_game_data = (
             team_game_data
             .merge(
                 total_player_stats_in_game_by_attribute, 
                 on=[game_id_column, team_id_column], 
-                suffixes=[None, STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute_column],
                 how='left'
                 )
                 .fillna(0)
@@ -370,7 +432,7 @@ def add_core_roster_change_columns(
     core_player_minutes_cutoff: int = 25
     ) -> pd.DataFrame:
     """
-    Adds columns to team_game_data that encode whether the team completely gained a core player or completely loss a core player from the previous games.
+    Adds columns to team_game_data that encode whether the team completely gained a core player or completely lost a core player from the previous game.
     """
 
     PREV_PREFIX = "PREV"
