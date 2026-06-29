@@ -1,6 +1,7 @@
 from datetime import datetime
 import torch
 from sklearn.preprocessing import StandardScaler
+import math
 
 from . import data_processor
 from . import train
@@ -55,4 +56,28 @@ def predict(
 
     return predicted_probabilities.tolist()[0]
 
-    
+def calculate_odds_over_line(
+    predicted_probabilities: list[float],
+    over_under_line: float,
+    minimum_value: int = 0
+    ) -> float:
+    """
+    Calculates the probability given the probability distribution of a value to be higher than the
+    given over_under_line.
+
+    Args:
+        predicted_probabilities is a list of floats where the value at each index represents the predicted probabilty of
+        the value represented by that index of occuring. Each value is assumed to be ordered and in increments of exactly 1.
+
+        over_under_line is a threshold set that a given value has a chance of exceeding.
+
+        minimum_value is the value that the index at 0 of the predicted_probability represents.
+    """
+
+    above_line_threshold = math.ceil(over_under_line) - minimum_value
+
+    probability_exceeds_over_under: float = 0.0
+    for value in range(above_line_threshold, len(predicted_probabilities)):
+        probability_exceeds_over_under += predicted_probabilities[value]
+
+    return probability_exceeds_over_under

@@ -36,9 +36,23 @@ HIDDEN_LAYERS_PARAMETERS = [
 ]
 
 HIDDEN_LAYERS_PARAMETERS = [
-    LayerParameters(512, nn.LeakyReLU(), True, 0.45),
-    LayerParameters(256, nn.LeakyReLU(), True, 0.35),
-    LayerParameters(256, nn.LeakyReLU(), True, 0.3),
+    LayerParameters(512, nn.LeakyReLU(0.1), True, 0.45),
+    LayerParameters(256, nn.LeakyReLU(0.1), True, 0.35),
+    LayerParameters(128, nn.LeakyReLU(0.1), True, 0.3),
+]
+
+HIDDEN_LAYERS_PARAMETERS = [
+    LayerParameters(1024, nn.ReLU(), True, 0.5),
+    LayerParameters(512, nn.ReLU(), True, 0.4),
+    LayerParameters(256, nn.ReLU(), True, 0.3),
+    LayerParameters(128, nn.ReLU(), True, 0.25),
+]
+
+HIDDEN_LAYERS_PARAMETERS = [
+    LayerParameters(512, nn.ReLU(), True, 0.45),
+    LayerParameters(256, nn.ReLU(), True, 0.35),
+    LayerParameters(256, nn.ReLU(), True, 0.35),
+    LayerParameters(128, nn.ReLU(), True, 0.25),
 ]
 
 LEARNING_RATE = 0.00001
@@ -113,6 +127,13 @@ def train(
          print_debug, 
          print_all_debug
          )
+    
+    # TESTING WITH LARGER VALIDATION DATASET
+    input_val = torch.concat((input_val, input_test))
+    output_val = torch.concat((output_val, output_test))
+    input_test = input_val
+    output_test = output_val
+    # END TEST
  
     if print_debug:
         print(f"Input feature dimensions: {str(input_train.shape)}")

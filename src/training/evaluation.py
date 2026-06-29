@@ -222,7 +222,7 @@ def output_test_evaluation_classification(
 
     mean_predicted_probabilities_of_actuals = np.mean(predicted_probabilities[np.arange(len(actuals)), actuals])
 
-    print(f"Average predicted probability of correct class: {mean_predicted_probabilities_of_actuals}")
+    print(f"Average Predicted Probability of Correct Class: {mean_predicted_probabilities_of_actuals}")
     
     if ordinal:
         output_classification_ordinal_errors(

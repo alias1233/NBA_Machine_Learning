@@ -14,6 +14,7 @@ from src.data_preparation import nba_data_helpers
 
 # TODO: Implement another model architecture such as transformmers or VAEs
 # TODO: Add season time column, along with current team seed (?)
+# TODO: Potentially use weighted averages that skew towards recent games for rolling data
 
 ROLLING_WINDOW = 15
 PAST_CAREER_MEAN_PREFIX = "PAST_CAREER_MEAN_"
@@ -143,7 +144,7 @@ PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS = [
 
 PAST_TEAM_STATS = [
     nba_data_processing.POSSESSIONS, 
-    team_game_data_manager.MINUTES_PLAYED.category_name,
+    # team_game_data_manager.MINUTES_PLAYED.category_name,
     team_game_data_manager.STEALS.category_name, team_game_data_manager.BLOCKS.category_name
 ]
 PAST_MEAN_TEAM_STATS = [
@@ -162,7 +163,7 @@ TEAM_ROLLING_CATEGORIES = PAST_MEAN_TEAM_STATS + PAST_MEAN_TEAM_STATS_TO_BE_USED
 OPPONENT_TEAM_ROLLING_CATEGORIES = PAST_OPPONENT_ALLOWED_MEAN_STATS + PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS
 
 # INPUT OUTPUT STRUCTURE: #
-PAST_GAMES_PLAYED_SEQUENCE_LENGTH = 20
+PAST_GAMES_PLAYED_SEQUENCE_LENGTH = 25
 PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH = 3
 
 INPUT_DATA_PLAYER_INFO = "PLAYER_INFO"
