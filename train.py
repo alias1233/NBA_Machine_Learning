@@ -1,4 +1,4 @@
-from modules.models.player_props import train
+from modules.model_managers.player_props import model_manager
 
 if __name__ == '__main__':
-    train.train()
+    model_manager.train(model_manager.PLAYER_PROPS_POINTS_MODEL)

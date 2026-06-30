@@ -1,6 +1,14 @@
-# Categories
-from src.data_preparation.category import DataType, Categories
+import pandas as pd
 
+from src.data_preparation.category import DataType, Categories
+from src.data_preparation.database import Database, DataConflictHandler
+from modules.data_managers import directories
+from nba_api.stats.endpoints.commonplayerinfo import CommonPlayerInfo
+from src.data_preparation.repeater import repeater
+from src.data_preparation import nba_data_helpers
+from src.data_preparation.nba_data_helpers import retry
+
+# Categories
 ALL_CATEGORIES = Categories()
 PLAYER_ID = ALL_CATEGORIES.add_category("PERSON_ID", DataType.INTEGER)
 HEIGHT = ALL_CATEGORIES.add_category("HEIGHT", DataType.INTEGER)
@@ -12,9 +20,6 @@ BIRTHDATE = ALL_CATEGORIES.add_category("BIRTHDATE", DataType.TEXT)
 DRAFT_NUMBER = ALL_CATEGORIES.add_category("DRAFT_NUMBER", DataType.INTEGER)
 
 # Database
-from src.data_preparation.database import Database, DataConflictHandler
-from modules.data_managers import directories
-
 FILEPATH = directories.DATABASE_DIRECTORY + "player_info.db"
 NAME = "player_info"
 PRIMARY_KEYS = [
@@ -25,13 +30,6 @@ DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
 
 # Collection
-import pandas as pd
-
-from nba_api.stats.endpoints.commonplayerinfo import CommonPlayerInfo
-from src.data_preparation.repeater import repeater
-from src.data_preparation import nba_data_helpers
-from src.data_preparation.nba_data_helpers import retry
-
 @retry
 def get_common_player_info(player_id: str) -> pd.DataFrame | None:
     try:

@@ -15,8 +15,9 @@ from src.data_preparation import nba_data_helpers
 # TODO: Implement another model architecture such as transformmers or VAEs
 # TODO: Add season time column, along with current team seed (?)
 # TODO: Potentially use weighted averages that skew towards recent games for rolling data
+# TODO: Incorporate choosing which stats to predict for, having each individual target stat have required columns, and for output, adding up the sum of all of the stats.
 
-ROLLING_WINDOW = 15
+ROLLING_WINDOW = 20
 PAST_CAREER_MEAN_PREFIX = "PAST_CAREER_MEAN_"
 PAST_CAREER_STD_PREFIX = "PAST_CAREER_STD_"
 PAST_MEAN_PREFIX = "PAST_MEAN_"
@@ -547,7 +548,7 @@ def _get_input_data_chunk(
     }
 
 def get_all_player_props_input_output_labeled_data(
-        target_stat: TargetStat,
+        target_stats: list[TargetStat],
         validation_split_start_date: datetime,
         test_split_start_date: datetime,
         chunk_step_size: int = 1,
@@ -610,7 +611,7 @@ def get_all_player_props_input_output_labeled_data(
             )
             if input_chunk is None:
                 continue
-            output_chunk = current_game[[target_stat.value]].to_frame().T
+            output_chunk = current_game[[TargetStat.PLAYER_POINTS.value]].to_frame().T
 
             if print_debug:
                 if count % 25000 == 0:
@@ -638,7 +639,7 @@ def get_all_player_props_input_output_labeled_data(
     return (input_training_data, output_training_data, input_validation_data, output_validation_data, input_test_data, output_test_data)
 
 def get_player_prop_inference_labeled_input_data(
-    target_stat: TargetStat,
+    target_stats: list[TargetStat],
     target_player_id: int,
     target_player_team_id: int,
     target_player_opponent_team_id: int,

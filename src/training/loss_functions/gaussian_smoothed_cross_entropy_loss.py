@@ -15,6 +15,7 @@ class GaussianSmoothedCrossEntropyLoss(torch.nn.Module):
             num_classes: Total number of classes.
             sigma: Std dev of the Gaussian in class-index units.
         """
+        
         super().__init__()
 
         self.num_classes = num_classes

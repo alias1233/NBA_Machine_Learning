@@ -1,6 +1,16 @@
-# Categories
-from src.data_preparation.category import DataType, Categories
+import time
+import pandas as pd
+from datetime import datetime
 
+from src.data_preparation.category import DataType, Categories
+from src.data_preparation.database import Database, DataConflictHandler
+from modules.data_managers import directories
+from nba_api.stats.endpoints.leaguegamelog import LeagueGameLog
+from src.data_preparation.repeater import repeater
+from src.data_preparation import nba_data_helpers
+from src.data_preparation.nba_data_helpers import retry
+
+# Categories
 ALL_CATEGORIES = Categories()
 TEAM_ID = ALL_CATEGORIES.add_category("TEAM_ID", DataType.INTEGER)
 GAME_ID = ALL_CATEGORIES.add_category("GAME_ID", DataType.INTEGER)
@@ -23,9 +33,6 @@ TURNOVERS = ALL_CATEGORIES.add_category("TOV", DataType.INTEGER)
 PERSONAL_FOULS = ALL_CATEGORIES.add_category("PF", DataType.INTEGER)
 
 # Database
-from src.data_preparation.database import Database, DataConflictHandler
-from modules.data_managers import directories
-
 FILEPATH = directories.DATABASE_DIRECTORY + "team_game_data.db"
 NAME = "teams"
 PRIMARY_KEYS = [
@@ -37,14 +44,6 @@ DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
 
 # Collection
-import time
-import pandas as pd
-
-from nba_api.stats.endpoints.leaguegamelog import LeagueGameLog
-from src.data_preparation.repeater import repeater
-from src.data_preparation import nba_data_helpers
-from src.data_preparation.nba_data_helpers import retry
-
 @retry
 def get_all_teams_season_game_logs(
     season_year: int, 
@@ -116,8 +115,6 @@ def collect_team_game_data(
     return index_reached
 
 # Query
-from datetime import datetime
-
 def get_all_team_game_data() -> pd.DataFrame:
     with DATABASE:
         data = DATABASE.query_dataframe()

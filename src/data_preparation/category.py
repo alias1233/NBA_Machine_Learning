@@ -26,6 +26,7 @@ class Category():
     private_name: str
     """
     The private name of this category.
+    If not initialized, it will be set to the same as the category_name.
     """
 
     category_type: DataType
@@ -33,9 +34,19 @@ class Category():
     The datatype of this category's values.
     """
 
+    @classmethod
+    def create(cls, category_name: str, category_type: DataType, private_name: str | None = None):
+        """
+        Creates a Category.
+        If no private_name is given, then the private_name will be set to the same as the category_name.
+        """
+
+        private_name = private_name if private_name is not None else category_name
+        return cls(category_name=category_name, private_name=private_name, category_type=category_type)
+
 class Categories():
     """
-    Helper Class For Managing Categories Lists
+    Helper class for creating category lists
     """
     
     def __init__(self):
@@ -52,10 +63,8 @@ class Categories():
 
         If no private_name is given, then the private_name will be set to the same as the category_name.
         """
-        if private_name is None:
-            private_name = category_name
 
-        category = Category(category_name, private_name, category_type)
+        category = Category.create(category_name, category_type, private_name)
         self.categories.append(category)
         return category
     
