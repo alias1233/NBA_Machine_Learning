@@ -44,124 +44,165 @@ DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES = [
 ]
 
 # PLAYER GAME FEATURE ENGINEERING: #
-PAST_CAREER_CALCULATED_FROM_STATS = [
-    nba_data_processing.POINTS
-]
-PAST_CAREER_STATS = [
-    RollingCategory(
-        PAST_CAREER_MEAN_PREFIX + stat_column,
-        stat_column,
-        rolling_category.MEAN_FUNCTION,
-    ) for stat_column in PAST_CAREER_CALCULATED_FROM_STATS
-] + [
-    RollingCategory(
-        PAST_CAREER_STD_PREFIX + stat_column,
-        stat_column,
-        rolling_category.STD_FUNCTION,
-    ) for stat_column in PAST_CAREER_CALCULATED_FROM_STATS
-]
+PAST_CAREER_CALCULATED_FROM_STATS_ALWAYS = [
 
-PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN = [
-    nba_data_processing.POINTS
 ]
-PAST_MEAN_PLAYER_STATS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN = [
-    RollingCategory(
-        PAST_MEAN_PREFIX + stat,
-        stat,
-        rolling_category.MEAN_FUNCTION,
-        ROLLING_WINDOW
-    ) for stat in PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN
+past_career_calculated_from_stats = set()
+def PAST_CAREER_STATS():
+    return [
+        RollingCategory(
+            PAST_CAREER_MEAN_PREFIX + stat_column,
+            stat_column,
+            rolling_category.MEAN_FUNCTION,
+        ) for stat_column in (
+            PAST_CAREER_CALCULATED_FROM_STATS_ALWAYS +
+            list(past_career_calculated_from_stats)
+        )
+    ] + [
+        RollingCategory(
+            PAST_CAREER_STD_PREFIX + stat_column,
+            stat_column,
+            rolling_category.STD_FUNCTION,
+        ) for stat_column in (
+            PAST_CAREER_CALCULATED_FROM_STATS_ALWAYS +
+            list(past_career_calculated_from_stats)
+        )
+    ]
+
+PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_ALWAYS = [
+
 ]
-PAST_MEAN_PLAYER_STATS_OVER_MEAN_COLUMNS = [
-    (stat, past_mean_stat.column_name) 
-    for stat, past_mean_stat 
-    in zip(PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN, PAST_MEAN_PLAYER_STATS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN)]
-PAST_MEAN_PLAYER_STATS_OVER_MEAN = nba_data_processing.get_all_differences_columns(PAST_MEAN_PLAYER_STATS_OVER_MEAN_COLUMNS)
+past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean = set()
+def PAST_MEAN_PLAYER_STATS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN():
+    return [
+        RollingCategory(
+            PAST_MEAN_PREFIX + stat,
+            stat,
+            rolling_category.MEAN_FUNCTION,
+            ROLLING_WINDOW
+        ) for stat in (
+            PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_ALWAYS +
+            list(past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean)
+        )
+    ]
+def PAST_MEAN_PLAYER_STATS_OVER_MEAN_COLUMNS():
+    return [
+        (stat, past_mean_stat.column_name) 
+        for stat, past_mean_stat 
+        in zip(
+            (
+            PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_ALWAYS +
+            list(past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean)
+            ), 
+            PAST_MEAN_PLAYER_STATS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN()
+            )
+    ]
+def PAST_MEAN_PLAYER_STATS_OVER_MEAN():
+    return nba_data_processing.get_all_differences_columns(PAST_MEAN_PLAYER_STATS_OVER_MEAN_COLUMNS())
 
 ATTRIBUTE_COLUMNS = nba_data_processing.ALL_POSITIONS
-STAT_COLUMNS = PAST_MEAN_PLAYER_STATS_OVER_MEAN
-ALL_STATS_BY_ATTRIBUTE_COLUMNS = nba_data_processing.get_all_stats_by_attribute_columns(
-    ATTRIBUTE_COLUMNS,
-    STAT_COLUMNS
-)
+def STAT_COLUMNS():
+    return PAST_MEAN_PLAYER_STATS_OVER_MEAN()
+def ALL_STATS_BY_ATTRIBUTE_COLUMNS():
+    return nba_data_processing.get_all_stats_by_attribute_columns(
+        ATTRIBUTE_COLUMNS,
+        STAT_COLUMNS()
+    )
 HEIGHT_BOUNDARIES: list[float] = [
     75, 78, 80, 82
 ]
-ALL_STATS_BY_HEIGHT_BUCKET_COLUMNS = nba_data_processing.get_all_stats_by_bucket_columns(
-    player_info_manager.HEIGHT.category_name,
-    HEIGHT_BOUNDARIES,
-    STAT_COLUMNS
-)
+def ALL_STATS_BY_HEIGHT_BUCKET_COLUMNS():
+    return nba_data_processing.get_all_stats_by_bucket_columns(
+        player_info_manager.HEIGHT.category_name,
+        HEIGHT_BOUNDARIES,
+        STAT_COLUMNS()
+    )
 WEIGHT_BOUNDARIES: list[float] = [
     195, 215, 230, 245
 ]
-ALL_STATS_BY_WEIGHT_BUCKET_COLUMNS = nba_data_processing.get_all_stats_by_bucket_columns(
-    player_info_manager.WEIGHT.category_name,
-    WEIGHT_BOUNDARIES,
-    STAT_COLUMNS
-)
-ALL_STATS_BY_ATTRIBUTE_AND_BUCKET_COLUMNS = ALL_STATS_BY_ATTRIBUTE_COLUMNS + ALL_STATS_BY_HEIGHT_BUCKET_COLUMNS + ALL_STATS_BY_WEIGHT_BUCKET_COLUMNS
+def ALL_STATS_BY_WEIGHT_BUCKET_COLUMNS():
+    return nba_data_processing.get_all_stats_by_bucket_columns(
+        player_info_manager.WEIGHT.category_name,
+        WEIGHT_BOUNDARIES,
+        STAT_COLUMNS()
+    )
+def ALL_STATS_BY_ATTRIBUTE_AND_BUCKET_COLUMNS():
+    return ALL_STATS_BY_ATTRIBUTE_COLUMNS() + ALL_STATS_BY_HEIGHT_BUCKET_COLUMNS() + ALL_STATS_BY_WEIGHT_BUCKET_COLUMNS()
 
 # TEAM GAME FEATURE ENGINEERING: #
-PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN = [
-    nba_data_processing.POINTS,
-    team_game_data_manager.TURNOVERS.category_name, 
-    team_game_data_manager.OFFENSIVE_REBOUNDS.category_name, team_game_data_manager.ASSISTS.category_name,
-    team_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name, team_game_data_manager.FIELD_GOALS_MADE.category_name,
-    team_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name, team_game_data_manager.THREE_POINTERS_MADE.category_name,
-    team_game_data_manager.FREE_THROWS_ATTEMPTED.category_name,
+PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_ALWAYS = [
     team_game_data_manager.PERSONAL_FOULS.category_name
 ]
-PAST_MEAN_TEAM_STATS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN = [
-    RollingCategory(
-        PAST_MEAN_PREFIX + stat,
-        stat,
-        rolling_category.MEAN_FUNCTION,
-        ROLLING_WINDOW
-    ) for stat in PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN
-]
-PAST_MEAN_TEAM_STATS_OVER_MEAN_COLUMNS = [
-    (stat, past_mean_stat.column_name) 
-    for stat, past_mean_stat 
-    in zip(PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN, PAST_MEAN_TEAM_STATS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN)]
+past_mean_team_stat_columns_to_be_used_for_past_mean_team_allowed_stats_over_mean = set()
+
+def PAST_MEAN_TEAM_STATS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN():
+    return [
+        RollingCategory(
+            PAST_MEAN_PREFIX + stat,
+            stat,
+            rolling_category.MEAN_FUNCTION,
+            ROLLING_WINDOW
+        ) for stat in (
+            PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_ALWAYS +
+            list(past_mean_team_stat_columns_to_be_used_for_past_mean_team_allowed_stats_over_mean)
+        )
+    ]
+def PAST_MEAN_TEAM_STATS_OVER_MEAN_COLUMNS(): 
+    return [
+        (stat, past_mean_stat.column_name) 
+        for stat, past_mean_stat 
+        in zip(
+            (
+            PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_ALWAYS +
+            list(past_mean_team_stat_columns_to_be_used_for_past_mean_team_allowed_stats_over_mean)
+            ), 
+            PAST_MEAN_TEAM_STATS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN()
+            )
+    ]
 PAST_MEAN_ALLOWED_INFIX = "PAST_MEAN_ALLOWED_"
-PAST_MEAN_ALLOWED_STATS = nba_data_processing.get_all_differences_columns(PAST_MEAN_TEAM_STATS_OVER_MEAN_COLUMNS)
-PAST_OPPONENT_ALLOWED_MEAN_STATS = [
-    RollingCategory(
-        nba_data_processing.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat,
-        stat,
-        rolling_category.MEAN_FUNCTION,
-        ROLLING_WINDOW
-        ) for stat in PAST_MEAN_ALLOWED_STATS
-        ]
-PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS = [
-    RollingCategory(
-        nba_data_processing.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat_by_attribute_column,
-        stat_by_attribute_column,
-        rolling_category.MEAN_FUNCTION,
-        ROLLING_WINDOW
-        ) for stat_by_attribute_column in ALL_STATS_BY_ATTRIBUTE_AND_BUCKET_COLUMNS
-        ]
+def PAST_MEAN_ALLOWED_STATS():
+    return nba_data_processing.get_all_differences_columns(PAST_MEAN_TEAM_STATS_OVER_MEAN_COLUMNS())
+def PAST_OPPONENT_ALLOWED_MEAN_STATS():
+    return [
+        RollingCategory(
+            nba_data_processing.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat,
+            stat,
+            rolling_category.MEAN_FUNCTION,
+            ROLLING_WINDOW
+            ) for stat in PAST_MEAN_ALLOWED_STATS()
+    ]
+def PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS():
+    return [
+        RollingCategory(
+            nba_data_processing.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat_by_attribute_column,
+            stat_by_attribute_column,
+            rolling_category.MEAN_FUNCTION,
+            ROLLING_WINDOW
+            ) for stat_by_attribute_column in ALL_STATS_BY_ATTRIBUTE_AND_BUCKET_COLUMNS()
+    ]
 
-PAST_TEAM_STATS = [
+PAST_TEAM_STATS_ALWAYS = [
     nba_data_processing.POSSESSIONS, 
-    # team_game_data_manager.MINUTES_PLAYED.category_name,
-    team_game_data_manager.STEALS.category_name, team_game_data_manager.BLOCKS.category_name
 ]
-PAST_MEAN_TEAM_STATS = [
-    RollingCategory(
-        PAST_MEAN_PREFIX + stat,
-        stat,
-        rolling_category.MEAN_FUNCTION,
-        ROLLING_WINDOW
-    ) for stat in PAST_TEAM_STATS
-]
+past_team_stats = set()
+def PAST_MEAN_TEAM_STATS():
+    return [
+        RollingCategory(
+            PAST_MEAN_PREFIX + stat,
+            stat,
+            rolling_category.MEAN_FUNCTION,
+            ROLLING_WINDOW
+        ) for stat in PAST_TEAM_STATS_ALWAYS + list(past_team_stats)
+    ]
 
-PLAYER_ROLLING_CATEGORIES = PAST_CAREER_STATS + PAST_MEAN_PLAYER_STATS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN
+def PLAYER_ROLLING_CATEGORIES():
+    return PAST_CAREER_STATS() + PAST_MEAN_PLAYER_STATS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN()
 
-TEAM_ROLLING_CATEGORIES = PAST_MEAN_TEAM_STATS + PAST_MEAN_TEAM_STATS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN
+def TEAM_ROLLING_CATEGORIES():
+    return PAST_MEAN_TEAM_STATS() + PAST_MEAN_TEAM_STATS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN()
 
-OPPONENT_TEAM_ROLLING_CATEGORIES = PAST_OPPONENT_ALLOWED_MEAN_STATS + PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS
+def OPPONENT_TEAM_ROLLING_CATEGORIES():
+    return PAST_OPPONENT_ALLOWED_MEAN_STATS() + PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS()
 
 # INPUT OUTPUT STRUCTURE: #
 PAST_GAMES_PLAYED_SEQUENCE_LENGTH = 25
@@ -172,22 +213,18 @@ INPUT_DATA_PAST_GAMES_SEQUENCE = "PAST_GAMES_SEQUENCE"
 INPUT_DATA_PAST_GAMES_AGAINST_OPPONENT_SEQUENCE = "PAST_GAMES_AGAINST_OPPONENT_SEQUENCE"
 INPUT_DATA_STATIC_DATA = "STATIC_DATA"
 
+OUTPUT = "OUTPUT"
+output_columns = set()
+def OUTPUT_COLUMNS():
+    return list(output_columns)
+
 # Players with less than this number of games will be removed from the dataset
 MINIMUM_REQUIRED_GAMES_PLAYED = PAST_GAMES_PLAYED_SEQUENCE_LENGTH
 
-STAT_TO_KEEP_SEQUENCE = [
-    nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
-    nba_data_processing.POINTS + nba_data_processing.TEAM_SUFFIX, nba_data_processing.OPPONENT_PREFIX + nba_data_processing.POINTS,
+STATS_TO_KEEP_SEQUENCE_ALWAYS = [
     player_game_data_manager.MINUTES_PLAYED.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.PLUS_MINUS.category_name,
-    player_game_data_manager.OFFENSIVE_REBOUNDS.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.PERSONAL_FOULS.category_name + nba_data_processing.PLAYER_SUFFIX,
-    player_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
-    player_game_data_manager.FIELD_GOALS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
-    player_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
-    player_game_data_manager.THREE_POINTERS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
-    player_game_data_manager.FREE_THROWS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
-    player_game_data_manager.FREE_THROWS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
     nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
     nba_data_processing.CHANGED_TEAM,
     nba_data_processing.POSSESSIONS,
@@ -195,34 +232,47 @@ STAT_TO_KEEP_SEQUENCE = [
     nba_data_processing.ROSTER_ADD_CORE_PLAYER, nba_data_processing.ROSTER_REMOVE_CORE_PLAYER
 ] + (
     nba_data_processing.ALL_SEASON_TYPES
-) + [
-    category.column_name for category in PAST_OPPONENT_ALLOWED_MEAN_STATS
-] + [
-    nba_data_processing.OPPONENT_PREFIX + category.column_name for category in PAST_MEAN_TEAM_STATS
-]
-STAT_TO_KEEP_SEQUENCE.sort()
+)
+stats_to_keep_sequence = set()
+def STATS_TO_KEEP_SEQUENCE(): 
+    stats = (
+        STATS_TO_KEEP_SEQUENCE_ALWAYS + list(stats_to_keep_sequence)
+    ) + [
+        category.column_name for category in PAST_OPPONENT_ALLOWED_MEAN_STATS()
+    ] + [
+        nba_data_processing.OPPONENT_PREFIX + category.column_name for category in PAST_MEAN_TEAM_STATS()
+    ]
+    stats.sort()
+    return stats
+def STAT_TO_KEEP_PREV_OPPONENT_SEQUENCE():
+    stats = STATS_TO_KEEP_SEQUENCE() + [
+        nba_data_processing.DAYS_BEFORE_LAST_GAME
+    ]
+    stats.sort()
+    return stats
 
-STAT_TO_KEEP_PREV_OPPONENT_SEQUENCE = STAT_TO_KEEP_SEQUENCE + [
-    nba_data_processing.DAYS_BEFORE_LAST_GAME
-]
-STAT_TO_KEEP_PREV_OPPONENT_SEQUENCE.sort()
-
-STATS_TO_KEEP_STATIC = [
-    nba_data_processing.AGE_DURING_GAME, nba_data_processing.NBA_EXPERIENCE_DURING_GAME, 
-    nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
-    nba_data_processing.CHANGED_TEAM,
-    nba_data_processing.ROSTER_ADD_CORE_PLAYER, nba_data_processing.ROSTER_REMOVE_CORE_PLAYER,
-    nba_data_processing.DAYS_BEFORE_LAST_GAME
-] + (
-    nba_data_processing.ALL_SEASON_TYPES
-) + [
-    category.column_name for category in OPPONENT_TEAM_ROLLING_CATEGORIES
-] + [
-    category.column_name for category in PAST_CAREER_STATS
-] + [
-    nba_data_processing.OPPONENT_PREFIX + category.column_name for category in PAST_MEAN_TEAM_STATS
-]
-STATS_TO_KEEP_STATIC.sort()
+STATS_TO_KEEP_STATIC_ALWAYS = [
+        nba_data_processing.AGE_DURING_GAME, nba_data_processing.NBA_EXPERIENCE_DURING_GAME, 
+        nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
+        nba_data_processing.CHANGED_TEAM,
+        nba_data_processing.ROSTER_ADD_CORE_PLAYER, nba_data_processing.ROSTER_REMOVE_CORE_PLAYER,
+        nba_data_processing.DAYS_BEFORE_LAST_GAME
+    ] + (
+        nba_data_processing.ALL_SEASON_TYPES
+    )
+stats_to_keep_static = set()
+def STATS_TO_KEEP_STATIC():
+    stats = (
+        STATS_TO_KEEP_STATIC_ALWAYS + list(stats_to_keep_static)
+    ) + [
+        category.column_name for category in OPPONENT_TEAM_ROLLING_CATEGORIES()
+    ] + [
+        category.column_name for category in PAST_CAREER_STATS()
+    ] + [
+        nba_data_processing.OPPONENT_PREFIX + category.column_name for category in PAST_MEAN_TEAM_STATS()
+    ]
+    stats.sort()
+    return stats
 
 POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
     player_info_manager.PLAYER_ID.category_name,
@@ -233,9 +283,140 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
 ]
 
 class TargetStat(Enum):
-    PLAYER_POINTS = nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX
-    PLAYER_REBOUNDS = nba_data_processing.REBOUNDS + nba_data_processing.PLAYER_SUFFIX
-    PLAYER_ASSISTS = player_game_data_manager.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
+    POINTS = nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX
+    REBOUNDS = nba_data_processing.REBOUNDS + nba_data_processing.PLAYER_SUFFIX
+    ASSISTS = player_game_data_manager.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX
+
+STATS_TO_KEEP_SEQUENCE_POINTS = [
+    nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
+    nba_data_processing.POINTS + nba_data_processing.TEAM_SUFFIX, nba_data_processing.OPPONENT_PREFIX + nba_data_processing.POINTS,
+    player_game_data_manager.OFFENSIVE_REBOUNDS.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.FIELD_GOALS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.THREE_POINTERS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.FREE_THROWS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.FREE_THROWS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
+]
+PAST_TEAM_STATS_POINTS = [
+    team_game_data_manager.STEALS.category_name, team_game_data_manager.BLOCKS.category_name
+]
+PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_POINTS = [
+    nba_data_processing.POINTS,
+    team_game_data_manager.TURNOVERS.category_name, 
+    team_game_data_manager.OFFENSIVE_REBOUNDS.category_name, team_game_data_manager.ASSISTS.category_name,
+    team_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name, team_game_data_manager.FIELD_GOALS_MADE.category_name,
+    team_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name, team_game_data_manager.THREE_POINTERS_MADE.category_name,
+    team_game_data_manager.FREE_THROWS_ATTEMPTED.category_name,
+]
+PAST_CAREER_CALCULATED_FROM_STATS_POINTS = [
+    nba_data_processing.POINTS
+]
+PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_POINTS = [
+    nba_data_processing.POINTS
+]
+
+STATS_TO_KEEP_SEQUENCE_REBOUNDS = [
+    
+]
+PAST_TEAM_STATS_REBOUNDS = [
+    
+]
+PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_REBOUNDS = [
+    
+]
+PAST_CAREER_CALCULATED_FROM_STATS_REBOUNDS = [
+    
+]
+PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_REBOUNDS = [
+
+]
+
+STATS_TO_KEEP_SEQUENCE_ASSISTS = [
+    
+]
+PAST_TEAM_STATS_ASSISTS = [
+    
+]
+PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_ASSISTS = [
+    
+]
+PAST_CAREER_CALCULATED_FROM_STATS_ASSISTS = [
+    
+]
+PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_ASSISTS = [
+
+]
+
+# TODO: Add columns for other targeted stats
+
+def _add_targeted_columns(
+    target_stats: list[TargetStat]
+    ):
+
+    # Reset all columns to be empty
+    stats_to_keep_sequence.clear()
+    stats_to_keep_static.clear()
+    past_team_stats.clear()
+    past_mean_team_stat_columns_to_be_used_for_past_mean_team_allowed_stats_over_mean.clear()
+    past_career_calculated_from_stats.clear()
+    past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean.clear()
+    output_columns.clear()
+
+    # Add specific columns to the targeted columns based on the targeted stats
+    def _add_other_columns_to_targeted_columns(
+        stats_to_keep_sequence_other,
+        stats_to_keep_static_other,
+        past_team_stats_other,
+        past_mean_team_stat_columns_to_be_used_for_past_mean_team_allowed_stats_over_mean_other,
+        past_career_calculated_from_stats_other,
+        past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean_other,
+        output_column_other: str
+        ):
+        stats_to_keep_sequence.update(stats_to_keep_sequence_other)
+        stats_to_keep_static.update(stats_to_keep_static_other)
+        past_team_stats.update(past_team_stats_other)
+        past_mean_team_stat_columns_to_be_used_for_past_mean_team_allowed_stats_over_mean.update(
+            past_mean_team_stat_columns_to_be_used_for_past_mean_team_allowed_stats_over_mean_other
+        )
+        past_career_calculated_from_stats.update(past_career_calculated_from_stats_other)
+        past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean.update(
+            past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean_other
+            )
+        output_columns.add(output_column_other)
+
+    for target_stat in set(target_stats):
+        match target_stat:
+            case TargetStat.POINTS:
+                _add_other_columns_to_targeted_columns(
+                    STATS_TO_KEEP_SEQUENCE_POINTS,
+                    [],
+                    PAST_TEAM_STATS_POINTS,
+                    PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_POINTS,
+                    PAST_CAREER_CALCULATED_FROM_STATS_POINTS,
+                    PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_POINTS,
+                    TargetStat.POINTS.value
+                )
+            case TargetStat.REBOUNDS:
+                _add_other_columns_to_targeted_columns(
+                    STATS_TO_KEEP_SEQUENCE_REBOUNDS,
+                    [],
+                    PAST_TEAM_STATS_REBOUNDS,
+                    PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_REBOUNDS,
+                    PAST_CAREER_CALCULATED_FROM_STATS_REBOUNDS,
+                    PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_REBOUNDS,
+                    TargetStat.REBOUNDS.value
+                )
+            case TargetStat.ASSISTS:
+                _add_other_columns_to_targeted_columns(
+                    STATS_TO_KEEP_SEQUENCE_ASSISTS,
+                    [],
+                    PAST_TEAM_STATS_ASSISTS,
+                    PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_ASSISTS,
+                    PAST_CAREER_CALCULATED_FROM_STATS_ASSISTS,
+                    PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_ASSISTS,
+                    TargetStat.ASSISTS.value
+                )   
 
 def _preprocess_game_data(
         player_info: pd.DataFrame,
@@ -323,14 +504,14 @@ def _preprocess_game_data(
             game_data,
             player_game_data_manager.TEAM_ID.category_name
         )
-        game_data = rolling_category.add_rolling_function_columns(game_data, PLAYER_ROLLING_CATEGORIES)
+        game_data = rolling_category.add_rolling_function_columns(game_data, PLAYER_ROLLING_CATEGORIES())
 
         accumulator.append(game_data)
     player_game_data = pd.concat(accumulator)
 
     player_game_data = nba_data_processing.add_differences_columns(
         player_game_data,
-        PAST_MEAN_PLAYER_STATS_OVER_MEAN_COLUMNS
+        PAST_MEAN_PLAYER_STATS_OVER_MEAN_COLUMNS()
     )
 
     if print_debug:
@@ -376,7 +557,7 @@ def _preprocess_game_data(
         team_game_data_manager.GAME_ID.category_name,
         team_game_data_manager.TEAM_ID.category_name,
         ATTRIBUTE_COLUMNS,
-        STAT_COLUMNS
+        STAT_COLUMNS()
     )
     team_game_data = nba_data_processing.add_total_player_stats_per_game_by_bucket(
         team_game_data,
@@ -388,7 +569,7 @@ def _preprocess_game_data(
         team_game_data_manager.TEAM_ID.category_name,
         player_info_manager.HEIGHT.category_name,
         HEIGHT_BOUNDARIES,
-        STAT_COLUMNS
+        STAT_COLUMNS()
     )
     team_game_data = nba_data_processing.add_total_player_stats_per_game_by_bucket(
         team_game_data,
@@ -400,7 +581,7 @@ def _preprocess_game_data(
         team_game_data_manager.TEAM_ID.category_name,
         player_info_manager.WEIGHT.category_name,
         WEIGHT_BOUNDARIES,
-        STAT_COLUMNS
+        STAT_COLUMNS()
     )
     team_game_data = nba_data_processing.add_core_roster_change_columns(
         team_game_data,
@@ -416,7 +597,7 @@ def _preprocess_game_data(
     accumulator = []
     for _, game_data in team_game_data.groupby(by=team_game_data_manager.TEAM_ID.category_name):
         game_data = game_data.sort_values(by=team_game_data_manager.GAME_DATE.category_name)
-        game_data = rolling_category.add_rolling_function_columns(game_data, TEAM_ROLLING_CATEGORIES)
+        game_data = rolling_category.add_rolling_function_columns(game_data, TEAM_ROLLING_CATEGORIES())
 
         accumulator.append(game_data)
     team_game_data = pd.concat(accumulator)
@@ -430,13 +611,13 @@ def _preprocess_game_data(
     
     team_game_data = nba_data_processing.add_differences_columns(
         team_game_data,
-        PAST_MEAN_TEAM_STATS_OVER_MEAN_COLUMNS
+        PAST_MEAN_TEAM_STATS_OVER_MEAN_COLUMNS()
     )
 
     accumulator = []
     for _, game_data in team_game_data.groupby(by=nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name):
         game_data = game_data.sort_values(by=team_game_data_manager.GAME_DATE.category_name)
-        game_data = rolling_category.add_rolling_function_columns(game_data, OPPONENT_TEAM_ROLLING_CATEGORIES)
+        game_data = rolling_category.add_rolling_function_columns(game_data, OPPONENT_TEAM_ROLLING_CATEGORIES())
         
         accumulator.append(game_data)
     team_game_data = pd.concat(accumulator)
@@ -462,6 +643,10 @@ def _preprocess_game_data(
     player_team_game_data = nba_data_processing.sort_columns_alphabetically(player_team_game_data)
 
     # TODO: Potentially move this elsewhere so that resources are not wasted during inferencing by generating more data than needed
+
+    # Creating output column which contains the targeted prediction value
+    player_team_game_data[OUTPUT] = player_team_game_data[OUTPUT_COLUMNS()].sum(axis=1)
+
     preprocessed_game_data = {}
     for player_id, game_data in player_team_game_data.groupby(by=player_game_data_manager.PLAYER_ID.category_name):
         game_data = game_data.sort_values(by=team_game_data_manager.GAME_DATE.category_name)
@@ -536,9 +721,9 @@ def _get_input_data_chunk(
     # Creating sequence of last played games by the current player 
     past_games_sequence = player_team_game_data.iloc[index - PAST_GAMES_PLAYED_SEQUENCE_LENGTH : index]
 
-    past_games_sequence = past_games_sequence[STAT_TO_KEEP_SEQUENCE]
-    past_games_against_opponent = past_games_against_opponent[STAT_TO_KEEP_PREV_OPPONENT_SEQUENCE]
-    input_data_static_game_data = current_game[STATS_TO_KEEP_STATIC].to_frame().T
+    past_games_sequence = past_games_sequence[STATS_TO_KEEP_SEQUENCE()]
+    past_games_against_opponent = past_games_against_opponent[STAT_TO_KEEP_PREV_OPPONENT_SEQUENCE()]
+    input_data_static_game_data = current_game[STATS_TO_KEEP_STATIC()].to_frame().T
     
     return {
         INPUT_DATA_PLAYER_INFO : static_player_info,
@@ -567,6 +752,8 @@ def get_all_player_props_input_output_labeled_data(
     The returned data is in the form of a tuple consisting of:
     (input training dataset, output training dataset, input validation data, output validation dataset, input test dataset, output test dataset)
     """
+
+    _add_targeted_columns(target_stats)
 
     if print_debug:
         print("Querying data from databases...")
@@ -611,7 +798,7 @@ def get_all_player_props_input_output_labeled_data(
             )
             if input_chunk is None:
                 continue
-            output_chunk = current_game[[TargetStat.PLAYER_POINTS.value]].to_frame().T
+            output_chunk = current_game[[OUTPUT]].to_frame().T
 
             if print_debug:
                 if count % 25000 == 0:
@@ -663,6 +850,8 @@ def get_player_prop_inference_labeled_input_data(
     """
 
     # TODO: Potentially refactor the process of encoding current known information into the input data
+
+    _add_targeted_columns(target_stats)
     
     if print_debug:
         print("Querying data from databases...")
@@ -780,7 +969,6 @@ def get_player_prop_inference_labeled_input_data(
     target_index = player_team_game_data.index.get_loc(target_label)
     if not isinstance(target_index, int):
         raise ValueError()
-    
 
     static_player_info = static_player_info.drop(columns=POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC, errors='ignore')
 

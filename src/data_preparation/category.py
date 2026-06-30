@@ -46,7 +46,7 @@ class Category():
 
 class Categories():
     """
-    Helper class for creating category lists
+    Helper class for creating Category lists
     """
     
     def __init__(self):
@@ -59,7 +59,7 @@ class Categories():
         private_name: str | None = None
         ) -> Category:
         """
-        Creates and registers a category to this category list.
+        Creates and registers a Category to this Category list.
 
         If no private_name is given, then the private_name will be set to the same as the category_name.
         """

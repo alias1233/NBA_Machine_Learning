@@ -31,30 +31,30 @@ class ModelSpecification():
 
 PLAYER_PROPS_POINTS_MODEL = ModelSpecification(
     "points",
-    [data_processor.TargetStat.PLAYER_POINTS],
+    [data_processor.TargetStat.POINTS],
     0,
     60
     )
 
 PLAYER_PROPS_REBOUNDS_MODEL = ModelSpecification(
     "rebounds",
-    [data_processor.TargetStat.PLAYER_REBOUNDS],
+    [data_processor.TargetStat.REBOUNDS],
     0,
     25
     )
 
 PLAYER_PROPS_ASSISTS_MODEL = ModelSpecification(
     "assists",
-    [data_processor.TargetStat.PLAYER_ASSISTS],
+    [data_processor.TargetStat.ASSISTS],
     0,
     20
     )
 
 PLAYER_PROPS_POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
     "points_rebounds_assists",
-    [data_processor.TargetStat.PLAYER_POINTS,
-    data_processor.TargetStat.PLAYER_REBOUNDS,
-    data_processor.TargetStat.PLAYER_ASSISTS],
+    [data_processor.TargetStat.POINTS,
+    data_processor.TargetStat.REBOUNDS,
+    data_processor.TargetStat.ASSISTS],
     0,
     (PLAYER_PROPS_POINTS_MODEL.number_of_stat_classifications + 
     PLAYER_PROPS_REBOUNDS_MODEL.number_of_stat_classifications + 
@@ -63,7 +63,7 @@ PLAYER_PROPS_POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
 
 # Training
 SAVE_PROCESSED_TRAINING_DATA = True
-LOAD_SAVED_PROCESSED_TRAINING_DATA = True
+LOAD_SAVED_PROCESSED_TRAINING_DATA = False
 
 RANDOM_SEED = 12156666
 
