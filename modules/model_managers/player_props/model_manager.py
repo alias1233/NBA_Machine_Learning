@@ -56,12 +56,11 @@ PLAYER_PROPS_POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
     data_processor.TargetStat.REBOUNDS,
     data_processor.TargetStat.ASSISTS],
     0,
-    (PLAYER_PROPS_POINTS_MODEL.number_of_stat_classifications + 
-    PLAYER_PROPS_REBOUNDS_MODEL.number_of_stat_classifications + 
-    PLAYER_PROPS_ASSISTS_MODEL.number_of_stat_classifications)
-)
+    80
+    )
 
 # Training
+# TODO: Have each model specs have their own model parameters
 SAVE_PROCESSED_TRAINING_DATA = True
 LOAD_SAVED_PROCESSED_TRAINING_DATA = False
 
@@ -84,6 +83,13 @@ HIDDEN_LAYERS_PARAMETERS = [
     LayerParameters(128, nn.LeakyReLU(0.1), True, 0.25),
 ]
 
+HIDDEN_LAYERS_PARAMETERS = [
+    LayerParameters(512, nn.ReLU(), True, 0.45),
+    LayerParameters(256, nn.ReLU(), True, 0.35),
+    LayerParameters(256, nn.ReLU(), True, 0.35),
+    LayerParameters(128, nn.ReLU(), True, 0.25),
+]
+
 LEARNING_RATE = 0.00001
 EPOCHS = 25
 LOSS_FUNCTION: trainer.LossFunction = torch.nn.CrossEntropyLoss()
@@ -95,18 +101,25 @@ DEVICE = helpers.get_best_device()
 LOG_LOSS_INTERVAL = 1
 
 # TESTING OVERPARAMETERIZATION #
+# TEST_OVER_PARAMETERIZED_PLAYER_PROPS_POINTS_MODEL = ModelSpecification(
+#     "points_overparameterized",
+#     [data_processor.TargetStat.POINTS],
+#     0,
+#     60
+#     )
+
 # HIDDEN_LAYERS_PARAMETERS = [
+#     LayerParameters(2048, nn.ReLU(), True, 0.25),
 #     LayerParameters(1024, nn.ReLU(), True, 0.2),
-#     LayerParameters(512, nn.ReLU(), True, 0.15),
 #     LayerParameters(512, nn.ReLU(), True, 0.15),
 #     LayerParameters(256, nn.ReLU(), True, 0.1),
 # ]
 
-# LEARNING_RATE = 0.001
-# EPOCHS = 50
+# LEARNING_RATE = 0.0001
+# EPOCHS = 250
 # LOSS_FUNCTION: trainer.LossFunction = torch.nn.CrossEntropyLoss()
 # EVALUATION_INTERVAL = 1
-# BATCH_SIZE = 512
+# BATCH_SIZE = 128
 # PATIENCE = -1
 # MIN_DELTA = 0.001
 # DEVICE = helpers.get_best_device()
@@ -205,7 +218,8 @@ def train(
 
     optimizer = torch.optim.AdamW(
         model.parameters(), 
-        lr=LEARNING_RATE
+        lr=LEARNING_RATE,
+
     )
 
     training_progress = trainer.train(

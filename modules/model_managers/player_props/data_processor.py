@@ -15,9 +15,9 @@ from src.data_preparation import nba_data_helpers
 # TODO: Implement another model architecture such as transformmers or VAEs
 # TODO: Add season time column, along with current team seed (?)
 # TODO: Potentially use weighted averages that skew towards recent games for rolling data
-# TODO: Incorporate choosing which stats to predict for, having each individual target stat have required columns, and for output, adding up the sum of all of the stats.
+# TODO: Potentially use per posession/minute stats instead of total?
 
-ROLLING_WINDOW = 20
+ROLLING_WINDOW = 15
 PAST_CAREER_MEAN_PREFIX = "PAST_CAREER_MEAN_"
 PAST_CAREER_STD_PREFIX = "PAST_CAREER_STD_"
 PAST_MEAN_PREFIX = "PAST_MEAN_"
@@ -72,6 +72,7 @@ def PAST_CAREER_STATS():
 PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_ALWAYS = [
 
 ]
+# TODO: Allow for each targeted stat to choose which attribute to get stats for
 past_mean_player_stat_columns_to_be_used_for_past_mean_player_allowed_stats_by_attribute_over_mean = set()
 def PAST_MEAN_PLAYER_STATS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN():
     return [
@@ -205,7 +206,7 @@ def OPPONENT_TEAM_ROLLING_CATEGORIES():
     return PAST_OPPONENT_ALLOWED_MEAN_STATS() + PAST_OPPONENT_ALLOWED_MEAN_STATS_BY_ATTRIBUTE_COLUMNS()
 
 # INPUT OUTPUT STRUCTURE: #
-PAST_GAMES_PLAYED_SEQUENCE_LENGTH = 25
+PAST_GAMES_PLAYED_SEQUENCE_LENGTH = 20
 PAST_GAMES_PLAYED_AGAINST_OPPONENT_SEQUENCE_LENGTH = 3
 
 INPUT_DATA_PLAYER_INFO = "PLAYER_INFO"
@@ -223,6 +224,7 @@ MINIMUM_REQUIRED_GAMES_PLAYED = PAST_GAMES_PLAYED_SEQUENCE_LENGTH
 
 STATS_TO_KEEP_SEQUENCE_ALWAYS = [
     player_game_data_manager.MINUTES_PLAYED.category_name + nba_data_processing.PLAYER_SUFFIX,
+    nba_data_processing.POINTS + nba_data_processing.TEAM_SUFFIX, nba_data_processing.OPPONENT_PREFIX + nba_data_processing.POINTS,
     player_game_data_manager.PLUS_MINUS.category_name,
     player_game_data_manager.PERSONAL_FOULS.category_name + nba_data_processing.PLAYER_SUFFIX,
     nba_data_processing.HOME_OR_AWAY, nba_data_processing.LONG_BREAK, nba_data_processing.REST,
@@ -289,8 +291,9 @@ class TargetStat(Enum):
 
 STATS_TO_KEEP_SEQUENCE_POINTS = [
     nba_data_processing.POINTS + nba_data_processing.PLAYER_SUFFIX,
-    nba_data_processing.POINTS + nba_data_processing.TEAM_SUFFIX, nba_data_processing.OPPONENT_PREFIX + nba_data_processing.POINTS,
     player_game_data_manager.OFFENSIVE_REBOUNDS.category_name + nba_data_processing.PLAYER_SUFFIX,
+    team_game_data_manager.ASSISTS.category_name + nba_data_processing.TEAM_SUFFIX,
+    player_game_data_manager.TURNOVERS.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.FIELD_GOALS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
     player_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name + nba_data_processing.PLAYER_SUFFIX,
@@ -299,7 +302,7 @@ STATS_TO_KEEP_SEQUENCE_POINTS = [
     player_game_data_manager.FREE_THROWS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
 ]
 PAST_TEAM_STATS_POINTS = [
-    team_game_data_manager.STEALS.category_name, team_game_data_manager.BLOCKS.category_name
+    team_game_data_manager.BLOCKS.category_name
 ]
 PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_POINTS = [
     nba_data_processing.POINTS,
@@ -317,38 +320,54 @@ PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_A
 ]
 
 STATS_TO_KEEP_SEQUENCE_REBOUNDS = [
-    
+    player_game_data_manager.OFFENSIVE_REBOUNDS.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.DEFENSIVE_REBOUNDS.category_name + nba_data_processing.PLAYER_SUFFIX,
+    team_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name + nba_data_processing.TEAM_SUFFIX,
+    team_game_data_manager.FIELD_GOALS_MADE.category_name + nba_data_processing.TEAM_SUFFIX,
+    team_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name + nba_data_processing.TEAM_SUFFIX,
+    team_game_data_manager.THREE_POINTERS_MADE.category_name + nba_data_processing.TEAM_SUFFIX,
 ]
 PAST_TEAM_STATS_REBOUNDS = [
     
 ]
 PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_REBOUNDS = [
-    
+    team_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
+    team_game_data_manager.DEFENSIVE_REBOUNDS.category_name,
+    team_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name, team_game_data_manager.FIELD_GOALS_MADE.category_name, 
+    team_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name, team_game_data_manager.THREE_POINTERS_MADE.category_name
 ]
 PAST_CAREER_CALCULATED_FROM_STATS_REBOUNDS = [
-    
+    player_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
+    player_game_data_manager.DEFENSIVE_REBOUNDS.category_name,
 ]
 PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_REBOUNDS = [
-
+    player_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
+    player_game_data_manager.DEFENSIVE_REBOUNDS.category_name,
 ]
 
 STATS_TO_KEEP_SEQUENCE_ASSISTS = [
-    
+    player_game_data_manager.ASSISTS.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.TURNOVERS.category_name + nba_data_processing.PLAYER_SUFFIX,
+    player_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name + nba_data_processing.TEAM_SUFFIX,
+    player_game_data_manager.FIELD_GOALS_MADE.category_name + nba_data_processing.TEAM_SUFFIX,
+    player_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name + nba_data_processing.TEAM_SUFFIX,
+    player_game_data_manager.THREE_POINTERS_MADE.category_name + nba_data_processing.TEAM_SUFFIX
 ]
 PAST_TEAM_STATS_ASSISTS = [
-    
+    team_game_data_manager.STEALS.category_name
 ]
 PAST_MEAN_TEAM_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_TEAM_ALLOWED_STATS_OVER_MEAN_ASSISTS = [
-    
+    team_game_data_manager.ASSISTS.category_name,
+    team_game_data_manager.TURNOVERS.category_name,
+    team_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name, team_game_data_manager.FIELD_GOALS_MADE.category_name,
+    team_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name, team_game_data_manager.THREE_POINTERS_MADE.category_name,
 ]
 PAST_CAREER_CALCULATED_FROM_STATS_ASSISTS = [
-    
+    player_game_data_manager.ASSISTS.category_name
 ]
 PAST_MEAN_PLAYER_STAT_COLUMNS_TO_BE_USED_FOR_PAST_MEAN_PLAYER_ALLOWED_STATS_BY_ATTRIBUTE_OVER_MEAN_ASSISTS = [
-
+    player_game_data_manager.ASSISTS.category_name
 ]
-
-# TODO: Add columns for other targeted stats
 
 def _add_targeted_columns(
     target_stats: list[TargetStat]

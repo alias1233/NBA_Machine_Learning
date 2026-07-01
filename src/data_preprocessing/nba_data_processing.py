@@ -435,7 +435,7 @@ def add_core_roster_change_columns(
     game_id_column_team: str,
     team_id_column_player: str,
     team_id_column_team: str,
-    minutes_played_column: str # TODO: Potentially use previous rolling mean minutes played
+    minutes_played_column: str, # TODO: Potentially use previous rolling mean minutes played
     ) -> pd.DataFrame:
     """
     Adds columns to team_game_data that encode whether the team completely gained a core player or completely lost a core player from the previous game.
@@ -505,22 +505,6 @@ def add_core_roster_change_columns(
 
     return team_game_data
 
-# TODO: Implement
-def add_net_expected_stat_changes_from_roster_change_columns(
-    player_game_data: pd.DataFrame,
-    team_game_data: pd.DataFrame,
-    player_id_column_info: str,
-    player_id_column_player: str,
-    game_id_column: str,
-    team_id_column: str,
-    stat_columns: list[str],
-    core_player_minutes_cutoff: int = 25
-    ) -> pd.DataFrame:
-    """
-    Adds columnns to team_game_data containing the expected net change in the given stats based on the change in 
-    """
-    return team_game_data
-
 def _add_years_between_static_player_event_and_game_column(
     game_data: pd.DataFrame,
     player_info: pd.DataFrame,
@@ -535,6 +519,7 @@ def _add_years_between_static_player_event_and_game_column(
     The static event's dates are represented inside of a dataframe where each player_id corresponds to the static event's time.
     The static_player_event_time and game_date columns must be represented in datetime form.
     """
+
     TEMP = 'TEMP'
     player_id_to_static_event_time = player_info.set_index(player_id_column_player_info)[static_player_event_time_column].to_dict()
     game_data[TEMP] = game_data[player_id_column_game_data].map(player_id_to_static_event_time, na_action='ignore')

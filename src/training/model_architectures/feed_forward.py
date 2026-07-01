@@ -16,7 +16,7 @@ class LayerParameters():
 
 class FeedForward(nn.Module):
     """
-    Simple Configurable Feed Forward Model
+    Simple configurable feed forward model
     """
 
     def __init__(
