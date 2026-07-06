@@ -10,8 +10,8 @@ from . import data_processor
 from .. import directories
 from src.data_preprocessing import training_data_processing
 from src.data_preparation import nba_data_helpers
-from src.training import trainer, helpers, evaluation
-from src.training.model_architectures.feed_forward import FeedForward, LayerParameters
+from src.machine_learning import trainer, helpers, evaluation
+from src.machine_learning.model_architectures.feed_forward import FeedForward, LayerParameters
 
 MODEL_CATEGORY = "player_prop"
 INPUT_SCALER = 'input_scaler'
@@ -62,7 +62,7 @@ PLAYER_PROPS_POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
 # Training
 # TODO: Have each model specs have their own model parameters
 SAVE_PROCESSED_TRAINING_DATA = True
-LOAD_SAVED_PROCESSED_TRAINING_DATA = False
+LOAD_SAVED_PROCESSED_TRAINING_DATA = True
 
 RANDOM_SEED = 12156666
 
@@ -71,26 +71,13 @@ VALIDATION_START_DATE = datetime(2026, 1, 1)
 TEST_START_DATE = datetime(2026, 3, 1)
 
 HIDDEN_LAYERS_PARAMETERS = [
-    LayerParameters(512, nn.ReLU(), True, 0.45),
-    LayerParameters(256, nn.ReLU(), True, 0.35),
-    LayerParameters(128, nn.ReLU(), True, 0.3),
+    LayerParameters(512, nn.ReLU(), True, 0.4),
+    LayerParameters(256, nn.ReLU(), True, 0.3),
+    LayerParameters(256, nn.ReLU(), True, 0.3),
+    LayerParameters(128, nn.ReLU(), True, 0.2),
 ]
 
-HIDDEN_LAYERS_PARAMETERS = [
-    LayerParameters(512, nn.LeakyReLU(0.1), True, 0.45),
-    LayerParameters(256, nn.LeakyReLU(0.1), True, 0.35),
-    LayerParameters(256, nn.LeakyReLU(0.1), True, 0.35),
-    LayerParameters(128, nn.LeakyReLU(0.1), True, 0.25),
-]
-
-HIDDEN_LAYERS_PARAMETERS = [
-    LayerParameters(512, nn.ReLU(), True, 0.45),
-    LayerParameters(256, nn.ReLU(), True, 0.35),
-    LayerParameters(256, nn.ReLU(), True, 0.35),
-    LayerParameters(128, nn.ReLU(), True, 0.25),
-]
-
-LEARNING_RATE = 0.00001
+LEARNING_RATE = 0.000005
 EPOCHS = 25
 LOSS_FUNCTION: trainer.LossFunction = torch.nn.CrossEntropyLoss()
 EVALUATION_INTERVAL = 1
@@ -99,32 +86,6 @@ PATIENCE = -1
 MIN_DELTA = 0.001
 DEVICE = helpers.get_best_device()
 LOG_LOSS_INTERVAL = 1
-
-# TESTING OVERPARAMETERIZATION #
-# TEST_OVER_PARAMETERIZED_PLAYER_PROPS_POINTS_MODEL = ModelSpecification(
-#     "points_overparameterized",
-#     [data_processor.TargetStat.POINTS],
-#     0,
-#     60
-#     )
-
-# HIDDEN_LAYERS_PARAMETERS = [
-#     LayerParameters(2048, nn.ReLU(), True, 0.25),
-#     LayerParameters(1024, nn.ReLU(), True, 0.2),
-#     LayerParameters(512, nn.ReLU(), True, 0.15),
-#     LayerParameters(256, nn.ReLU(), True, 0.1),
-# ]
-
-# LEARNING_RATE = 0.0001
-# EPOCHS = 250
-# LOSS_FUNCTION: trainer.LossFunction = torch.nn.CrossEntropyLoss()
-# EVALUATION_INTERVAL = 1
-# BATCH_SIZE = 128
-# PATIENCE = -1
-# MIN_DELTA = 0.001
-# DEVICE = helpers.get_best_device()
-# LOG_LOSS_INTERVAL = 1
-# END TEST
 
 INPUT_SCALER = 'input_scaler'
 
