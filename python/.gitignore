@@ -1,0 +1,11 @@
+__pycache__/
+.venv/
+
+# Training outputs
+trained_models/
+graphs/
+
+# Datasets
+data/
+databases/
+training_data_preprocessed/
