@@ -1,44 +1,32 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Callable
+
 import numpy as np
 import torch, torch.nn as nn
 import pandas as pd
-from datetime import datetime
-from enum import Enum
-from sklearn.preprocessing import StandardScaler
-from torch.utils.data import Dataset, TensorDataset
-from typing import Callable
-import math
-
-from src.components.machine_learning import helpers
-from src.components.machine_learning import evaluation
-from src.components.machine_learning import training_report
 
 from . import data_processor
 from .. import directories
 from src.components.data_preprocessing import training_data_processing
+from src.components.data_preprocessing.training_data_processing import SequenceGameDataset
 from src.components.data_preparation import nba_data_helpers
+from src.components.machine_learning import helpers
+from src.components.machine_learning import evaluation
+from src.components.machine_learning import training_report
 from src.components.machine_learning import trainer
 from src.components.machine_learning.loss_functions.gaussian_smoothed_cross_entropy_loss import GaussianSmoothedCrossEntropyLoss
-from src.components.machine_learning.model_architectures.feed_forward import FeedForward, LayerParameters
+from src.components.machine_learning.model_architectures.feed_forward import LayerParameters
 from src.components.machine_learning.model_architectures.gru_feed_forward import GRUFeedForward
-from src.components.machine_learning.model_architectures.savable_module import SavableModule
 
 MODEL_CATEGORY = "player_prop"
 
-INPUT_SCALER = 'input_scaler'
 SEQUENCE_SCALER = 'sequence_scaler'
 STATIC_SCALER = 'static_scaler'
 
-class Architecture(Enum):
-    """
-    FEED_FORWARD flattens a fixed window of past games into one input vector.
-    GRU reads the past games as a sequence and pairs its final hidden state with the static data.
-    """
-
-    FEED_FORWARD = "feed_forward"
-    GRU = "gru"
-
 # Data
+# Note: Whenever data processing changes, the cached processed data not updated until
+# the data is reprocessed and saved while LOAD_SAVED_PROCESSED_TRAINING_DATA is false. 
 SAVE_PROCESSED_TRAINING_DATA = True
 LOAD_SAVED_PROCESSED_TRAINING_DATA = True
 
@@ -51,7 +39,7 @@ TEST_START_DATE = datetime(2026, 3, 1)
 DEVICE = helpers.get_best_device()
 
 # How many of the most recent games the GRU reads per prediction, or None for a player's entire history.
-MAX_SEQUENCE_LENGTH: int | None = 100
+MAX_SEQUENCE_LENGTH: int | None = 50
 
 # Training
 LossFunctionFactory = Callable[[int], trainer.LossFunction]
@@ -83,47 +71,25 @@ class TrainingParameters():
     weight_decay: float = 0.01
     build_loss_function: LossFunctionFactory = cross_entropy_loss
 
-FEED_FORWARD_TRAINING_PARAMETERS = TrainingParameters(
-    configuration=trainer.TrainingConfiguration(
-        epochs=25,
-        batch_size=128,
-        patience=9,
-        min_delta=0.001,
-        device=DEVICE
-    ),
-    hidden_layers=[
-        LayerParameters(512, nn.ReLU(), True, 0.4),
-        LayerParameters(256, nn.ReLU(), True, 0.3),
-        LayerParameters(256, nn.ReLU(), True, 0.3),
-        LayerParameters(128, nn.ReLU(), True, 0.2),
-    ],
-    learning_rate=0.000005
-)
-
 GRU_HIDDEN_DIM = 128
 GRU_LAYERS = 1
 GRU_DROPOUT_RATE = 0.0
 
-GRU_TRAINING_PARAMETERS = TrainingParameters(
+DEFAULT_TRAINING_PARAMETERS = TrainingParameters(
     configuration=trainer.TrainingConfiguration(
-        epochs=25,
+        epochs=20,
         batch_size=128,
         patience=7,
-        min_delta=0.001,
+        min_delta=0,
         max_gradient_norm=1.0,
         device=DEVICE
     ),
     hidden_layers=[
-        LayerParameters(256, nn.ReLU(), True, 0.3),
-        LayerParameters(128, nn.ReLU(), True, 0.2),
+        LayerParameters(256, nn.ReLU(), True, 0.20),
+        LayerParameters(128, nn.ReLU(), True, 0.15),
     ],
-    learning_rate=0.000033
+    learning_rate=0.000015
 )
-
-DEFAULT_TRAINING_PARAMETERS = {
-    Architecture.FEED_FORWARD: FEED_FORWARD_TRAINING_PARAMETERS,
-    Architecture.GRU: GRU_TRAINING_PARAMETERS
-}
 
 # Models
 @dataclass
@@ -132,30 +98,28 @@ class ModelSpecification():
     target_stats: list[data_processor.TargetStat]
     minimum_of_stat: int
     number_of_stat_classifications: int
-    training_parameter_overrides: dict[Architecture, TrainingParameters] = field(default_factory=dict)
-    """Set an architecture here to train this stat with parameters other than the shared defaults."""
+    training_parameters: TrainingParameters = DEFAULT_TRAINING_PARAMETERS
+    """Set this to train the stat with parameters other than the shared defaults."""
 
-    def get_training_parameters(self, architecture: Architecture) -> TrainingParameters:
-        return self.training_parameter_overrides.get(architecture, DEFAULT_TRAINING_PARAMETERS[architecture])
+    def get_feature_set(self) -> data_processor.FeatureSet:
+        """
+        Resolves which columns this model reads. Resolve it once per run and pass it down, so that
+        two models being built at the same time never share column state.
+        """
 
-    def _get_path_name(self, architecture: Architecture) -> str:
-        # The feed forward keeps the unsuffixed path so that already saved files still load.
-        if architecture is Architecture.FEED_FORWARD:
-            return self.name
+        return data_processor.build_feature_set(self.target_stats)
 
-        return self.name + "/" + architecture.value
+    def get_save_model_file_path(self) -> str:
+        return directories.get_model_save_path(self.name, MODEL_CATEGORY)
 
-    def get_save_model_file_path(self, architecture: Architecture) -> str:
-        return directories.get_model_save_path(self._get_path_name(architecture), MODEL_CATEGORY)
+    def get_save_training_report_file_path(self) -> str:
+        return directories.get_model_save_training_report_path(self.name, MODEL_CATEGORY)
 
-    def get_save_training_report_file_path(self, architecture: Architecture) -> str:
-        return directories.get_model_save_training_report_path(self._get_path_name(architecture), MODEL_CATEGORY)
+    def get_save_training_data_file_path(self) -> str:
+        return directories.get_model_save_training_data_path(self.name, MODEL_CATEGORY)
 
-    def get_save_training_data_file_path(self, architecture: Architecture) -> str:
-        return directories.get_model_save_training_data_path(self._get_path_name(architecture), MODEL_CATEGORY)
-
-    def get_save_graphs_directory_path(self, architecture: Architecture) -> str:
-        return directories.get_model_save_graphs_directory_path(self._get_path_name(architecture), MODEL_CATEGORY)
+    def get_save_graphs_directory_path(self) -> str:
+        return directories.get_model_save_graphs_directory_path(self.name, MODEL_CATEGORY)
 
 PLAYER_PROPS_POINTS_MODEL = ModelSpecification(
     "points",
@@ -197,187 +161,91 @@ ALL_MODEL_SPECIFICATIONS = {
     )
 }
 
-@dataclass
-class _ArchitectureTrainingSetup():
-    """
-    Everything that differs between architectures once their data has been prepared.
-    """
-
-    model: SavableModule
-    training_dataset: Dataset
-    training_outputs: torch.Tensor
-    validation_dataset: Dataset
-    validation_outputs: torch.Tensor
-    test_dataset: Dataset
-    test_outputs: torch.Tensor
-    scaler_parameters: dict
-    collate_fn: Callable | None = None
-
-def _get_preprocessed_training_data(
+def _build_datasets(
         model_specs: ModelSpecification,
-        architecture: Architecture,
-        process_data: Callable[[], tuple],
         print_debug: bool = False
-        ) -> tuple:
+        ) -> tuple[SequenceGameDataset, SequenceGameDataset, SequenceGameDataset, dict]:
     """
-    Returns the cached preprocessed data if it is being loaded, otherwise builds it with
-    process_data and caches it.
+    Builds the three splits and the scalers fitted on the training one, reusing the last run's
+    build when it is being loaded and caching it when it is not.
+
+    Returns:
+        (training, validation, test, scaler name to fitted scaler)
     """
 
-    file_path = model_specs.get_save_training_data_file_path(architecture)
+    file_path = model_specs.get_save_training_data_file_path()
 
     if LOAD_SAVED_PROCESSED_TRAINING_DATA:
         if print_debug:
             print("Loading in preprocessed data...")
 
-        return helpers.load_data_from_file(file_path)
+        cached = helpers.load_data_from_file(file_path)
 
-    datasets = process_data()
-
-    if SAVE_PROCESSED_TRAINING_DATA:
-        if print_debug:
-            print("Saving preprocessed data...")
-
-        helpers.save_data_to_file(file_path, datasets)
-
-    return datasets
-
-def _build_feed_forward_setup(
-        model_specs: ModelSpecification,
-        parameters: TrainingParameters,
-        print_debug: bool = False,
-        print_all_debug: bool = False
-        ) -> _ArchitectureTrainingSetup:
-
-    def process_data() -> tuple:
-        labeled_datasets = data_processor.get_all_player_props_input_output_labeled_data(
-            model_specs.target_stats,
+    else:
+        labeled_data = data_processor.get_all_player_props_labeled_data(
+            model_specs.get_feature_set(),
             VALIDATION_START_DATE,
             TEST_START_DATE,
             CHUNK_STEP_SIZE,
             print_debug
         )
 
-        helpers.print_labeled_dataset(
-            labeled_datasets,
-            print_values=print_all_debug,
-            print_summary=print_debug
-        )
-
-        datasets = training_data_processing.process_labeled_data_for_classification_training(
-            *labeled_datasets,
-            flatten=True,
-            standardize_input=True,
-            min_output_value=model_specs.minimum_of_stat,
-            num_classifications=model_specs.number_of_stat_classifications
-            )
-
-        # The last entry is the fitted scaler rather than a dataset.
-        helpers.print_datasets(datasets[:-1], 1, print_all_debug, print_debug)
-
-        return datasets
-
-    (input_train, output_train,
-     input_val, output_val,
-     input_test, output_test,
-     input_scaler
-     ) = _get_preprocessed_training_data(
-         model_specs,
-         Architecture.FEED_FORWARD,
-         process_data,
-         print_debug
-         )
-
-    model = FeedForward(
-        input_train.shape[1],
-        model_specs.number_of_stat_classifications,
-        parameters.hidden_layers
-    )
-
-    return _ArchitectureTrainingSetup(
-        model=model,
-        training_dataset=TensorDataset(input_train, output_train),
-        training_outputs=output_train,
-        validation_dataset=TensorDataset(input_val, output_val),
-        validation_outputs=output_val,
-        test_dataset=TensorDataset(input_test, output_test),
-        test_outputs=output_test,
-        scaler_parameters={INPUT_SCALER : input_scaler}
-    )
-
-def _build_gru_setup(
-        model_specs: ModelSpecification,
-        parameters: TrainingParameters,
-        print_debug: bool = False
-        ) -> _ArchitectureTrainingSetup:
-
-    def process_data() -> tuple:
-        labeled_data = data_processor.get_all_player_props_sequence_input_output_labeled_data(
-            model_specs.target_stats,
-            VALIDATION_START_DATE,
-            TEST_START_DATE,
-            CHUNK_STEP_SIZE,
-            print_debug
-        )
-
-        return training_data_processing.process_sequence_labeled_data_for_classification_training(
+        cached = training_data_processing.build_classification_datasets(
             *labeled_data,
             max_sequence_length=MAX_SEQUENCE_LENGTH,
             min_output_value=model_specs.minimum_of_stat,
             num_classifications=model_specs.number_of_stat_classifications,
             standardize_input=True
-            )
+        )
 
-    (training_dataset, validation_dataset, test_dataset,
-     sequence_scaler, static_scaler
-     ) = _get_preprocessed_training_data(
-         model_specs,
-         Architecture.GRU,
-         process_data,
-         print_debug
-         )
+        if SAVE_PROCESSED_TRAINING_DATA:
+            if print_debug:
+                print("Saving preprocessed data...")
+
+            helpers.save_data_to_file(file_path, cached)
+
+    training_dataset, validation_dataset, test_dataset, sequence_scaler, static_scaler = cached
 
     # Set again after loading so that the window can be changed without rebuilding the cached data.
     for dataset in (training_dataset, validation_dataset, test_dataset):
         dataset.max_sequence_length = MAX_SEQUENCE_LENGTH
 
-    model = GRUFeedForward(
-        training_dataset.sequence_input_dim,
-        training_dataset.static_input_dim,
-        model_specs.number_of_stat_classifications,
-        parameters.hidden_layers,
-        GRU_HIDDEN_DIM,
-        GRU_LAYERS,
-        GRU_DROPOUT_RATE
+    return (
+        training_dataset,
+        validation_dataset,
+        test_dataset,
+        {SEQUENCE_SCALER : sequence_scaler, STATIC_SCALER : static_scaler}
     )
 
-    return _ArchitectureTrainingSetup(
-        model=model,
-        training_dataset=training_dataset,
-        training_outputs=training_dataset.outputs,
-        validation_dataset=validation_dataset,
-        validation_outputs=validation_dataset.outputs,
-        test_dataset=test_dataset,
-        test_outputs=test_dataset.outputs,
-        scaler_parameters={SEQUENCE_SCALER : sequence_scaler, STATIC_SCALER : static_scaler},
-        collate_fn=training_data_processing.collate_sequence_batch
-    )
-
-def _load_model(
-        architecture: Architecture,
-        parameters_dict: dict
-        ) -> SavableModule:
-
-    if architecture is Architecture.GRU:
-        return GRUFeedForward.load_from_saved_parameters_dict(parameters_dict)
-
-    return FeedForward.load_from_saved_parameters_dict(parameters_dict)
-
-def _describe_data(setup: _ArchitectureTrainingSetup) -> dict:
+def _describe_features(features: data_processor.FeatureSet) -> dict:
     return {
-        "training samples": len(setup.training_outputs),
-        "validation samples": len(setup.validation_outputs),
-        "test samples": len(setup.test_outputs),
+        "predicted value": " + ".join(features.output_columns),
+        "past games read": MAX_SEQUENCE_LENGTH if MAX_SEQUENCE_LENGTH is not None else "every game",
+        "past games required": data_processor.MINIMUM_PAST_GAMES,
+        "columns per past game": len(features.sequence_columns),
+        "columns on the game being predicted": len(features.static_columns)
+    }
+
+def _list_feature_columns(features: data_processor.FeatureSet) -> str:
+    """The exact columns a run consumed, so a saved report can be matched back to its inputs."""
+
+    return "\n\n".join(
+        f"{label} ({len(columns)}):\n" + "\n".join(columns)
+        for label, columns in (
+            ("Past game columns", features.sequence_columns),
+            ("Predicted game columns", features.static_columns)
+        )
+    )
+
+def _describe_data(
+    training_dataset: SequenceGameDataset,
+    validation_dataset: SequenceGameDataset,
+    test_dataset: SequenceGameDataset
+    ) -> dict:
+    return {
+        "training samples": len(training_dataset),
+        "validation samples": len(validation_dataset),
+        "test samples": len(test_dataset),
         "validation starts": VALIDATION_START_DATE.date(),
         "test starts": TEST_START_DATE.date(),
         "sample step size": CHUNK_STEP_SIZE,
@@ -398,9 +266,7 @@ def _describe_run(training_run: trainer.TrainingRun) -> dict:
 
 def _evaluate_saved_model(
         model_specs: ModelSpecification,
-        architecture: Architecture,
-        parameters: TrainingParameters,
-        setup: _ArchitectureTrainingSetup,
+        test_dataset: SequenceGameDataset,
         loss_function: trainer.LossFunction,
         training_run: trainer.TrainingRun
     ) -> dict:
@@ -409,32 +275,34 @@ def _evaluate_saved_model(
     proves that the saved file round trips back into a working model.
     """
 
-    save_graphs_directory_path = model_specs.get_save_graphs_directory_path(architecture)
+    save_graphs_directory_path = model_specs.get_save_graphs_directory_path()
 
     trainer.graph_loss_progress(training_run, save_graphs_directory_path)
 
-    saved_parameters = helpers.load_data_from_file(model_specs.get_save_model_file_path(architecture))
-    model = _load_model(architecture, saved_parameters)
+    saved_parameters = helpers.load_data_from_file(model_specs.get_save_model_file_path())
+    model = GRUFeedForward.load_from_saved_parameters_dict(saved_parameters)
 
+    configuration = model_specs.training_parameters.configuration
     predictions = trainer.predict(
         model,
-        setup.test_dataset,
-        parameters.configuration.batch_size,
-        parameters.configuration.device,
-        setup.collate_fn
+        test_dataset,
+        configuration.batch_size,
+        configuration.device,
+        training_data_processing.collate_sequence_batch
     )
 
     # The trainer moved the loss onto the training device, and the predictions come back on the cpu.
     if isinstance(loss_function, nn.Module):
         loss_function = loss_function.cpu()
 
+    test_outputs = test_dataset.outputs
     metrics = {
-        "test loss": float(loss_function(predictions, setup.test_outputs)),
-        "test cross entropy": float(nn.functional.cross_entropy(predictions, setup.test_outputs))
+        "test loss": float(loss_function(predictions, test_outputs)),
+        "test cross entropy": float(nn.functional.cross_entropy(predictions, test_outputs))
     }
     metrics.update(evaluation.output_test_evaluation_classification(
         predictions.numpy(),
-        setup.test_outputs.numpy(),
+        test_outputs.numpy(),
         label=model_specs.name,
         ordinal=True,
         output_size=20,
@@ -445,13 +313,12 @@ def _evaluate_saved_model(
 
 def train(
         model_specs: ModelSpecification,
-        architecture: Architecture = Architecture.FEED_FORWARD,
         output_evaluations: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
         ):
     """
-    Fits one model spec with one architecture, saves it, and writes a report of the run next to it.
+    Fits one model spec, saves it, and writes a report of the run next to it.
     """
 
     if print_all_debug:
@@ -461,24 +328,35 @@ def train(
     torch.manual_seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
 
-    parameters = model_specs.get_training_parameters(architecture)
+    parameters = model_specs.training_parameters
 
-    if architecture is Architecture.GRU:
-        setup = _build_gru_setup(model_specs, parameters, print_debug)
-    else:
-        setup = _build_feed_forward_setup(model_specs, parameters, print_debug, print_all_debug)
+    training_dataset, validation_dataset, test_dataset, scaler_parameters = _build_datasets(
+        model_specs,
+        print_debug
+    )
+
+    model = GRUFeedForward(
+        training_dataset.sequence_input_dim,
+        training_dataset.static_input_dim,
+        model_specs.number_of_stat_classifications,
+        parameters.hidden_layers,
+        GRU_HIDDEN_DIM,
+        GRU_LAYERS,
+        GRU_DROPOUT_RATE
+    )
 
     optimizer = torch.optim.AdamW(
-        setup.model.parameters(),
+        model.parameters(),
         lr=parameters.learning_rate,
         weight_decay=parameters.weight_decay
     )
     loss_function = parameters.build_loss_function(model_specs.number_of_stat_classifications)
 
-    model_description = training_report.describe_model(setup.model)
-    data_description = _describe_data(setup)
+    model_description = training_report.describe_model(model)
+    feature_description = _describe_features(model_specs.get_feature_set())
+    data_description = _describe_data(training_dataset, validation_dataset, test_dataset)
     label_description = training_data_processing.summarize_classification_outputs(
-        setup.training_outputs,
+        training_dataset.outputs,
         model_specs.number_of_stat_classifications
     )
     hyperparameters = {
@@ -490,30 +368,37 @@ def train(
     }
 
     report = (
-        training_report.TrainingReport(f"{model_specs.name} trained as a {architecture.value} model")
+        training_report.TrainingReport(f"{model_specs.name} model")
         .add("Model", model_description)
+        .add("Features", feature_description)
         .add("Data", data_description)
         .add("Training labels", label_description)
         .add("Hyperparameters", hyperparameters)
-        .add_text("Architecture", str(setup.model))
+        .add_text("Architecture", str(model))
+        .add_text("Feature columns", _list_feature_columns(model_specs.get_feature_set()))
     )
 
     if print_debug:
-        print(f"\n===== TRAINING {model_specs.name} AS A {architecture.value.upper()} MODEL =====")
+        print(f"\n===== TRAINING THE {model_specs.name.upper()} MODEL =====")
         training_report.print_values("Model", model_description)
+        training_report.print_values("Features", feature_description)
         training_report.print_values("Data", data_description)
         training_report.print_values("Training labels", label_description)
         training_report.print_values("Hyperparameters", hyperparameters)
         print("")
 
+    if print_all_debug:
+        print(_list_feature_columns(model_specs.get_feature_set()))
+        print("")
+
     training_run = trainer.train(
-        setup.model,
-        setup.training_dataset,
-        setup.validation_dataset,
+        model,
+        training_dataset,
+        validation_dataset,
         optimizer,
         loss_function,
         parameters.configuration,
-        collate_fn=setup.collate_fn,
+        collate_fn=training_data_processing.collate_sequence_batch,
         metrics=evaluation.get_ordinal_classification_metrics()
     )
 
@@ -527,22 +412,22 @@ def train(
     })
 
     # Saving model data
-    save_model_file_path = model_specs.get_save_model_file_path(architecture)
-    model_params = setup.model.get_save_parameters_dict()
+    save_model_file_path = model_specs.get_save_model_file_path()
 
-    helpers.save_dictionary_data_to_file(save_model_file_path, [model_params, setup.scaler_parameters])
+    helpers.save_dictionary_data_to_file(
+        save_model_file_path,
+        [model.get_save_parameters_dict(), scaler_parameters]
+    )
 
     if output_evaluations:
         report.add("Test set", _evaluate_saved_model(
             model_specs,
-            architecture,
-            parameters,
-            setup,
+            test_dataset,
             loss_function,
             training_run
         ))
 
-    report_path = report.write(model_specs.get_save_training_report_file_path(architecture))
+    report_path = report.write(model_specs.get_save_training_report_file_path())
 
     if print_debug:
         print(f"\nSaved the model to {save_model_file_path} and its report to {report_path}.")
@@ -558,14 +443,19 @@ def predict(
     target_game_at_home: bool,
     target_player_removed_core_teammate_player_ids: set[int],
     target_player_added_core_teammate_player_ids: set[int],
-    architecture: Architecture = Architecture.FEED_FORWARD,
     ) -> list[float]:
+    """
+    Returns the probability of every whole number outcome of the stat this model predicts, from the
+    lowest class up.
 
-    parameters_dict = helpers.load_data_from_file(model_specs.get_save_model_file_path(architecture))
-    model = _load_model(architecture, parameters_dict)
+    See data_processor._get_inference_player_game_data for what the target game arguments mean.
+    """
 
-    inference_arguments = (
-        model_specs.target_stats,
+    parameters_dict = helpers.load_data_from_file(model_specs.get_save_model_file_path())
+    model = GRUFeedForward.load_from_saved_parameters_dict(parameters_dict)
+
+    player_game_sequences, samples = data_processor.get_player_prop_inference_data(
+        model_specs.get_feature_set(),
         target_player_id,
         target_player_team_id,
         target_player_opponent_team_id,
@@ -573,74 +463,24 @@ def predict(
         target_game_season_type,
         target_game_at_home,
         target_player_removed_core_teammate_player_ids,
-        target_player_added_core_teammate_player_ids
+        target_player_added_core_teammate_player_ids,
+        print_debug=True
     )
 
-    if architecture is Architecture.GRU:
-        player_game_sequences, samples = data_processor.get_player_prop_inference_sequence_input_data(
-            *inference_arguments,
-            print_debug=True
-        )
+    dataset = training_data_processing.build_inference_dataset(
+        player_game_sequences,
+        samples,
+        MAX_SEQUENCE_LENGTH,
+        parameters_dict[SEQUENCE_SCALER],
+        parameters_dict[STATIC_SCALER]
+    )
 
-        dataset = training_data_processing.process_sequence_labeled_input(
-            player_game_sequences,
-            samples,
-            MAX_SEQUENCE_LENGTH,
-            parameters_dict[SEQUENCE_SCALER],
-            parameters_dict[STATIC_SCALER]
-        )
-
-        predictions = trainer.predict(
-            model,
-            dataset,
-            collate_fn=training_data_processing.collate_sequence_batch
-        )
-
-    else:
-        input_labeled = data_processor.get_player_prop_inference_labeled_input_data(
-            *inference_arguments,
-            print_debug=True
-        )
-
-        input_processed = training_data_processing.process_labeled_input(
-            input_labeled,
-            True
-        )
-
-        input_scaler: StandardScaler = parameters_dict[INPUT_SCALER]
-        input_scaled = input_scaler.transform(input_processed)
-        input: torch.Tensor = training_data_processing.to_tensor(input_scaled)
-
-        model.eval()
-        with torch.no_grad():
-            predictions = model(input).cpu()
+    predictions = trainer.predict(
+        model,
+        dataset,
+        collate_fn=training_data_processing.collate_sequence_batch
+    )
 
     predicted_probabilities = torch.softmax(predictions, 1)
 
     return predicted_probabilities.tolist()[0]
-
-def calculate_odds_over_line(
-    predicted_probabilities: list[float],
-    over_under_line: float,
-    minimum_value: int = 0
-    ) -> float:
-    """
-    Calculates the probability given the probability distribution of a value to be higher than the
-    given over_under_line.
-
-    Args:
-        predicted_probabilities is a list of floats where the value at each index represents the predicted probabilty of
-        the value represented by that index of occuring. Each value is assumed to be ordered and in increments of exactly 1.
-
-        over_under_line is a threshold set that a given value has a chance of exceeding.
-
-        minimum_value is the value that the index at 0 of the predicted_probability represents.
-    """
-
-    above_line_threshold = math.ceil(over_under_line) - minimum_value
-
-    probability_exceeds_over_under: float = 0.0
-    for value in range(above_line_threshold, len(predicted_probabilities)):
-        probability_exceeds_over_under += predicted_probabilities[value]
-
-    return probability_exceeds_over_under

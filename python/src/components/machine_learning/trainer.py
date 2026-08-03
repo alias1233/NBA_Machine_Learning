@@ -55,7 +55,7 @@ class TrainingConfiguration():
     patience: int = 10
     """The number of evaluations without progress before training ends. Negative disables early stopping."""
 
-    min_delta: float = 0.001
+    min_delta: float = 0
     """The smallest drop in validation loss that counts as progress."""
 
     evaluation_interval: int = 1
@@ -262,13 +262,13 @@ def _format_epoch_line(
     ) -> str:
 
     parts = [
-        f"Epoch {result.epoch:>4}/{total_epochs}",
+        f"Epoch: {result.epoch}/{total_epochs}",
         f"{result.seconds:6.1f}s",
         f"{result.samples_per_second:,.0f} samples/s",
-        f"lr {result.learning_rate:.3e}",
-        f"train {result.training_loss:.4f}",
-        f"val {result.validation_loss:.4f}",
-        f"best {best_validation_loss:.4f}"
+        f"LR: {result.learning_rate:.3e}",
+        f"Train Loss: {result.training_loss:.4f}",
+        f"Val Loss: {result.validation_loss:.4f}",
+        f"Best Loss: {best_validation_loss:.4f}"
     ]
 
     if result.gradient_norm is not None:
@@ -336,7 +336,7 @@ def train(
     initial_validation_loss, _ = _evaluate(model, loss_function, validation_loader, device)
 
     if configuration.log_interval > 0:
-        print(f"Before training | train {initial_training_loss:.4f} | val {initial_validation_loss:.4f}")
+        print(f"Before training: | Train Loss {initial_training_loss:.4f} | Val Loss {initial_validation_loss:.4f}")
 
     epoch_results: list[EpochResult] = []
     stop_reason = "completed every epoch"
@@ -426,10 +426,10 @@ def train(
     final_training_loss, _ = _evaluate(model, loss_function, training_loader, device)
 
     if configuration.log_interval > 0:
-        print(f"Stopped at epoch {epoch_results[-1].epoch if epoch_results else 0} because it {stop_reason}.")
+        print(f"Stopped at epoch {epoch_results[-1].epoch if epoch_results else 0} because: {stop_reason}.")
         print(
             f"Best weights from epoch {early_stopper.best_epoch} | "
-            f"train {final_training_loss:.4f} | val {early_stopper.best_loss:.4f}"
+            f"Train Loss: {final_training_loss:.4f} | Val Loss: {early_stopper.best_loss:.4f}"
         )
 
     return TrainingRun(

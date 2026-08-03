@@ -12,7 +12,7 @@ HIDDEN_LAYERS = 'hidden_layers'
 class LayerParameters():
     num_nodes: int
     activation_function: nn.Module | None = None
-    batch_normalization: bool = False
+    layer_normalization: bool = False
     dropout_rate: float = 0
 
 def encode_layer_parameters(hidden_layers: list[LayerParameters]) -> list[dict[str, Any]]:
@@ -71,8 +71,8 @@ class FeedForward(SavableModule):
                     )
                     )
 
-            if layer_parameters.batch_normalization:
-                layers.append(nn.BatchNorm1d(layer_parameters.num_nodes))
+            if layer_parameters.layer_normalization:
+                layers.append(nn.LayerNorm(layer_parameters.num_nodes))
 
             if layer_parameters.activation_function is not None:
                 layers.append(layer_parameters.activation_function)

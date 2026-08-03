@@ -51,42 +51,71 @@ MEAN_FUNCTION: Callable[[Rolling | Expanding], pd.Series] = lambda x : x.mean()
 STD_FUNCTION: Callable[[Rolling | Expanding], pd.Series] = lambda x : x.std()
 
 def calculate_rolling_function_column(
-        dataframe: pd.DataFrame, 
-        rolling_param: RollingCategory
+        dataframe: pd.DataFrame,
+        rolling_param: RollingCategory,
+        group_by_column: str | None = None
         ) -> pd.Series:
+    """
+    Args:
+        group_by_column restarts the window for every group, so one call covers every group in the
+        frame. Without it the whole column is treated as one group.
+
+    The frame must be sorted so that each group's rows are in the order the window should read them,
+    and its row labels must be unique.
+    """
+
     calculated_from_column = dataframe[rolling_param.calculated_from_column_name]
+    groups = None if group_by_column is None else dataframe[group_by_column]
 
     if rolling_param.exclusive:
-        calculated_from_column = calculated_from_column.shift(1)
+        calculated_from_column = (
+            calculated_from_column.shift(1) if groups is None
+            else calculated_from_column.groupby(groups, sort=False).shift(1)
+        )
+
+    window = calculated_from_column if groups is None else calculated_from_column.groupby(groups, sort=False)
 
     if rolling_param.max_window_length is not None:
         rolling_column = rolling_param.rolling_function(
-        calculated_from_column.rolling(
-            window=rolling_param.max_window_length, 
-            min_periods=rolling_param.min_window_length
-            ))
-    
+            window.rolling(
+                window=rolling_param.max_window_length,
+                min_periods=rolling_param.min_window_length
+                ))
+
     else:
         rolling_column = rolling_param.rolling_function(
-            calculated_from_column.expanding(
+            window.expanding(
                 min_periods=rolling_param.min_window_length
             )
         )
-    
+
+    if groups is not None:
+        # A grouped window comes back keyed by group, so put the values back on the frame's own rows.
+        rolling_column = rolling_column.reset_index(level=0, drop=True).reindex(dataframe.index)
+
     if rolling_param.fill_na_value is not None:
         rolling_column = rolling_column.fillna(rolling_param.fill_na_value)
 
     return rolling_column
 
 def add_rolling_function_columns(
-        dataframe: pd.DataFrame, 
-        rolling_params: list[RollingCategory]
+        dataframe: pd.DataFrame,
+        rolling_params: list[RollingCategory],
+        group_by_column: str | None = None
         ) -> pd.DataFrame:
     """
-    Computes rolling functions on the given dataframe. 
+    Computes rolling functions on the given dataframe.
+
+    The columns are attached in one step, because inserting them one at a time fragments the frame
+    and gets slower as the frame widens. See calculate_rolling_function_column for group_by_column.
     """
 
-    for rolling_param in rolling_params:
-        dataframe[rolling_param.column_name] = calculate_rolling_function_column(dataframe, rolling_param)
+    if not rolling_params:
+        return dataframe
 
-    return dataframe
+    new_columns = {
+        rolling_param.column_name: calculate_rolling_function_column(dataframe, rolling_param, group_by_column)
+        for rolling_param in rolling_params
+    }
+
+    return pd.concat([dataframe, pd.DataFrame(new_columns, index=dataframe.index)], axis=1)
