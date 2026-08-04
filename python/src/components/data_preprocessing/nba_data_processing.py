@@ -44,6 +44,11 @@ MAX_REST = 7
 MAX_BREAK_DAYS = 90
 # NBA seasons run October to June, so a season is named for the calendar year it started in.
 SEASON_START_MONTH = 8
+def season_of(game_dates: pd.Series) -> pd.Series:
+    """The calendar year each game's season started in. The dates must be in datetime form."""
+
+    return game_dates.dt.year - (game_dates.dt.month < SEASON_START_MONTH)
+
 def add_break_columns(
     game_data: pd.DataFrame,
     game_date_column: str,
@@ -72,7 +77,7 @@ def add_break_columns(
     days_since_last_game = _column_or_grouped_column(game_data, game_date_column, group_by_column).diff().dt.days - 1
     days_since_last_game = days_since_last_game.fillna(max_break_days).clip(lower=0, upper=max_break_days)
 
-    season = game_dates.dt.year - (game_dates.dt.month < SEASON_START_MONTH)
+    season = season_of(game_dates)
     previous_season = season.shift(1) if groups is None else season.groupby(groups, sort=False).shift(1)
 
     game_data[REST] = days_since_last_game.clip(upper=max_rest)
@@ -352,150 +357,119 @@ def add_opponent_stat_columns(
     merged = team_game_data.merge(opponent_stats, on=game_id_column)
     return merged[merged[team_id_column] != merged[OPPONENT_PREFIX + team_id_column]]
 
-STATS_BASED_ON_ATTRIBUTE_SUFFIX = "_BY_"
-def get_all_stats_by_attribute_columns(
-    attribute_columns: list[str],
-    stat_columns: list[str]
-    ) -> list[str]:
-    return [
-        stat + STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute 
-        for stat in stat_columns 
-        for attribute in attribute_columns
-    ]   
-def add_total_player_stats_per_game_by_attribute(
+TEAM_GAME_NUMBER = "TEAM_GAME_NUMBER"
+def number_team_games(
     team_game_data: pd.DataFrame,
-    player_game_data: pd.DataFrame,
-    player_info: pd.DataFrame,
-    player_id_column_info: str,
-    player_id_column_player: str,
     game_id_column: str,
     team_id_column: str,
-    attribute_columns: list[str],
-    stat_columns: list[str]
+    game_date_column: str
     ) -> pd.DataFrame:
     """
-    Adds columns corresponding to the total stats of every player with the given attribute of each game to the team game dataframe.
+    Returns each team's games numbered from its first, so that "the game before this one" becomes a
+    subtraction and the comparisons built on it become joins.
 
-    The attribute column must be a hot encoded column in player_info,
-    where every value at each row index is 0 or 1 corresponding to whether the player has that attribute.
-
-    The attributes must be mutually exclusive, since each player is counted once under the single
-    attribute they hold. A player holding none of them is left out entirely. That lets every
-    attribute be totalled in one grouped pass instead of one filtered pass each.
+    The date column must be in datetime form. The frame need not be sorted.
     """
 
-    ATTRIBUTE = 'ATTRIBUTE'
-
-    hot_encoded_attributes = player_info[attribute_columns]
-    attribute_of_player = hot_encoded_attributes.idxmax(axis=1).where(hot_encoded_attributes.to_numpy().any(axis=1))
-    player_id_to_attribute = dict(zip(player_info[player_id_column_info], attribute_of_player))
-
-    stats_by_attribute = player_game_data[[game_id_column, team_id_column] + stat_columns].copy()
-    stats_by_attribute[ATTRIBUTE] = player_game_data[player_id_column_player].map(player_id_to_attribute)
-
-    totals = (
-        stats_by_attribute
-        .dropna(subset=[ATTRIBUTE])
-        .groupby(by=[game_id_column, team_id_column, ATTRIBUTE], sort=False)
-        [stat_columns]
-        .sum()
-        .unstack(ATTRIBUTE)
+    team_games = team_game_data[[game_id_column, team_id_column, game_date_column]].sort_values(
+        by=[team_id_column, game_date_column]
     )
+    team_games[TEAM_GAME_NUMBER] = team_games.groupby(by=team_id_column, sort=False).cumcount()
+    return team_games
 
-    totals.columns = [
-        stat + STATS_BASED_ON_ATTRIBUTE_SUFFIX + attribute
-        for stat, attribute in totals.columns
-    ]
-    merged_columns = get_all_stats_by_attribute_columns(attribute_columns, stat_columns)
-    totals = totals.fillna(0).reindex(columns=merged_columns, fill_value=0).reset_index()
-
-    team_game_data = team_game_data.merge(totals, on=[game_id_column, team_id_column], how='left')
-
-    # Only the merged columns are blank filled. A team with nobody holding an attribute really did
-    # get zero from it, but filling the whole frame would turn any other blank into a real zero.
-    team_game_data[merged_columns] = team_game_data[merged_columns].fillna(0)
-
-    return team_game_data
-
-OVER_BUCKET_BOUNDARY_PREFIX = "_OVER_"
-BETWEEN_BUCKET_BOUNDARY_PREFIX = "_BETWEEN_"
-BETWEEN_SPACE = "_"
-UNDER_BUCKET_BOUNDARY_PREFIX = "_UNDER_"
-def get_all_stats_by_bucket_columns(
-    bucket_column: str,
-    bucket_boundaries: list[float],
-    stat_columns: list[str]
-    ) -> list[str]:
-    temp_attribute_columns: list[str] = []
-    lower_bucket_boundary: float | None = None
-    for upper_bucket_boundary in bucket_boundaries:
-        temp_attribute_column: str = ""
-        if lower_bucket_boundary is None:
-            temp_attribute_column = bucket_column + UNDER_BUCKET_BOUNDARY_PREFIX + str(upper_bucket_boundary)
-
-        else:
-            temp_attribute_column = bucket_column + BETWEEN_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary) + BETWEEN_SPACE + str(upper_bucket_boundary)
-        
-        lower_bucket_boundary = upper_bucket_boundary
-        temp_attribute_columns.append(temp_attribute_column)
-
-    temp_attribute_column = bucket_column + OVER_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary)
-    temp_attribute_columns.append(temp_attribute_column)
-
-    return get_all_stats_by_attribute_columns(
-        temp_attribute_columns,
-        stat_columns
-    )
-
-def add_total_player_stats_per_game_by_bucket(
-    team_game_data: pd.DataFrame,
+TEAM_GAMES_MISSED = 'TEAM_GAMES_MISSED'
+RECENT_AVAILABILITY = 'RECENT_AVAILABILITY'
+ALL_AVAILABILITY_COLUMNS = [TEAM_GAMES_MISSED, RECENT_AVAILABILITY]
+AVAILABILITY_WINDOW = 10
+MAX_TEAM_GAMES_MISSED = 15
+def add_availability_columns(
     player_game_data: pd.DataFrame,
-    player_info: pd.DataFrame,
-    player_id_column_info: str,
-    player_id_column_player: str,
-    game_id_column: str,
-    team_id_column: str,
-    bucket_column: str,
-    bucket_boundaries: list[float],
-    stat_columns: list[str]
+    team_game_data: pd.DataFrame,
+    player_id_column: str,
+    game_id_column_player: str,
+    team_id_column_player: str,
+    game_id_column_team: str,
+    team_id_column_team: str,
+    game_date_column_team: str,
+    window: int = AVAILABILITY_WINDOW,
+    max_games_missed: int = MAX_TEAM_GAMES_MISSED
     ) -> pd.DataFrame:
+    """
+    Adds how much of their team's recent schedule the player has actually been available for.
 
-    temp_player_info = player_info.copy()
+    Rest and break length only see the gap in days, so a player in and out of the lineup with a
+    nagging injury reads as well rested. These count the team's games instead.
 
-    bucket = temp_player_info[bucket_column]
+    TEAM_GAMES_MISSED is how many games the team played since the player last appeared for them.
+    RECENT_AVAILABILITY is the share of its games the player played over their last window
+    appearances, so one means they have missed nothing and a half means they played every other
+    game. Both are unknown until the player has a history with the team, and an unknown reads as
+    fully available, which is what a player with no missed games looks like.
 
-    temp_attribute_columns: list[str] = []
-    lower_bucket_boundary: float | None = None
-    for upper_bucket_boundary in bucket_boundaries:
-        temp_attribute_column: str = ""
-        if lower_bucket_boundary is None:
-            temp_attribute_column = bucket_column + UNDER_BUCKET_BOUNDARY_PREFIX + str(upper_bucket_boundary)
-            temp_player_info[temp_attribute_column] = (bucket < upper_bucket_boundary).astype(int)
+    Neither frame needs to be sorted. team_game_data supplies the order of a team's games and needs
+    its date column in datetime form.
+    """
 
-        else:
-            temp_attribute_column = bucket_column + BETWEEN_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary) + BETWEEN_SPACE + str(upper_bucket_boundary)
-            temp_player_info[temp_attribute_column] = ((bucket < upper_bucket_boundary) & (bucket >= lower_bucket_boundary)).astype(int)
-        
-        lower_bucket_boundary = upper_bucket_boundary
-        temp_attribute_columns.append(temp_attribute_column)
+    numbered = number_team_games(
+        team_game_data, game_id_column_team, team_id_column_team, game_date_column_team
+    ).rename(columns={game_id_column_team: game_id_column_player, team_id_column_team: team_id_column_player})
 
-    temp_attribute_column = bucket_column + OVER_BUCKET_BOUNDARY_PREFIX + str(lower_bucket_boundary)
-    temp_player_info[temp_attribute_column] = (bucket >= lower_bucket_boundary).astype(int)
-    temp_attribute_columns.append(temp_attribute_column)
-
-    team_game_data = add_total_player_stats_per_game_by_attribute(
-        team_game_data,
-        player_game_data,
-        temp_player_info,
-        player_id_column_info,
-        player_id_column_player,
-        game_id_column,
-        team_id_column,
-        temp_attribute_columns,
-        stat_columns
+    appearances = player_game_data[[player_id_column, game_id_column_player, team_id_column_player]].merge(
+        numbered, on=[game_id_column_player, team_id_column_player], how='left'
     )
+    appearances.index = player_game_data.index
+    appearances = appearances.sort_values(by=[player_id_column, team_id_column_player, TEAM_GAME_NUMBER])
 
-    return team_game_data
+    spell = appearances.groupby(by=[player_id_column, team_id_column_player], sort=False)[TEAM_GAME_NUMBER]
+    game_number = appearances[TEAM_GAME_NUMBER]
+
+    missed = (game_number - spell.shift(1) - 1).fillna(0).clip(lower=0, upper=max_games_missed)
+    # Games the team played across the player's last window appearances. Equal to the window when
+    # they played every one of them, and larger by however many they sat out.
+    played_over = game_number - spell.shift(window)
+
+    player_game_data[TEAM_GAMES_MISSED] = missed.reindex(player_game_data.index)
+    player_game_data[RECENT_AVAILABILITY] = (
+        (window / played_over).clip(upper=1.0).fillna(1.0).reindex(player_game_data.index)
+    )
+    return player_game_data
+
+RECENT_GAME_COUNT_PREFIX = 'GAMES_IN_LAST_'
+RECENT_GAME_COUNT_DAYS = (7, 14)
+def get_recent_game_count_columns(day_counts: tuple[int, ...] = RECENT_GAME_COUNT_DAYS) -> list[str]:
+    return [f"{RECENT_GAME_COUNT_PREFIX}{days}_DAYS" for days in day_counts]
+def add_recent_game_count_columns(
+    game_data: pd.DataFrame,
+    game_date_column: str,
+    group_by_column: str,
+    day_counts: tuple[int, ...] = RECENT_GAME_COUNT_DAYS
+    ) -> pd.DataFrame:
+    """
+    Adds how many games came before each one within the given number of days, not counting itself.
+
+    Rest only measures the last gap. Three games in five nights and one game in five nights both
+    leave a day of rest behind them, and only one of them is a tired player.
+
+    The frame need not be sorted, but its row labels must be unique and the date column must be in
+    datetime form.
+    """
+
+    COUNTED = "COUNTED"
+
+    # Sorted here rather than demanded of the caller, because a time based window has to read a
+    # group in date order and the grouped result comes back in whatever order the groups were met.
+    ordered = game_data[[group_by_column, game_date_column]].sort_values(
+        by=[group_by_column, game_date_column]
+    )
+    ordered[COUNTED] = 1
+    grouped = ordered.groupby(by=group_by_column, sort=False)
+
+    columns = {}
+    for days, column_name in zip(day_counts, get_recent_game_count_columns(day_counts)):
+        within_days = grouped.rolling(f"{days}D", on=game_date_column)[COUNTED].count().to_numpy()
+        columns[column_name] = pd.Series(within_days - 1, index=ordered.index).reindex(game_data.index)
+
+    return pd.concat([game_data, pd.DataFrame(columns, index=game_data.index)], axis=1)
 
 GAINED_CORE_TEAMMATE_PREFIX = "GAINED_CORE_TEAMMATE_"
 LOST_CORE_TEAMMATE_PREFIX = "LOST_CORE_TEAMMATE_"
@@ -548,42 +522,37 @@ def add_core_teammate_columns(
     Neither frame needs to be sorted.
     """
 
-    GAME_NUMBER = "TEAM_GAME_NUMBER"
     FOUND = "FOUND_IN_OTHER_GAME"
 
-    team_games = team_game_data[[game_id_column_team, team_id_column_team, game_date_column_team]].rename(
-        columns={game_id_column_team: game_id_column_player, team_id_column_team: team_id_column_player}
-    )
-    team_games = team_games.sort_values(by=[team_id_column_player, game_date_column_team])
-    team_games[GAME_NUMBER] = team_games.groupby(by=team_id_column_player, sort=False).cumcount()
-    every_team_game = pd.MultiIndex.from_frame(team_games[[team_id_column_player, GAME_NUMBER]])
+    team_games = number_team_games(
+        team_game_data, game_id_column_team, team_id_column_team, game_date_column_team
+    ).rename(columns={game_id_column_team: game_id_column_player, team_id_column_team: team_id_column_player})
+    every_team_game = pd.MultiIndex.from_frame(team_games[[team_id_column_player, TEAM_GAME_NUMBER]])
 
-    # Numbering each team's games turns "the previous game" into a subtraction, which lets the
-    # comparisons below be joins rather than a pass over one roster at a time.
     roster_columns = [player_id_column, team_id_column_player, minutes_played_column, recent_minutes_column]
     roster_columns += [column for column in stat_columns if column not in roster_columns]
 
     roster = player_game_data[roster_columns].copy()
-    roster[GAME_NUMBER] = (
-        team_games.set_index([game_id_column_player, team_id_column_player])[GAME_NUMBER]
+    roster[TEAM_GAME_NUMBER] = (
+        team_games.set_index([game_id_column_player, team_id_column_player])[TEAM_GAME_NUMBER]
         .reindex(pd.MultiIndex.from_arrays([
             player_game_data[game_id_column_player],
             player_game_data[team_id_column_player]
         ]))
         .to_numpy()
     )
-    roster = roster.dropna(subset=[GAME_NUMBER])
-    roster[GAME_NUMBER] = roster[GAME_NUMBER].astype(np.int64)
+    roster = roster.dropna(subset=[TEAM_GAME_NUMBER])
+    roster[TEAM_GAME_NUMBER] = roster[TEAM_GAME_NUMBER].astype(np.int64)
 
-    keys = [team_id_column_player, player_id_column, GAME_NUMBER]
+    keys = [team_id_column_player, player_id_column, TEAM_GAME_NUMBER]
     core = roster[roster[minutes_played_column] >= CORE_PLAYER_MINUTES_CUTOFF]
-    team_key = pd.MultiIndex.from_arrays([roster[team_id_column_player], roster[GAME_NUMBER]])
+    team_key = pd.MultiIndex.from_arrays([roster[team_id_column_player], roster[TEAM_GAME_NUMBER]])
 
     def keyed_to_next_game(rows: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
         """The given rows, renumbered so they line up with the game that came after them."""
 
         rows = rows[keys + columns].copy()
-        rows[GAME_NUMBER] += 1
+        rows[TEAM_GAME_NUMBER] += 1
         return rows
 
     def missing_from(rows: pd.DataFrame, other_game: pd.DataFrame) -> pd.DataFrame:
@@ -592,7 +561,7 @@ def add_core_teammate_columns(
         return merged[merged[FOUND].isna()]
 
     def totals_per_game(rows: pd.DataFrame) -> pd.DataFrame:
-        return rows.groupby(by=[team_id_column_player, GAME_NUMBER], sort=False)[stat_columns].sum()
+        return rows.groupby(by=[team_id_column_player, TEAM_GAME_NUMBER], sort=False)[stat_columns].sum()
 
     gained = missing_from(core[keys + stat_columns], keyed_to_next_game(roster, []))
     lost = missing_from(keyed_to_next_game(core, stat_columns), roster)
@@ -738,6 +707,52 @@ def encode_win_loss_column_as_integer(
     game_data[win_loss_column] = _encode_equality_as_integer(game_data[win_loss_column], "W")
     return game_data
 
+SEASON_GAME_NUMBER = 'SEASON_GAME_NUMBER'
+DAYS_INTO_SEASON = 'DAYS_INTO_SEASON'
+TEAM_WIN_PERCENTAGE = 'TEAM_WIN_PERCENTAGE'
+ALL_SEASON_CONTEXT_COLUMNS = [SEASON_GAME_NUMBER, DAYS_INTO_SEASON, TEAM_WIN_PERCENTAGE]
+EVEN_RECORD = 0.5
+def add_season_standings_columns(
+    team_game_data: pd.DataFrame,
+    game_date_column: str,
+    team_id_column: str,
+    won_column: str,
+    regular_season_column: str
+    ) -> pd.DataFrame:
+    """
+    Adds how far into its season each team game sits and how the team's season is going.
+
+    SEASON_GAME_NUMBER and DAYS_INTO_SEASON place the game in the season, which is what tells a
+    model that a regular playing fewer minutes in April is the calendar rather than a decline.
+    TEAM_WIN_PERCENTAGE says how much the game is still worth to the team, which is what separates
+    a contender resting a star from an eliminated team handing minutes to its bench.
+
+    Only regular season games count towards the record, and a game never counts itself. A playoff
+    game therefore reads the record the team finished the regular season on, and a preseason game
+    reads an even one.
+
+    The given team_game_data must be sorted by game date, grouped by team id, with the date column
+    in datetime form and the won column already encoded as 1 for a win.
+    """
+
+    game_dates = team_game_data[game_date_column]
+    team_and_season = [team_game_data[team_id_column], season_of(game_dates)]
+    played = team_game_data[regular_season_column]
+    won = team_game_data[won_column] * played
+
+    def totalled_before(counted: pd.Series) -> pd.Series:
+        """Exclusive, so a game is never part of the record it is measured against."""
+
+        return counted.groupby(team_and_season, sort=False).cumsum() - counted
+
+    games_played = totalled_before(played)
+    team_game_data[SEASON_GAME_NUMBER] = games_played
+    team_game_data[TEAM_WIN_PERCENTAGE] = (totalled_before(won) / games_played).fillna(EVEN_RECORD)
+    team_game_data[DAYS_INTO_SEASON] = (
+        game_dates - game_dates.groupby(team_and_season, sort=False).transform('min')
+    ).dt.days
+    return team_game_data
+
 UNKNOWN_HEIGHT = 'UNKNOWN_HEIGHT'
 def convert_height_to_inches(
     player_info: pd.DataFrame,
@@ -775,47 +790,6 @@ def handle_unknown_weight(
 
     if fill_unknown_with_mean:
         player_info[weight_column] = player_info[weight_column].fillna(player_info[weight_column].mean())
-
-    return player_info
-
-### POSITION TYPES: A value of 1 represents True, and a value of 0 represents False. ###
-CENTER = 'Center'
-CENTER_FORWARD = 'Center-Forward'
-FORWARD = 'Forward'
-_FORWARD_CENTER = 'Forward-Center'
-_FORWARD_GUARD = 'Forward-Guard'
-GUARD = 'Guard'
-GUARD_FORWARD = 'Guard-Forward'
-UNKNOWN_POSITION = 'UNKNOWN_POSITION'
-ALL_POSITIONS = [
-    CENTER,
-    FORWARD,
-    GUARD,
-    GUARD_FORWARD,
-    CENTER_FORWARD
-]
-def add_encoded_position_columns(
-    player_info: pd.DataFrame,
-    position_column: str,
-    add_unknown_position_column: bool = False,
-    fill_unknown_with_position: str | None = None
-    ) -> pd.DataFrame:
-    position = player_info[position_column]
-
-    forward_center = _encode_equality_as_integer(position, _FORWARD_CENTER)
-    forward_guard = _encode_equality_as_integer(position, _FORWARD_GUARD)
-
-    player_info[GUARD] = _encode_equality_as_integer(position, GUARD)
-    player_info[GUARD_FORWARD] = _encode_equality_as_integer(position, GUARD_FORWARD) + forward_guard
-    player_info[FORWARD] = _encode_equality_as_integer(position, FORWARD)
-    player_info[CENTER_FORWARD] = _encode_equality_as_integer(position, CENTER_FORWARD) + forward_center
-    player_info[CENTER] = _encode_equality_as_integer(position, CENTER)
-
-    if fill_unknown_with_position is not None:
-        player_info[fill_unknown_with_position] += _encode_equality_as_integer(position, "")
-
-    if add_unknown_position_column:
-        player_info[UNKNOWN_POSITION] = _encode_equality_as_integer(position, "")
 
     return player_info
 

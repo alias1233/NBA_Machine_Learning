@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -25,21 +26,21 @@ SEQUENCE_SCALER = 'sequence_scaler'
 STATIC_SCALER = 'static_scaler'
 
 # Data
-# Note: Whenever data processing changes, the cached processed data not updated until
-# the data is reprocessed and saved while LOAD_SAVED_PROCESSED_TRAINING_DATA is false. 
+# A cached build is only reused when it was built from the columns the model asks for today, so a
+# feature set change rebuilds instead of silently training on the previous one.
 SAVE_PROCESSED_TRAINING_DATA = True
-LOAD_SAVED_PROCESSED_TRAINING_DATA = True
+LOAD_SAVED_PROCESSED_TRAINING_DATA = False
+
+CACHED_DATASETS = 'datasets'
+CACHED_COLUMNS = 'columns'
 
 RANDOM_SEED = 12156666
 
 CHUNK_STEP_SIZE = 1
-VALIDATION_START_DATE = datetime(2026, 1, 1)
-TEST_START_DATE = datetime(2026, 3, 1)
+VALIDATION_START_DATE = datetime(2025, 8, 1)
+TEST_START_DATE = datetime(2026, 6, 8) # TESTING WITH LARGER VALIDATION SET WITH NO DISJOINT TEST DATASET
 
 DEVICE = helpers.get_best_device()
-
-# How many of the most recent games the GRU reads per prediction, or None for a player's entire history.
-MAX_SEQUENCE_LENGTH: int | None = 50
 
 # Training
 LossFunctionFactory = Callable[[int], trainer.LossFunction]
@@ -71,7 +72,10 @@ class TrainingParameters():
     weight_decay: float = 0.01
     build_loss_function: LossFunctionFactory = cross_entropy_loss
 
-GRU_HIDDEN_DIM = 128
+# How many of the most recent games the GRU reads per prediction, or None for a player's entire history.
+MAX_SEQUENCE_LENGTH: int | None = 50
+
+GRU_HIDDEN_DIM = 64
 GRU_LAYERS = 1
 GRU_DROPOUT_RATE = 0.0
 
@@ -79,16 +83,16 @@ DEFAULT_TRAINING_PARAMETERS = TrainingParameters(
     configuration=trainer.TrainingConfiguration(
         epochs=20,
         batch_size=128,
-        patience=7,
+        patience=8,
         min_delta=0,
         max_gradient_norm=1.0,
         device=DEVICE
     ),
     hidden_layers=[
-        LayerParameters(256, nn.ReLU(), True, 0.20),
-        LayerParameters(128, nn.ReLU(), True, 0.15),
+        LayerParameters(256, nn.ReLU(), False, 0.20),
+        LayerParameters(128, nn.ReLU(), False, 0.15),
     ],
-    learning_rate=0.000015
+    learning_rate=0.00001
 )
 
 # Models
@@ -163,27 +167,37 @@ ALL_MODEL_SPECIFICATIONS = {
 
 def _build_datasets(
         model_specs: ModelSpecification,
+        features: data_processor.FeatureSet,
         print_debug: bool = False
         ) -> tuple[SequenceGameDataset, SequenceGameDataset, SequenceGameDataset, dict]:
     """
     Builds the three splits and the scalers fitted on the training one, reusing the last run's
-    build when it is being loaded and caching it when it is not.
+    build when it was made from the same columns and caching it when it was not.
 
     Returns:
         (training, validation, test, scaler name to fitted scaler)
     """
 
     file_path = model_specs.get_save_training_data_file_path()
+    columns = (features.sequence_columns, features.static_columns)
+    cached = None
 
-    if LOAD_SAVED_PROCESSED_TRAINING_DATA:
+    if LOAD_SAVED_PROCESSED_TRAINING_DATA and Path(file_path).exists():
         if print_debug:
             print("Loading in preprocessed data...")
 
-        cached = helpers.load_data_from_file(file_path)
+        saved = helpers.load_data_from_file(file_path)
 
-    else:
+        # A build saved before this check existed holds no column list, so it counts as a mismatch.
+        if isinstance(saved, dict) and saved.get(CACHED_COLUMNS) == columns:
+            cached = saved[CACHED_DATASETS]
+
+        elif print_debug:
+            print("The saved data was built from different columns, so it is being rebuilt...")
+
+    if cached is None:
         labeled_data = data_processor.get_all_player_props_labeled_data(
-            model_specs.get_feature_set(),
+            features,
             VALIDATION_START_DATE,
             TEST_START_DATE,
             CHUNK_STEP_SIZE,
@@ -202,7 +216,7 @@ def _build_datasets(
             if print_debug:
                 print("Saving preprocessed data...")
 
-            helpers.save_data_to_file(file_path, cached)
+            helpers.save_data_to_file(file_path, {CACHED_DATASETS: cached, CACHED_COLUMNS: columns})
 
     training_dataset, validation_dataset, test_dataset, sequence_scaler, static_scaler = cached
 
@@ -330,10 +344,16 @@ def train(
 
     parameters = model_specs.training_parameters
 
+    features = model_specs.get_feature_set()
     training_dataset, validation_dataset, test_dataset, scaler_parameters = _build_datasets(
         model_specs,
+        features,
         print_debug
     )
+
+    # TESTING WITH LARGER VALIDATION SET WITH NO DISJOINT TEST DATASET
+    test_dataset = validation_dataset
+    # END TEST
 
     model = GRUFeedForward(
         training_dataset.sequence_input_dim,
@@ -353,7 +373,7 @@ def train(
     loss_function = parameters.build_loss_function(model_specs.number_of_stat_classifications)
 
     model_description = training_report.describe_model(model)
-    feature_description = _describe_features(model_specs.get_feature_set())
+    feature_description = _describe_features(features)
     data_description = _describe_data(training_dataset, validation_dataset, test_dataset)
     label_description = training_data_processing.summarize_classification_outputs(
         training_dataset.outputs,
@@ -375,7 +395,7 @@ def train(
         .add("Training labels", label_description)
         .add("Hyperparameters", hyperparameters)
         .add_text("Architecture", str(model))
-        .add_text("Feature columns", _list_feature_columns(model_specs.get_feature_set()))
+        .add_text("Feature columns", _list_feature_columns(features))
     )
 
     if print_debug:
@@ -388,7 +408,7 @@ def train(
         print("")
 
     if print_all_debug:
-        print(_list_feature_columns(model_specs.get_feature_set()))
+        print(_list_feature_columns(features))
         print("")
 
     training_run = trainer.train(

@@ -1,6 +1,7 @@
 import pandas as pd
 from pandas.core.window.rolling import Rolling
 from pandas.core.window.expanding import Expanding
+from pandas.core.window.ewm import ExponentialMovingWindow
 from typing import Callable
 from dataclasses import dataclass
 
@@ -20,15 +21,25 @@ class RollingCategory():
     Name of the targeted column to calculate rolling functions on
     """
 
-    rolling_function: Callable[[Rolling | Expanding], pd.Series]
+    rolling_function: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series]
     """
     Function to apply to calculate the new column
     """
 
     max_window_length: int | None = None
     """
-    Max window length of the rolling calculations. 
+    Max window length of the rolling calculations.
     If None, then the rolling function will calculate based on every value in the entire column.
+    """
+
+    halflife: float | None = None
+    """
+    If set, the window is exponentially weighted instead of flat, with a value this many rows back
+    counting half as much as the newest one. max_window_length is ignored, because every earlier
+    value still counts for something.
+
+    A flat window treats the row before last exactly like the oldest row still inside it. A weighted
+    one reacts to a change straight away, which is what a recent form column is asked for.
     """
 
     min_window_length: int = 1
@@ -47,8 +58,8 @@ class RollingCategory():
     If None, then the NAN values will be left as NAN in the rolling column.
     """
 
-MEAN_FUNCTION: Callable[[Rolling | Expanding], pd.Series] = lambda x : x.mean()
-STD_FUNCTION: Callable[[Rolling | Expanding], pd.Series] = lambda x : x.std()
+MEAN_FUNCTION: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series] = lambda x : x.mean()
+STD_FUNCTION: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series] = lambda x : x.std()
 
 def calculate_rolling_function_column(
         dataframe: pd.DataFrame,
@@ -75,19 +86,22 @@ def calculate_rolling_function_column(
 
     window = calculated_from_column if groups is None else calculated_from_column.groupby(groups, sort=False)
 
-    if rolling_param.max_window_length is not None:
-        rolling_column = rolling_param.rolling_function(
-            window.rolling(
-                window=rolling_param.max_window_length,
-                min_periods=rolling_param.min_window_length
-                ))
+    if rolling_param.halflife is not None:
+        window = window.ewm(
+            halflife=rolling_param.halflife,
+            min_periods=rolling_param.min_window_length
+        )
+
+    elif rolling_param.max_window_length is not None:
+        window = window.rolling(
+            window=rolling_param.max_window_length,
+            min_periods=rolling_param.min_window_length
+        )
 
     else:
-        rolling_column = rolling_param.rolling_function(
-            window.expanding(
-                min_periods=rolling_param.min_window_length
-            )
-        )
+        window = window.expanding(min_periods=rolling_param.min_window_length)
+
+    rolling_column = rolling_param.rolling_function(window)
 
     if groups is not None:
         # A grouped window comes back keyed by group, so put the values back on the frame's own rows.

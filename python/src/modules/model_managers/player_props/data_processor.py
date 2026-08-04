@@ -17,11 +17,13 @@ from src.components.data_preprocessing.training_data_processing import PlayerGam
 from src.components.data_preparation import nba_data_helpers
 
 # TODO: Implement another model architecture such as transformmers or VAEs
-# TODO: Add season time column, along with current team seed (?)
-# TODO: Potentially use weighted averages that skew towards recent games for rolling data
-# TODO: Potentially use per posession/minute stats instead of total?
 
 ROLLING_WINDOW = 15
+
+# How fast the weighted recent form columns forget, in games. One means the game before last counts
+# half as much as the last one. Swept over halflives from a half to ten and against flat windows of
+# one to twenty five games, and this was the best of them on all three stats.
+RECENT_FORM_HALFLIFE = 1
 
 # How much history a prediction reads out of the databases.
 HISTORICAL_WINDOW_LENGTH_YEARS = 5
@@ -34,6 +36,7 @@ CAREER_WINDOW = 200
 PAST_CAREER_MEAN_PREFIX = "PAST_CAREER_MEAN_"
 PAST_CAREER_STD_PREFIX = "PAST_CAREER_STD_"
 PAST_MEAN_PREFIX = "PAST_MEAN_"
+PAST_WEIGHTED_MEAN_PREFIX = "PAST_WEIGHTED_MEAN_"
 PAST_MEAN_ALLOWED_INFIX = "PAST_MEAN_ALLOWED_"
 
 PRE_UNUSED_PLAYER_CATEGORIES = [
@@ -51,15 +54,6 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
     player_info_manager.FROM_YEAR.category_name,
     player_info_manager.TO_YEAR.category_name,
     player_info_manager.BIRTHDATE.category_name
-]
-
-# The player attributes an opponent's allowed stats are broken down by.
-ATTRIBUTE_COLUMNS = nba_data_processing.ALL_POSITIONS
-HEIGHT_BOUNDARIES: list[float] = [
-    75, 78, 80, 82
-]
-WEIGHT_BOUNDARIES: list[float] = [
-    195, 215, 230, 245
 ]
 
 # INPUT OUTPUT STRUCTURE: #
@@ -86,15 +80,11 @@ class TargetStatColumns():
     career_stats: tuple[str, ...] = ()
     """Player stats to carry a long window mean and standard deviation of."""
 
-    opponent_allowed_player_stats: tuple[str, ...] = ()
+    player_recent_mean_stats: tuple[str, ...] = ()
     """
-    Player stats to measure against the player's own recent average. Those differences are totalled
-    per team and game by position, height, and weight, then averaged over the opponent's last games.
-    That says how much an opponent lets players built like this one beat their own average.
+    Player stats to carry a recent average of, on top of the box score every model already gets.
+    Only derived stats need listing here, since a raw box score column is always covered.
     """
-
-    team_stats: tuple[str, ...] = ()
-    """Team stats to carry a recent average of, read back as the opponent's recent average."""
 
     opponent_allowed_team_stats: tuple[str, ...] = ()
     """Team stats to measure against the team's own recent average, then average per opponent."""
@@ -115,8 +105,7 @@ class TargetStat(Enum):
             player_game_data_manager.FREE_THROWS_MADE.category_name + nba_data_processing.PLAYER_SUFFIX,
         ),
         career_stats=(nba_data_processing.POINTS,),
-        opponent_allowed_player_stats=(nba_data_processing.POINTS,),
-        team_stats=(team_game_data_manager.BLOCKS.category_name,),
+        player_recent_mean_stats=(nba_data_processing.POINTS,),
         opponent_allowed_team_stats=(
             nba_data_processing.POINTS,
             team_game_data_manager.TURNOVERS.category_name,
@@ -144,10 +133,7 @@ class TargetStat(Enum):
             player_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
             player_game_data_manager.DEFENSIVE_REBOUNDS.category_name,
         ),
-        opponent_allowed_player_stats=(
-            player_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
-            player_game_data_manager.DEFENSIVE_REBOUNDS.category_name,
-        ),
+        player_recent_mean_stats=(nba_data_processing.REBOUNDS,),
         opponent_allowed_team_stats=(
             team_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
             team_game_data_manager.DEFENSIVE_REBOUNDS.category_name,
@@ -169,8 +155,6 @@ class TargetStat(Enum):
             player_game_data_manager.THREE_POINTERS_MADE.category_name + nba_data_processing.TEAM_SUFFIX,
         ),
         career_stats=(player_game_data_manager.ASSISTS.category_name,),
-        opponent_allowed_player_stats=(player_game_data_manager.ASSISTS.category_name,),
-        team_stats=(team_game_data_manager.STEALS.category_name,),
         opponent_allowed_team_stats=(
             team_game_data_manager.ASSISTS.category_name,
             team_game_data_manager.TURNOVERS.category_name,
@@ -193,7 +177,12 @@ SEQUENCE_STATS_ALWAYS = [
     nba_data_processing.CHANGED_TEAM,
     nba_data_processing.POSSESSIONS,
     team_game_data_manager.MINUTES_PLAYED.category_name + nba_data_processing.TEAM_SUFFIX
-] + nba_data_processing.ALL_SEASON_TYPES
+] + (
+    nba_data_processing.ALL_SEASON_TYPES
+    + nba_data_processing.ALL_SEASON_CONTEXT_COLUMNS
+    + nba_data_processing.ALL_AVAILABILITY_COLUMNS
+    + nba_data_processing.get_recent_game_count_columns()
+)
 
 # A career debut is left out here, because a game only becomes a sample once MINIMUM_PAST_GAMES sit
 # behind it, so the game being predicted is never anyone's first.
@@ -202,23 +191,36 @@ STATIC_STATS_ALWAYS = [
     nba_data_processing.HOME_OR_AWAY, nba_data_processing.REST, nba_data_processing.BREAK_LENGTH,
     nba_data_processing.SEASON_OPENER,
     nba_data_processing.CHANGED_TEAM,
-    nba_data_processing.DAYS_BEFORE_LAST_GAME,
     nba_data_processing.GAMES_PLAYED
-] + nba_data_processing.ALL_SEASON_TYPES
+] + (
+    nba_data_processing.ALL_SEASON_TYPES
+    + nba_data_processing.ALL_SEASON_CONTEXT_COLUMNS
+    + nba_data_processing.ALL_AVAILABILITY_COLUMNS
+    + nba_data_processing.get_recent_game_count_columns()
+)
 
-TEAM_STATS_ALWAYS = [
-    nba_data_processing.POSSESSIONS
-]
 OPPONENT_ALLOWED_TEAM_STATS_ALWAYS = [
     team_game_data_manager.PERSONAL_FOULS.category_name
 ]
 CAREER_STATS_ALWAYS: list[str] = []
-OPPONENT_ALLOWED_PLAYER_STATS_ALWAYS: list[str] = []
 
-# Minutes decide most of what a player produces, and they are what a layoff or a missing teammate
-# moves first, so every model carries a recent average of them.
+# The whole box score, averaged over the player's recent games. This is also what the core teammate
+# columns total, so a stat here says what the player brings and what the players around them bring.
 PLAYER_RECENT_MEAN_STATS_ALWAYS = [
-    player_game_data_manager.MINUTES_PLAYED.category_name
+    player_game_data_manager.MINUTES_PLAYED.category_name,
+    player_game_data_manager.FIELD_GOALS_ATTEMPTED.category_name,
+    player_game_data_manager.FIELD_GOALS_MADE.category_name,
+    player_game_data_manager.THREE_POINTERS_ATTEMPTED.category_name,
+    player_game_data_manager.THREE_POINTERS_MADE.category_name,
+    player_game_data_manager.FREE_THROWS_ATTEMPTED.category_name,
+    player_game_data_manager.FREE_THROWS_MADE.category_name,
+    player_game_data_manager.OFFENSIVE_REBOUNDS.category_name,
+    player_game_data_manager.DEFENSIVE_REBOUNDS.category_name,
+    player_game_data_manager.ASSISTS.category_name,
+    player_game_data_manager.TURNOVERS.category_name,
+    player_game_data_manager.STEALS.category_name,
+    player_game_data_manager.BLOCKS.category_name,
+    player_game_data_manager.PERSONAL_FOULS.category_name
 ]
 
 @dataclass(frozen=True)
@@ -234,9 +236,6 @@ class FeatureSet():
     """Summed together to form the value being predicted."""
 
     player_rolling_categories: list[RollingCategory]
-    player_difference_columns: list[tuple[str, str]]
-    player_stats_over_mean_columns: list[str]
-    """How far a player beat their own recent average, totalled per team by player attribute."""
 
     core_teammate_stat_columns: list[str]
     """Recent player averages to total over the core teammates a team gained, lost and is missing."""
@@ -282,11 +281,10 @@ def build_feature_set(target_stats: Iterable[TargetStat]) -> FeatureSet:
         return sorted(set(always).union(*selected))
 
     career_stats = gather(CAREER_STATS_ALWAYS, [spec.career_stats for spec in specifications])
-    opponent_allowed_player_stats = gather(
-        OPPONENT_ALLOWED_PLAYER_STATS_ALWAYS,
-        [spec.opponent_allowed_player_stats for spec in specifications]
+    player_recent_mean_stats = gather(
+        PLAYER_RECENT_MEAN_STATS_ALWAYS,
+        [spec.player_recent_mean_stats for spec in specifications]
     )
-    team_stats = gather(TEAM_STATS_ALWAYS, [spec.team_stats for spec in specifications])
     opponent_allowed_team_stats = gather(
         OPPONENT_ALLOWED_TEAM_STATS_ALWAYS,
         [spec.opponent_allowed_team_stats for spec in specifications]
@@ -305,54 +303,36 @@ def build_feature_set(target_stats: Iterable[TargetStat]) -> FeatureSet:
         RollingCategory(PAST_CAREER_STD_PREFIX + stat, stat, rolling_category.STD_FUNCTION, CAREER_WINDOW)
         for stat in career_stats
     ]
-    # The opponent adjustment needs a recent mean of every stat it covers, so those are folded in
-    # here rather than built a second time.
-    player_recent_mean_stats = sorted(set(PLAYER_RECENT_MEAN_STATS_ALWAYS).union(opponent_allowed_player_stats))
-
     player_mean_categories = rolling_means(player_recent_mean_stats, ROLLING_WINDOW)
-    team_mean_categories = rolling_means(team_stats, ROLLING_WINDOW)
     team_allowed_mean_categories = rolling_means(opponent_allowed_team_stats, ROLLING_WINDOW)
 
-    player_difference_columns = [(stat, PAST_MEAN_PREFIX + stat) for stat in opponent_allowed_player_stats]
-    team_difference_columns = [(stat, PAST_MEAN_PREFIX + stat) for stat in opponent_allowed_team_stats]
+    # The same stats again, weighted towards the newest games. The flat window above is slow to
+    # notice a player's role changing, and both readings together beat either one alone.
+    player_weighted_mean_categories = [
+        RollingCategory(
+            PAST_WEIGHTED_MEAN_PREFIX + stat,
+            stat,
+            rolling_category.MEAN_FUNCTION,
+            halflife=RECENT_FORM_HALFLIFE
+        )
+        for stat in player_recent_mean_stats
+    ]
 
-    player_stats_over_mean_columns = nba_data_processing.get_all_differences_columns(player_difference_columns)
+    team_difference_columns = [(stat, PAST_MEAN_PREFIX + stat) for stat in opponent_allowed_team_stats]
     team_stats_over_mean_columns = nba_data_processing.get_all_differences_columns(team_difference_columns)
 
-    stats_by_attribute_columns = (
-        nba_data_processing.get_all_stats_by_attribute_columns(
-            ATTRIBUTE_COLUMNS,
-            player_stats_over_mean_columns
-        )
-        + nba_data_processing.get_all_stats_by_bucket_columns(
-            player_info_manager.HEIGHT.category_name,
-            HEIGHT_BOUNDARIES,
-            player_stats_over_mean_columns
-        )
-        + nba_data_processing.get_all_stats_by_bucket_columns(
-            player_info_manager.WEIGHT.category_name,
-            WEIGHT_BOUNDARIES,
-            player_stats_over_mean_columns
-        )
-    )
-
-    def opponent_allowed_means(stats: list[str]) -> list[RollingCategory]:
-        return [
-            RollingCategory(
-                nba_data_processing.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat,
-                stat,
-                rolling_category.MEAN_FUNCTION,
-                ROLLING_WINDOW
-            ) for stat in stats
-        ]
-
-    opponent_allowed_team_categories = opponent_allowed_means(team_stats_over_mean_columns)
-    opponent_allowed_attribute_categories = opponent_allowed_means(stats_by_attribute_columns)
-
-    opponent_team_mean_columns = [
-        nba_data_processing.OPPONENT_PREFIX + category.column_name
-        for category in team_mean_categories
+    opponent_allowed_team_categories = [
+        RollingCategory(
+            nba_data_processing.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat,
+            stat,
+            rolling_category.MEAN_FUNCTION,
+            ROLLING_WINDOW
+        ) for stat in team_stats_over_mean_columns
     ]
+
+    # How the opposing team's own season is going, which is what tells a model whether the game
+    # still matters to them. Only their record is carried over, since both teams share the calendar.
+    opponent_record_column = nba_data_processing.OPPONENT_PREFIX + nba_data_processing.TEAM_WIN_PERCENTAGE
 
     # Who the team gained, lost and is missing around the player, measured in the same recent
     # averages the player's own form is measured in.
@@ -363,46 +343,39 @@ def build_feature_set(target_stats: Iterable[TargetStat]) -> FeatureSet:
         SEQUENCE_STATS_ALWAYS
         + [stat for spec in specifications for stat in spec.sequence_stats]
         + [category.column_name for category in opponent_allowed_team_categories]
-        + opponent_team_mean_columns
+        + [opponent_record_column]
         + core_teammate_columns
     ))
 
     # The player's own recent average of each targeted stat. Recent form is the strongest single
     # predictor here, and without this the model would have to rebuild it from the raw past games.
-    team_rolling_column_names = {
-        category.column_name
-        for category in team_mean_categories + team_allowed_mean_categories
-    }
+    team_rolling_column_names = {category.column_name for category in team_allowed_mean_categories}
     recent_form_columns = [
         _column_name_after_merge(category.column_name, team_rolling_column_names)
-        for category in player_mean_categories
+        for category in player_mean_categories + player_weighted_mean_categories
     ]
 
     static_columns = sorted(set(
         STATIC_STATS_ALWAYS
         + [category.column_name for category in career_categories]
-        + [
-            category.column_name
-            for category in opponent_allowed_team_categories + opponent_allowed_attribute_categories
-        ]
-        + opponent_team_mean_columns
+        + [category.column_name for category in opponent_allowed_team_categories]
+        + [opponent_record_column]
         + recent_form_columns
         + core_teammate_columns
     ))
 
     return FeatureSet(
         output_columns=sorted({spec.output_column for spec in specifications}),
-        player_rolling_categories=career_categories + player_mean_categories,
-        player_difference_columns=player_difference_columns,
-        player_stats_over_mean_columns=player_stats_over_mean_columns,
+        player_rolling_categories=career_categories + player_mean_categories + player_weighted_mean_categories,
         core_teammate_stat_columns=core_teammate_stat_columns,
-        team_rolling_categories=team_mean_categories + team_allowed_mean_categories,
+        team_rolling_categories=team_allowed_mean_categories,
         team_difference_columns=team_difference_columns,
-        opponent_rolling_categories=opponent_allowed_team_categories + opponent_allowed_attribute_categories,
-        opponent_columns_to_copy=(
-            [team_game_data_manager.TEAM_ID.category_name, nba_data_processing.POINTS]
-            + [category.column_name for category in team_mean_categories]
-        ),
+        opponent_rolling_categories=opponent_allowed_team_categories,
+        opponent_columns_to_copy=[
+            team_game_data_manager.TEAM_ID.category_name,
+            nba_data_processing.POINTS,
+            nba_data_processing.TEAM_WIN_PERCENTAGE
+        ],
         sequence_columns=sequence_columns,
         static_columns=static_columns
     )
@@ -470,11 +443,6 @@ def _preprocess_player_info(player_info: pd.DataFrame) -> pd.DataFrame:
         player_info_manager.HEIGHT.category_name,
         fill_unknown_with_mean=True
     )
-    player_info = nba_data_processing.add_encoded_position_columns(
-        player_info,
-        player_info_manager.POSITION.category_name,
-        fill_unknown_with_position=nba_data_processing.FORWARD
-        )
     player_info = nba_data_processing.encode_undrafted(
         player_info,
         player_info_manager.DRAFT_NUMBER.category_name
@@ -553,18 +521,19 @@ def _preprocess_player_game_data(
         player_game_data,
         player_game_data_manager.PLAYER_ID.category_name
     )
-    player_game_data = rolling_category.add_rolling_function_columns(
+    player_game_data = nba_data_processing.add_recent_game_count_columns(
+        player_game_data,
+        player_game_data_manager.GAME_DATE.category_name,
+        group_by_column=player_game_data_manager.PLAYER_ID.category_name
+    )
+    return rolling_category.add_rolling_function_columns(
         player_game_data,
         features.player_rolling_categories,
         group_by_column=player_game_data_manager.PLAYER_ID.category_name
     )
 
-    return nba_data_processing.add_differences_columns(player_game_data, features.player_difference_columns)
-
 def _preprocess_team_game_data(
     features: FeatureSet,
-    player_info: pd.DataFrame,
-    player_game_data: pd.DataFrame,
     team_game_data: pd.DataFrame
     ) -> pd.DataFrame:
     """
@@ -609,32 +578,13 @@ def _preprocess_team_game_data(
         team_game_data,
         team_game_data_manager.WIN_LOSS.category_name
     )
-
-    stats_by_attribute_arguments = (
-        player_game_data,
-        player_info,
-        player_info_manager.PLAYER_ID.category_name,
-        player_game_data_manager.PLAYER_ID.category_name,
-        team_game_data_manager.GAME_ID.category_name,
-        team_game_data_manager.TEAM_ID.category_name
-    )
-    team_game_data = nba_data_processing.add_total_player_stats_per_game_by_attribute(
+    team_game_data = nba_data_processing.add_season_standings_columns(
         team_game_data,
-        *stats_by_attribute_arguments,
-        ATTRIBUTE_COLUMNS,
-        features.player_stats_over_mean_columns
+        team_game_data_manager.GAME_DATE.category_name,
+        team_game_data_manager.TEAM_ID.category_name,
+        team_game_data_manager.WIN_LOSS.category_name,
+        nba_data_processing.REGULAR_SEASON
     )
-    for bucket_column, bucket_boundaries in (
-        (player_info_manager.HEIGHT.category_name, HEIGHT_BOUNDARIES),
-        (player_info_manager.WEIGHT.category_name, WEIGHT_BOUNDARIES)
-        ):
-        team_game_data = nba_data_processing.add_total_player_stats_per_game_by_bucket(
-            team_game_data,
-            *stats_by_attribute_arguments,
-            bucket_column,
-            bucket_boundaries,
-            features.player_stats_over_mean_columns
-        )
 
     team_game_data = rolling_category.add_rolling_function_columns(
         team_game_data,
@@ -731,7 +681,19 @@ def _preprocess_game_data(
     if print_debug:
         print("Feature engineering team game data...")
 
-    team_game_data = _preprocess_team_game_data(features, player_info, player_game_data, team_game_data.copy())
+    team_game_data = _preprocess_team_game_data(features, team_game_data.copy())
+
+    # These two read the team's game order, so they come after the team frame is built.
+    player_game_data = nba_data_processing.add_availability_columns(
+        player_game_data,
+        team_game_data,
+        player_game_data_manager.PLAYER_ID.category_name,
+        player_game_data_manager.GAME_ID.category_name,
+        player_game_data_manager.TEAM_ID.category_name,
+        team_game_data_manager.GAME_ID.category_name,
+        team_game_data_manager.TEAM_ID.category_name,
+        team_game_data_manager.GAME_DATE.category_name
+    )
 
     # Last, because it reads the player's finished rolling means and the team's game order.
     player_game_data = nba_data_processing.add_core_teammate_columns(
@@ -763,16 +725,6 @@ def _preprocess_game_data(
     player_team_game_data = player_team_game_data.sort_values(
         by=[player_game_data_manager.PLAYER_ID.category_name, team_game_data_manager.GAME_DATE.category_name]
         ).reset_index(drop=True)
-
-    # One pass over every game, rather than one pass per player and opponent pair.
-    player_team_game_data = nba_data_processing.add_days_between_games_columns(
-        player_team_game_data,
-        team_game_data_manager.GAME_DATE.category_name,
-        group_by_column=[
-            player_game_data_manager.PLAYER_ID.category_name,
-            nba_data_processing.OPPONENT_PREFIX + team_game_data_manager.TEAM_ID.category_name
-        ]
-    )
 
     # TODO: Potentially move this elsewhere so that resources are not wasted during inferencing by generating more data than needed
     player_team_game_data[OUTPUT] = player_team_game_data[features.output_columns].sum(axis=1)
@@ -993,9 +945,9 @@ def _get_inference_player_game_data(
 
     historical_window_start_date: datetime = target_game_date - relativedelta(years=HISTORICAL_WINDOW_LENGTH_YEARS)
 
-    # Every player is read, not just the ones still active in the window. The team totals by position
-    # and by height and weight count whoever played, so filtering here would leave a historical game
-    # with different totals than the ones the model was trained on.
+    # Every player is read, not just the ones still active in the window. A player missing from here
+    # is dropped from the game data entirely, which would leave the core teammate columns totalling
+    # a smaller roster than the one the model was trained on.
     player_info: pd.DataFrame = player_info_manager.get_all_players_info()
     player_info = player_info.dropna()
 
