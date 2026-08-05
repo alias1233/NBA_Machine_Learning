@@ -1,11 +1,5 @@
 __pycache__/
 .venv/
 
-# Training outputs
-trained_models/
-graphs/
-
-# Datasets
+# Databases, trained models, cached training builds, and graphs
 data/
-databases/
-training_data_preprocessed/

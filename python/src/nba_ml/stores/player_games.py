@@ -1,0 +1,131 @@
+"""One row per player per finished game, straight off the box score."""
+
+from datetime import date, datetime
+
+import pandas as pd
+
+from nba_ml import paths, season
+from nba_ml.database import Categories, Database, DataConflictHandler, DataType
+
+# Categories
+ALL_CATEGORIES = Categories()
+PLAYER_ID = ALL_CATEGORIES.add_category("PLAYER_ID", DataType.INTEGER)
+GAME_ID = ALL_CATEGORIES.add_category("GAME_ID", DataType.INTEGER)
+TEAM_ID = ALL_CATEGORIES.add_category("TEAM_ID", DataType.INTEGER)
+GAME_DATE = ALL_CATEGORIES.add_category("GAME_DATE", DataType.TEXT)
+MATCHUP = ALL_CATEGORIES.add_category("MATCHUP", DataType.TEXT)
+WIN_LOSS = ALL_CATEGORIES.add_category("WL", DataType.TEXT)
+MINUTES_PLAYED = ALL_CATEGORIES.add_category("MIN", DataType.INTEGER)
+FIELD_GOALS_MADE = ALL_CATEGORIES.add_category("FGM", DataType.INTEGER)
+FIELD_GOALS_ATTEMPTED = ALL_CATEGORIES.add_category("FGA", DataType.INTEGER)
+THREE_POINTERS_MADE = ALL_CATEGORIES.add_category("FG3M", DataType.INTEGER)
+THREE_POINTERS_ATTEMPTED = ALL_CATEGORIES.add_category("FG3A", DataType.INTEGER)
+FREE_THROWS_MADE = ALL_CATEGORIES.add_category("FTM", DataType.INTEGER)
+FREE_THROWS_ATTEMPTED = ALL_CATEGORIES.add_category("FTA", DataType.INTEGER)
+OFFENSIVE_REBOUNDS = ALL_CATEGORIES.add_category("OREB", DataType.INTEGER)
+DEFENSIVE_REBOUNDS = ALL_CATEGORIES.add_category("DREB", DataType.INTEGER)
+ASSISTS = ALL_CATEGORIES.add_category("AST", DataType.INTEGER)
+STEALS = ALL_CATEGORIES.add_category("STL", DataType.INTEGER)
+BLOCKS = ALL_CATEGORIES.add_category("BLK", DataType.INTEGER)
+TURNOVERS = ALL_CATEGORIES.add_category("TOV", DataType.INTEGER)
+PERSONAL_FOULS = ALL_CATEGORIES.add_category("PF", DataType.INTEGER)
+PLUS_MINUS = ALL_CATEGORIES.add_category("PLUS_MINUS", DataType.INTEGER)
+
+# Database
+FILEPATH = paths.database_file("player_game_data")
+NAME = "players"
+PRIMARY_KEYS = [
+    PLAYER_ID,
+    GAME_ID
+]
+DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
+
+DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
+
+# Writing
+def store(player_game_data: pd.DataFrame) -> int:
+    """Adds the given rows, replacing any game already held. Returns how many were written."""
+
+    with DATABASE:
+        return DATABASE.add_dataframe(player_game_data)
+
+# Query
+def get_all_player_game_data() -> pd.DataFrame:
+    with DATABASE:
+        data = DATABASE.query_dataframe()
+
+    return data
+
+def get_specific_player_game_data(
+        player_id: str,
+        date_start: datetime | None = None
+        ) -> pd.DataFrame:
+    SQL_condition = f"{PLAYER_ID.category_name} = :{PLAYER_ID.category_name}"
+    condition_params = {PLAYER_ID : player_id}
+
+    if date_start is not None:
+        SQL_condition += f" AND {GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
+        condition_params[GAME_DATE] = season.to_date_string(date_start)
+    with DATABASE:
+        data = DATABASE.query_dataframe(
+            SQL_condition=SQL_condition,
+            condition_params=condition_params
+        )
+
+    return data
+
+def get_game_data_after_date(date_start: datetime) -> pd.DataFrame:
+    SQL_condtition = f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
+    condition_params = {GAME_DATE : season.to_date_string(date_start)}
+
+    with DATABASE:
+        data = DATABASE.query_dataframe(
+            SQL_condition=SQL_condtition,
+            condition_params=condition_params
+        )
+
+    return data
+
+def latest_game_date() -> date | None:
+    """The newest game held, which is where an update run starts from. None when nothing is held."""
+
+    with DATABASE:
+        newest = DATABASE.max_value(GAME_DATE)
+
+    return None if newest is None else season.from_date_string(newest).date()
+
+def latest_team_id(player_id: int, before: date | None = None) -> int | None:
+    """
+    The team a player last played for, which is the team they are on unless they have just moved.
+    None when they have no recorded game.
+    """
+
+    SQL_condition = f"{PLAYER_ID.category_name} = :{PLAYER_ID.category_name}"
+    condition_params: dict = {PLAYER_ID : player_id}
+
+    if before is not None:
+        SQL_condition += f" AND {GAME_DATE.category_name} < :{GAME_DATE.category_name}"
+        condition_params[GAME_DATE] = season.to_date_string(before)
+
+    with DATABASE:
+        rows = DATABASE.query(
+            SQL_condition=SQL_condition,
+            condition_params=condition_params,
+            categories=[TEAM_ID],
+            limit=1,
+            order_by=f"{GAME_DATE.category_name} DESC"
+        )
+
+    return None if not rows else int(rows[0][0])
+
+def player_ids_since(date_start: date) -> list[int]:
+    """Who has played since the given date, which is who is worth refreshing information for."""
+
+    with DATABASE:
+        rows = DATABASE.query(
+            SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",
+            condition_params={GAME_DATE : season.to_date_string(date_start)},
+            categories=[PLAYER_ID]
+        )
+
+    return sorted({int(row[0]) for row in rows})
