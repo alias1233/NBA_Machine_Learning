@@ -3,14 +3,14 @@
 
 	This page does not list upcoming games. A game is only predictable by a particular family, and
 	sending a reader from here into one with a game attached would silently pick a family for them.
-	R11.6.
+	R11.8.
 
 	The families come from the layout, so the header menu and this page are built from one list.
 -->
 <script lang="ts">
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { familyPath } from '$lib/models';
+	import { familyAboutPath, familyPath } from '$lib/models';
 	import { pageTitle } from '$lib/site';
 
 	let { data } = $props();
@@ -37,10 +37,16 @@
 					     nested image area inside a block is a surface. R3.4. -->
 					<div class="graphic surface" aria-hidden="true"></div>
 
+					<!-- The two links R10.7 allows a block that is not itself one, and only the first is a
+					     filled accent button. -->
 					<div class="about">
 						<h2 class="type-h3">{family.title}</h2>
 						<p class="muted">{family.description}</p>
-						<a class="button" href={familyPath(family)}>Predict</a>
+
+						<div class="ways">
+							<a class="button" href={familyPath(family)}>Predict</a>
+							<a class="small" href={familyAboutPath(family)}>How this model works</a>
+						</div>
 					</div>
 				</div>
 			{/each}
@@ -74,10 +80,20 @@
 		gap: var(--space-3);
 	}
 
-	/* The button sits away from the description rather than under it, so the block reads as a card
-	   with one way out of it. */
-	.about .button {
+	/* The ways out sit away from the description rather than under it, so the block reads as a card
+	   with something to do at the bottom of it. */
+	.ways {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-4);
 		margin-top: var(--space-2);
+	}
+
+	.ways a:not(.button) {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
 	}
 
 	/* The graphic moves beside the words once the block is wide enough to hold both. */

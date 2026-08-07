@@ -20,14 +20,14 @@
 		line: number;
 		/** The outcomes to draw. Its caller owns it, because the handle travels across the same run. */
 		range: { first: number; last: number };
-		/** Stands in for the drawing when it cannot be seen. R10.21. */
+		/** Stands in for the drawing when it cannot be seen. R10.26. */
 		summary: string;
 	};
 
 	let { probabilities, minimumValue, stat, line, range, summary }: Props = $props();
 
 	// A one pixel gap needs a bar this wide to still read as a bar. Below it the bars run together
-	// into one silhouette, which is better than a comb of slivers. R10.16.
+	// into one silhouette, which is better than a comb of slivers. R10.21.
 	const GAP_ABOVE_WIDTH = 6;
 	// The whole draw finishes inside 400ms: --motion-slow plus the last bar's share of this. R7.4.
 	const STAGGER_TOTAL = 80;
@@ -95,7 +95,7 @@
 	</p>
 
 	<!-- One focusable element, not sixty. What it says is in the label and in the table below.
-	     R10.20. -->
+	     R10.25. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 	<div
 		class="bars"

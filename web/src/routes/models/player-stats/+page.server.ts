@@ -9,7 +9,7 @@
  * and no precedence to keep straight.
  *
  * Only published models are returned. A model that has no trained file is not offered at all, so a
- * reader is never shown a stat that cannot answer. R11.9.
+ * reader is never shown a stat that cannot answer. R11.13.
  */
 
 import { isHttpError } from '@sveltejs/kit';
@@ -23,15 +23,7 @@ import {
 	predictPlayerStat
 } from '$lib/server/api';
 
-import type {
-	Model,
-	Player,
-	Prediction,
-	Roster,
-	ScheduledGame,
-	SeasonType,
-	Team
-} from '$lib/types';
+import type { Model, Player, Prediction, ScheduledGame, SeasonType, Team } from '$lib/types';
 import type { PageServerLoad } from './$types';
 
 const FAMILY = 'player_stats';
@@ -141,17 +133,13 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const playerId = Number(parameters.get('player')) || null;
 
-	let rosters: Roster[] = [];
-	let player: Player | null = null;
-
-	if (selectedGame === null) {
-		player = playerId === null ? null : await getPlayer(playerId).catch(() => null);
-	} else {
-		rosters = await getRosters(selectedGame).catch(() => []);
-
-		// A player left over from another game is dropped rather than asked about in this one.
-		player = rosters.flatMap((roster) => roster.players).find(({ id }) => id === playerId) ?? null;
-	}
+	// A chosen player is never dropped for being off both rosters. Somebody who has just joined a
+	// team has no game on it yet and so appears on neither, and predicting exactly them is one of
+	// the things this site is for. R10.15.
+	const [rosters, player] = await Promise.all([
+		selectedGame === null ? [] : getRosters(selectedGame).catch(() => []),
+		playerId === null ? null : getPlayer(playerId).catch(() => null)
+	]);
 
 	const [out, joined] = await Promise.all([
 		namePlayers(readIds(parameters, 'out')),

@@ -1,13 +1,18 @@
 <!--
 	The shell every page sits in: the header, the page itself, and the footer.
 
+	The header is fixed and gets out of the way once the reader scrolls. Three things bring it back
+	and nothing else: the top of the page, a pointer in the top --header-reveal-zone, and focus
+	landing inside it. R10.3.
+
 	The landing screen is the one exception and section 11.1 spells it out. It drops the header's
-	background, rule and wordmark so only the tabs float over the collage, and it carries no footer,
-	because it is one screen with one message.
+	background and wordmark, stays in the flow because that screen does not scroll, and carries no
+	footer, because it is one screen with one message.
 -->
 <script lang="ts">
 	import '../app.css';
 
+	import { onMount } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -43,6 +48,36 @@
 		if (!menu.contains(event.relatedTarget as Node | null)) dismissed = false;
 	}
 
+	let scrollY = $state(0);
+	let headerHeight = $state(0);
+	let nearTop = $state(false);
+	let holdingFocus = $state(false);
+	let revealZone = $state(0);
+
+	// It hides only once the page has scrolled past its own height, so a small scroll never takes it
+	// away, and it returns at the very top rather than on the way back up. R10.3.
+	const hidden = $derived(!landing && (scrollY > headerHeight / 2) && !nearTop && !holdingFocus);
+
+	// A touch leaves its last position behind, which would hold the header open after a scroll that
+	// started at the top of the screen. Only a pointer that hovers can reveal.
+	function onPointerMove(event: PointerEvent) {
+		if (event.pointerType === 'touch') return;
+
+		const near = event.clientY <= revealZone;
+
+		if (near !== nearTop) nearTop = near;
+	}
+
+	function onHeaderFocusOut(event: FocusEvent & { currentTarget: HTMLElement }) {
+		holdingFocus = event.currentTarget.contains(event.relatedTarget as Node | null);
+	}
+
+	onMount(() => {
+		const zone = getComputedStyle(document.documentElement).getPropertyValue('--header-reveal-zone');
+
+		revealZone = parseFloat(zone);
+	});
+
 	// Pages cross-fade. A change within one page never does, because the reader did not ask to go
 	// anywhere. Where the browser has no view transitions the navigation is simply instant, and
 	// reduced motion opts out the same way rather than through a shorter animation. R7.5 and R7.6.
@@ -60,7 +95,16 @@
 	});
 </script>
 
-<header class:landing>
+<svelte:window bind:scrollY onpointermove={onPointerMove} />
+
+<header
+	class:landing
+	class:hidden
+	class:scrolled={scrollY > 0}
+	bind:clientHeight={headerHeight}
+	onfocusin={() => (holdingFocus = true)}
+	onfocusout={onHeaderFocusOut}
+>
 	<div class="page masthead">
 		<!-- The landing screen already prints the name at display size, so it drops the wordmark. -->
 		{#if !landing}
@@ -126,44 +170,73 @@
 {/if}
 
 <style>
+	/* The panel plane is what separates the header from the page, so it carries no rule. R10.1. */
 	header {
-		background: var(--page);
-		border-bottom: var(--rule);
+		position: fixed;
+		z-index: 30;
+		inset: 0 0 auto;
+		background: var(--header);
+		transition:
+			translate var(--motion) var(--ease-in),
+			box-shadow var(--motion-fast) var(--ease-in);
 	}
 
-	/* Nothing behind the tabs, so they read as floating over the collage. R10.4. */
+	/* A header returning over scrolled content with no shadow reads as a strip cut out of the page
+	   rather than as something above it. R10.3, R5.5. */
+	header.scrolled {
+		box-shadow: var(--shadow);
+	}
+
+	header.hidden {
+		translate: 0 -100%;
+		transition-timing-function: var(--ease-out);
+	}
+
+	/* Nothing behind the tabs, so they read as floating over the backdrop. That screen does not
+	   scroll, so the header stays in the flow and the backdrop takes what is left. R10.4. */
 	header.landing {
+		position: static;
 		background: none;
-		border-bottom: none;
+		box-shadow: none;
+		translate: none;
 	}
 
+	/* One row at every width. The page reserves exactly this height, so the wordmark gives up room
+	   rather than wrapping the header onto a second line. */
 	.masthead {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-3) var(--space-5);
+		gap: var(--space-4);
 		padding-block: var(--space-2);
 	}
 
 	.wordmark {
 		display: flex;
 		align-items: center;
+		min-width: 0;
 		min-height: var(--tap-target);
+		overflow: hidden;
 		color: var(--ink);
 		text-decoration: none;
+		white-space: nowrap;
 	}
 
 	/* Keeps the tabs on the right whether or not the wordmark is beside them. */
 	nav {
+		flex: none;
 		margin-left: auto;
 	}
 
 	.tabs {
 		display: flex;
-		gap: var(--space-5);
+		gap: var(--space-4);
 		padding: 0;
 		list-style: none;
+	}
+
+	.tabs > li {
+		flex: none;
 	}
 
 	.tabs > li > a {
@@ -243,17 +316,19 @@
 		}
 	}
 
+	/* A fixed header is out of flow, so the page reserves its height rather than shifting under it
+	   when it hides. R10.3. */
 	main {
 		display: flex;
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
-		padding-block: var(--space-5) var(--space-8);
+		padding-block: calc(var(--header-height) + var(--space-5)) var(--space-8);
 	}
 
-	/* The landing screen fills what is left of the viewport instead of ending in page space. */
+	/* The landing screen fills what is left of the viewport, inset from every edge. R11.2. */
 	main.landing {
-		padding-block: 0;
+		padding: var(--landing-inset);
 	}
 
 	footer {
@@ -281,16 +356,13 @@
 		min-height: var(--tap-target);
 	}
 
-	@media (min-width: 64rem) {
-		header {
-			position: sticky;
-			top: 0;
-			z-index: 30;
+	@media (min-width: 40rem) {
+		.masthead {
+			gap: var(--space-5);
 		}
 
-		/* The landing screen never scrolls, so nothing there needs to stick. */
-		header.landing {
-			position: static;
+		.tabs {
+			gap: var(--space-5);
 		}
 	}
 </style>

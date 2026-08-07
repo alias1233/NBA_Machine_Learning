@@ -1,7 +1,7 @@
 <!--
-	Covers 404 and everything else. A heading, one line, and a link home. See section 11.6.
+	Covers 404 and everything else. A heading, one line, and a link home. See section 11.7.
 
-	The reader is never shown a status code or the name of a service that failed. R11.20.
+	The reader is never shown a status code or the name of a service that failed. R11.25.
 -->
 <script lang="ts">
 	import { page } from '$app/state';

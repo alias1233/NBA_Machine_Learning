@@ -35,13 +35,14 @@
 
 	/* The five planes. A block is the opposite theme's paper, which is what gives a page its
 	   composition, so it carries an ink family of its own. */
-	--page: light-dark(#f8f5ee, #141311);
-	--panel: light-dark(#eae2d2, #26231c);
-	--block: light-dark(#22201c, #ede7d9);
-	--surface: light-dark(#fffdf9, #1a1815);
-	--surface-sunken: light-dark(#d9cfba, #312d25);
+	--page: light-dark(#f8f5ee, #171616);
+	--header: light-dark(#ffffff, #000000);
+	--panel: light-dark(#eae2d2, #282725);
+	--block: light-dark(#222120, #ede7d9);
+	--surface: light-dark(#fffdf9, #242321);
+	--surface-sunken: light-dark(#d9cfba, #32302c);
 
-	--ink: light-dark(#1c1a16, #f0ebdf);
+	--ink: light-dark(#1e1e1c, #f0ebdf);
 	--ink-muted: light-dark(#5c574b, #a69e8c);
 	--block-ink: light-dark(#f5f1e8, #1c1a16);
 	--block-muted: light-dark(#b0a896, #5c574b);
@@ -91,13 +92,17 @@
 	--control-padding-x: 0.75rem;
 	--tap-target: 44px;
 
+	/* Chrome. The header is fixed, so the page reserves exactly what it takes. R10.3. */
+	--header-height: calc(var(--tap-target) + var(--space-2) * 2);
+	--header-reveal-zone: 16px;
+
 	/* Shape */
 	--radius: 8px;
 	--radius-lg: 14px;
 	--radius-full: 999px;
 	--card-ratio: 1 / 1;
-	--card-transition-time: 0.2s;
-	--card-select-hover-size-scale: 1.03;
+	--card-max: 12rem;
+	--card-hover-scale: 1.03;
 
 	/* Elevation. Flat is the plane tint and nothing else. Raised adds --shadow, and only a thing
 	   that floats above the page is raised. */
@@ -115,17 +120,17 @@
 	--motion-slow: 320ms;
 	--motion-entry: 900ms;
 	--collage-stagger: 120ms;
-	--float-cycle: 9s;
 	--ease-in: cubic-bezier(0.2, 0, 0, 1);
 	--ease-out: cubic-bezier(0.4, 0, 1, 1);
-	--ease-float: cubic-bezier(0.45, 0, 0.55, 1);
 
 	/* The landing collage. The filter is what makes a set of unrelated pictures read as one piece of
 	   art rather than as a mood board, and it is the one place to dial that back. R8.6. */
-	--collage-opacity: light-dark(0.45, 0.5);
+	--collage-opacity: 0.7;
 	--collage-filter: saturate(0.8);
-	--collage-drift: 16px;
-	--float-distance: 10px;
+	--collage-gap: var(--space-3);
+
+	/* The landing backdrop is inset from every edge, so the page tone frames it. R11.2. */
+	--landing-inset: var(--space-4);
 
 	/* Layout */
 	--content-width: 64rem;
@@ -148,6 +153,8 @@
 html {
 	background: var(--page);
 	-webkit-text-size-adjust: 100%;
+	/* The header is fixed, so an anchor stops below it rather than under it. R10.3. */
+	scroll-padding-top: var(--header-height);
 }
 
 body {
@@ -341,7 +348,7 @@ a {
 
 /*
  * The two containers, and no others. Both are --radius-lg with --space-5 of padding, no border and
- * no shadow. The transparent top edge is what R10.7 and R10.8 colour in without moving anything.
+ * no shadow. The transparent top edge is what R10.8 and R10.9 colour in without moving anything.
  */
 .panel,
 .block {
@@ -365,8 +372,9 @@ a {
 	color: var(--block-muted);
 }
 
-.block a {
-	color: var(--accent-block);
+/* Style only links which are not buttons. */
+.block a:not(.button) {
+    color: var(--accent-block);
 }
 
 /* A nested data or image area inside a block. The page-side tokens apply again here. R3.4. */
@@ -382,7 +390,7 @@ a {
 }
 
 /* A whole container that leads somewhere is one link, and shows it as a top edge and nothing
-   else: no lift, no scale, no shadow, no background change. R10.7. */
+   else: no lift, no shadow, no background change. An upcoming game card also scales. R10.8. */
 a.panel,
 a.block {
 	display: block;
@@ -406,7 +414,7 @@ a.block:focus-visible {
 }
 
 /* A tag takes its colour from what it sits on, so one shape serves a block, an accent card and a
-   page. R10.4, R10.11, 10.8. */
+   page. Sections 10.4 and 10.8, R10.13. */
 .tag {
 	display: inline-flex;
 	align-items: center;
@@ -480,10 +488,11 @@ select:disabled {
 	cursor: not-allowed;
 }
 
-/* The loudest control on the site, once, on the landing screen. R11.2. */
+/* The loudest control on the site, once, on the landing screen. R11.5. */
 .button--lead {
 	padding-inline: var(--space-5);
 	font-size: var(--type-h3);
+	color: var(--ink);
 }
 
 /*
@@ -508,8 +517,12 @@ select:disabled {
 }
 
 @media (min-width: 40rem) {
+	:root {
+		--landing-inset: var(--space-6);
+	}
+
 	.sections {
-		gap: var(--space-8);
+		gap: var(--space-7);
 	}
 }
 
@@ -519,8 +532,8 @@ select:disabled {
 	}
 }
 
-/* Nothing draws, drifts, floats or scrolls smoothly. Colour and opacity still change, at
-   --motion-fast. Never disable a state change, only its animation. R7.10. */
+/* Nothing draws, opens or scrolls smoothly. Colour and opacity still change, at --motion-fast.
+   Never disable a state change, only its animation. R7.13. */
 @media (prefers-reduced-motion: reduce) {
 	html {
 		scroll-behavior: auto;
@@ -532,6 +545,7 @@ select:disabled {
 		animation-delay: 0ms !important;
 		animation-duration: 1ms !important;
 		animation-iteration-count: 1 !important;
+		transition-delay: 0ms !important;
 		transition-duration: var(--motion-fast) !important;
 	}
 }

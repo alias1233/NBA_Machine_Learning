@@ -1,13 +1,15 @@
 /**
- * Rolling a figure to its new value rather than snapping to it.
+ * Motion a script has to take part in, rather than hand to CSS.
  *
- * The duration mirrors `--motion` in `app.css`, which a tween cannot read. Reduced motion drops it
- * to nothing, which stops the animation without stopping the change itself.
+ * `MOTION` mirrors `--motion` in `app.css`, because neither a tween nor a two-phase reveal can read
+ * a duration out of a stylesheet. Reduced motion drops a roll to nothing, which stops the animation
+ * without stopping the change itself.
  */
 
 import { Tween, prefersReducedMotion } from 'svelte/motion';
 
-const MOTION = 200;
+/** `--motion`. The roll of R7.2 and the first phase of the answer column reveal in R10.27. */
+export const MOTION = 200;
 
 export const rolling = (value: () => number) =>
 	Tween.of(value, { duration: () => (prefersReducedMotion.current ? 0 : MOTION) });

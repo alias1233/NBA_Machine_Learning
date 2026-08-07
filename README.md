@@ -20,12 +20,11 @@ Working models:
 
 ## Future
 
-Have models accessible through a website where users can predict future statistics. The design is in
-`docs/ARCHITECTURE.md` and the ordered work list is in `docs/TODO.md`.
+Have models accessible through a website where users can predict future statistics.
 
 ## Layout
 
 ```
 python/ : the machine learning pipeline: collection, feature engineering, training, inference
-web/    : the website, SvelteKit. See web/README.md.
+web/    : the website, SvelteKit.
 ```

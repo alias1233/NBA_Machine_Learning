@@ -58,7 +58,7 @@ src/routes/models/             every family, then one folder per family
 src/routes/about/              how it works, the one page allowed to explain
 src/routes/privacy/            required before ads can run
 src/routes/api/                player search and rosters, the two things the browser fetches
-static/collage/                the landing images, each shipped one with a row in CREDITS.md
+static/collage/                the landing images, each shipped one with a row in credits.txt
 static/fonts/                  Instrument Serif, Inter Tight and JetBrains Mono, Latin only
 ```
 
@@ -111,7 +111,7 @@ filling it in shifts no layout.
 - The site name and the landing description, in `src/lib/site.ts`.
 - The collage tiles. One test picture is in place and the other five paint the duotone gradient.
   Filling one in is `image` on an entry in `src/lib/collage.ts` plus its row in
-  `static/collage/CREDITS.md`.
+  `static/collage/credits.txt`.
 - The family graphic and the favicon.
 - The accuracy table on About, which waits on the three untrained models.
 - The privacy wording. Ads stay off until it is real, and `ADS_ENABLED` in `src/lib/ads.ts` is the

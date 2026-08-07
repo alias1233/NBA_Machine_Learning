@@ -1,15 +1,17 @@
 <!--
 	One family's prediction page. See section 11.3.
 
-	Two columns from 64rem up: the upcoming games, the parameter panels and the button on the left,
-	and the answer on the right. Below 64rem the
-	same order runs down the page with the answer last.
+	It has two shapes. Before the first prediction it is one centred column of controls and nothing
+	else, because a reader who has not asked for anything should not be looking at an empty box. On
+	the first submit the answer column opens beside them, line first and then widening, and never
+	closes. R10.27 to R10.30.
 
 	The form is the reader's pending request and the URL is the answered one. Editing a field or
-	choosing a card changes the form, and only the button copies it into the URL, which is what runs a
-	prediction. That is why choosing a card never fires a request on its own. R10.10 and R11.10.
+	choosing a card changes the form, and only the button copies it into the URL, which is what runs
+	a prediction. That is why choosing a card never fires a request on its own. R10.14 and R10.18.
 -->
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -22,6 +24,8 @@
 	import PlayerSearch from '$lib/components/PlayerSearch.svelte';
 	import { longGameDay } from '$lib/games';
 	import { sentenceCase, statPhrase } from '$lib/models';
+	import { MOTION } from '$lib/motion';
+	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
 	import { pageTitle } from '$lib/site';
 
 	import type { Player, Roster, ScheduledGame } from '$lib/types';
@@ -29,6 +33,7 @@
 	let { data } = $props();
 
 	const TITLE = 'Player game statistics';
+	const ABOUT = '/models/player-stats/about';
 
 	const PHASES = [
 		['REGULAR_SEASON', 'Regular season'],
@@ -56,22 +61,15 @@
 	// svelte-ignore state_referenced_locally
 	let rosters = $state<Roster[]>(data.rosters);
 	let answerColumn = $state<HTMLElement>();
-	let predictButton = $state<HTMLElement>();
+	let submitButton = $state<HTMLElement>();
 
-	const scrollToPredictButton = (delayInMilli: number = 0): void => {
-		const func = (): void => {
-			predictButton?.scrollIntoView({
-				behavior: prefersReducedMotion.current ? 'auto' : 'smooth',
-				block: 'end'
-			})
-		}
-		if (delayInMilli <= 0) {
-			func();
-		}
-		else {
-			setTimeout(func, delayInMilli);
-		}
-	};
+	// A page loaded with a prediction already in its URL renders with the column open and no
+	// animation, because nothing happened there for the motion to mark. R10.28.
+	// svelte-ignore state_referenced_locally
+	const answered = data.prediction !== null || data.error !== null;
+
+	let opened = $state(answered);
+	let widened = $state(answered);
 
 	// Bookkeeping, not state: which game the roster list on the page belongs to.
 	// svelte-ignore state_referenced_locally
@@ -88,7 +86,7 @@
 	);
 
 	// A chosen game switches the picker to its two rosters. Nothing navigates, so the list is
-	// fetched rather than loaded. R10.5.
+	// fetched rather than loaded. R10.14.
 	$effect(() => {
 		const game = selectedGame;
 
@@ -109,7 +107,7 @@
 				if (!live) return;
 
 				rosters = loaded;
-				fitToRosters(loaded);
+				clearRoster();
 			})
 			.catch(() => {});
 
@@ -118,12 +116,11 @@
 		};
 	});
 
-	/** A player or a roster change left over from another game is dropped, not asked about in this one. */
-	function fitToRosters(loaded: Roster[]) {
-		const playing = loaded.flatMap((roster) => roster.players);
-
-		if (form.player && !playing.some(({ id }) => id === form.player?.id)) form.player = null;
-
+	/**
+	 * A teammate of the last game is not a teammate of this one, so changing the game drops both
+	 * roster controls. The chosen player stays, whichever team they turn out to be on. R10.14.
+	 */
+	function clearRoster() {
 		form.out = [];
 		form.joined = [];
 
@@ -131,7 +128,6 @@
 
 		url.searchParams.delete('out');
 		url.searchParams.delete('joined');
-		if (form.player === null) url.searchParams.delete('player');
 
 		if (url.search !== location.search) replaceState(url, page.state);
 	}
@@ -140,17 +136,24 @@
 		rosters.find((roster) => roster.players.some(({ id }) => id === form.player?.id)) ?? null
 	);
 
-	// Only a teammate can be missing from the game, so the Out list is that one team. R10.6.
-	const outOptions = $derived(
-		(playerTeam?.players ?? []).filter(
-			(candidate) =>
-				candidate.id !== form.player?.id && !form.out.some(({ id }) => id === candidate.id)
-		)
+	/**
+	 * Who can be sat out. Only a teammate can be missing from the game, so the list is that one team.
+	 * Where no roster names the chosen player their team is not known, so both sides are offered.
+	 * R10.5.
+	 */
+	const outGroups = $derived(
+		(playerTeam ? [playerTeam] : rosters).map((roster) => ({
+			team: roster.team,
+			players: roster.players.filter(
+				(candidate) =>
+					candidate.id !== form.player?.id && !form.out.some(({ id }) => id === candidate.id)
+			)
+		}))
 	);
 
 	const predicting = $derived(navigating.to?.route.id === '/models/player-stats');
 
-	/** Which parameter is still missing, in at most twelve words. Empty once none are. R11.10. */
+	/** Which parameter is still missing, in at most twelve words. Empty once none are. R11.14. */
 	const missing = $derived(
 		form.date === '' || form.awayTeam === '' || form.homeTeam === ''
 			? 'Pick a game first.'
@@ -173,9 +176,10 @@
 		};
 	}
 
-	const answered = $derived(describe(data.player, data.model, data.choice));
+	const reached = $derived(describe(data.player, data.model, data.choice));
 
-	// While one is being worked out the block names what was asked for, not the last answer.
+	// While one is being worked out the block names what was asked for, not the last answer. With
+	// the column open but the URL naming no answer, it says which parameter would bring one back.
 	const shown = $derived(
 		predicting
 			? describe(form.player, form.model, {
@@ -185,8 +189,8 @@
 					seasonType: form.seasonType
 				})
 			: data.prediction
-				? answered
-				: { stat: '', heading: 'Pick a game and a player.', subheading: '' }
+				? reached
+				: { stat: '', heading: missing, subheading: '' }
 	);
 
 	const customRoster = $derived(data.out.length > 0 || data.joined.length > 0);
@@ -196,7 +200,7 @@
 
 	const announcement = $derived(
 		data.prediction && data.player
-			? `${data.player.name}. Expected ${data.prediction.expected_value.toFixed(1)} ${answered.stat}.`
+			? `${data.player.name}. Expected ${data.prediction.expected_value.toFixed(1)} ${reached.stat}.`
 			: ''
 	);
 
@@ -215,8 +219,8 @@
 		return `?${query}`;
 	}
 
-	// The URL is rewritten in place, which runs no load, so the answer beside it keeps standing 
-	// until the button asks for a new one. R10.10.
+	// The URL is rewritten in place, which runs no load, so the answer beside it keeps standing
+	// until the button asks for a new one. R10.14.
 	function chooseGame(game: ScheduledGame) {
 		form.date = game.date;
 		form.awayTeam = game.away_team.abbreviation;
@@ -233,37 +237,47 @@
 
 		replaceState(url, page.state);
 
-		scrollToPredictButton();
+		scrollIntoViewIfOffScreen(submitButton, 'end');
 	}
 
-	function choosePlayer(player: Player | null) {
+	function choosePlayer(player: Player) {
 		form.player = player;
 		form.out = [];
 
-		scrollToPredictButton(50);
+		scrollIntoViewIfOffScreen(submitButton, 'end');
 	}
 
 	function addOut(event: Event & { currentTarget: HTMLSelectElement }) {
-		const chosen = outOptions.find(({ id }) => id === Number(event.currentTarget.value));
+		const chosen = outGroups
+			.flatMap((group) => group.players)
+			.find(({ id }) => id === Number(event.currentTarget.value));
 
 		if (chosen) form.out = [...form.out, chosen];
 
 		event.currentTarget.value = '';
 
-		scrollToPredictButton(50);
+		scrollIntoViewIfOffScreen(submitButton, 'end');
 	}
 
 	function addJoined(player: Player) {
 		if (!form.joined.some(({ id }) => id === player.id)) form.joined = [...form.joined, player];
 
-		scrollToPredictButton(50);
+		scrollIntoViewIfOffScreen(submitButton, 'end');
 	}
 
-	function onPredict({}) {
-		answerColumn?.scrollIntoView({
-			behavior: prefersReducedMotion.current ? 'auto' : 'smooth',
-			block: 'start'
-		})
+	/**
+	 * Opens the answer column, once, for a reader who pressed the button.
+	 *
+	 * The line grows first and then widens into the column, so the press gets an answer of its own
+	 * straight away rather than waiting on the service. R10.27.
+	 */
+	function openAnswerColumn() {
+		if (opened) return;
+
+		opened = true;
+
+		if (prefersReducedMotion.current) widened = true;
+		else setTimeout(() => (widened = true), MOTION);
 	}
 
 	/**
@@ -272,7 +286,7 @@
 	 * The fields name themselves, so the query is read off the form rather than restated here. A new
 	 * answer opens on its own line, so the last one's is not carried over.
 	 */
-	function onSubmit(event: SubmitEvent & { currentTarget: HTMLFormElement }) {
+	async function onSubmit(event: SubmitEvent & { currentTarget: HTMLFormElement }) {
 		event.preventDefault();
 
 		const query = new URLSearchParams();
@@ -281,7 +295,12 @@
 			if (value !== '') query.append(key, String(value));
 		}
 
+		openAnswerColumn();
 		goto(`?${query}`, { noScroll: true, keepFocus: true, invalidateAll: true });
+
+		// The column is created by the line above, so it has to exist before it can be scrolled to.
+		await tick();
+		scrollIntoViewIfOffScreen(answerColumn, 'start');
 	}
 
 	afterNavigate(({}) => {
@@ -299,20 +318,20 @@
 	/>
 </svelte:head>
 
-<div class="page page--wide sections">
-	<div class="work">
+<div class="page sections" class:page--wide={widened}>
+	<div class="work" class:centered={!widened}>
 		<h1 class="page-title">{TITLE}</h1>
 
 		{#if data.models.length === 0}
-			<!-- With nothing published there is nothing to offer, so the page is this and no more. R11.9. -->
+			<!-- With nothing published there is nothing to offer, so the page is this and no more. R11.13. -->
 			<Notice>No model is published right now.</Notice>
 		{:else}
-			<div class="columns">
+			<div class="columns sections">
 				<div class="controls sections">
 					<section class="games">
 						<div class="heading">
 							<h2>Upcoming games</h2>
-							<a class="small" href="/about#which-games">Why?</a>
+							<a class="small" href="{ABOUT}#which-games">Why?</a>
 						</div>
 
 						{#if data.games.length === 0}
@@ -368,42 +387,20 @@
 							</div>
 						</div>
 
-						<!-- A chosen game confines the list to its two teams. Without one the whole league
-						     is searched. The one field's label is the panel's label. R10.5. -->
+						<!-- One field whose label is the panel's, printed once. R11.16. A chosen game opens the
+						     list on its two rosters, and typing searches the whole league. R10.5. -->
 						<div class="panel">
-							{#if selectedGame}
-								<div class="field">
-									<label class="micro" for="player">Player</label>
-									<select
-										id="player"
-										name="player"
-										value={form.player?.id ?? ''}
-										onchange={(event) =>
-											choosePlayer(
-												rosters
-													.flatMap((roster) => roster.players)
-													.find(({ id }) => id === Number(event.currentTarget.value)) ?? null
-											)}
-									>
-										<option value="">Pick a player</option>
-										{#each rosters as roster (roster.team.abbreviation)}
-											<optgroup label={roster.team.name}>
-												{#each roster.players as option (option.id)}
-													<option value={option.id}>{option.name}</option>
-												{/each}
-											</optgroup>
-										{/each}
-									</select>
-								</div>
-							{:else}
+							{#key data.player?.id}
 								<PlayerSearch
 									id="player"
 									label="Player"
 									initial={form.player}
+									{rosters}
 									onchoose={choosePlayer}
 								/>
-								<input type="hidden" name="player" value={form.player?.id ?? ''} />
-							{/if}
+							{/key}
+
+							<input type="hidden" name="player" value={form.player?.id ?? ''} />
 						</div>
 
 						<div class="panel" role="group" aria-labelledby="prediction-group">
@@ -420,11 +417,11 @@
 						</div>
 
 						<!-- A roster change takes effect on the next prediction, with the rest of the form.
-						     Nothing here fires a request on its own. R10.14. -->
+						     Nothing here fires a request on its own. R10.18. -->
 						<div class="panel" role="group" aria-labelledby="roster-group">
 							<p class="micro muted" id="roster-group">Roster</p>
 
-							{#if playerTeam === null}
+							{#if form.player === null}
 								<p class="small muted">Pick a player first.</p>
 							{:else}
 								<div class="fields">
@@ -432,8 +429,12 @@
 										<label class="micro" for="out">Out</label>
 										<select id="out" onchange={addOut}>
 											<option value="">Add a player</option>
-											{#each outOptions as candidate (candidate.id)}
-												<option value={candidate.id}>{candidate.name}</option>
+											{#each outGroups as group (group.team.abbreviation)}
+												<optgroup label={group.team.name}>
+													{#each group.players as candidate (candidate.id)}
+														<option value={candidate.id}>{candidate.name}</option>
+													{/each}
+												</optgroup>
 											{/each}
 										</select>
 										<p class="small muted">Players on this team who will not play.</p>
@@ -468,8 +469,8 @@
 							{/if}
 						</div>
 
-						<div class="submit" bind:this={predictButton}>
-							<button class="button" type="submit" disabled={predicting || missing !== ''} onclick={onPredict}>
+						<div class="submit" bind:this={submitButton}>
+							<button class="button" type="submit" disabled={predicting || missing !== ''}>
 								{predicting ? 'Predicting' : 'Run prediction'}
 							</button>
 
@@ -480,23 +481,35 @@
 					</form>
 				</div>
 
-				<div class="answer" bind:this={answerColumn}>
-					{#if data.error && !predicting}
-						<Notice tone="error">{data.error}</Notice>
-					{:else}
-						{#key answerKey}
-							<AnswerBlock
-								prediction={data.prediction}
-								loading={predicting}
-								stat={shown.stat}
-								heading={shown.heading}
-								subheading={shown.subheading}
-								openOn={data.line}
-								{customRoster}
-							/>
-						{/key}
+				{#if opened}
+					<!-- The line that grows out of the column's future left edge, phase one of R10.27. -->
+					{#if !widened}
+						<div class="opening-line" aria-hidden="true"></div>
 					{/if}
-				</div>
+
+					<div class="answer" class:narrow={!widened} bind:this={answerColumn}>
+						<!-- One box for the skeleton, the answer and a failure alike, so the page never jumps
+						     once the column is open. R10.30 and R10.33. -->
+						<div class="answer-body">
+							{#if data.error && !predicting}
+								<Notice tone="error">{data.error}</Notice>
+							{:else}
+								{#key answerKey}
+									<AnswerBlock
+										prediction={data.prediction}
+										loading={predicting}
+										stat={shown.stat}
+										heading={shown.heading}
+										subheading={shown.subheading}
+										openOn={data.line}
+										aboutHref={ABOUT}
+										{customRoster}
+									/>
+								{/key}
+							{/if}
+						</div>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -507,17 +520,23 @@
 <p class="visually-hidden" aria-live="polite">{announcement}</p>
 
 <style>
+	/* The page takes its wide cap as the column widens, which is the second half of the reveal. */
+	.page {
+		transition: max-width var(--motion-slow) var(--ease-in);
+	}
+
 	.work {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-5);
 	}
 
-	.columns,
-	.controls {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-6);
+	.work.centered {
+		margin-inline: auto;
+	}
+
+	.work:not(.centered) {
+		margin-inline: auto;
 	}
 
 	.games,
@@ -539,7 +558,7 @@
 		min-height: var(--tap-target);
 	}
 
-	/* The panel's own label sits above the fields it groups. R11.13. */
+	/* The panel's own label sits above the fields it groups. R11.16. */
 	.panel {
 		display: flex;
 		flex-direction: column;
@@ -556,19 +575,16 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--space-2);
-		scroll-margin-bottom: var(--space-2);
+		scroll-margin-bottom: var(--space-5);
 	}
 
-	.answer {
-		scroll-margin-top: var(--space-7);
+	/* Below 64rem there is no column and no reveal. The answer arrives at the bottom of the one
+	   column and R7.7 scrolls the reader to it. R10.29. */
+	.opening-line {
+		display: none;
 	}
 
 	@media (min-width: 40rem) {
-		.columns,
-		.controls {
-			gap: var(--space-7);
-		}
-
 		.fields {
 			grid-template-columns: 1fr 1fr;
 		}
@@ -576,10 +592,54 @@
 
 	@media (min-width: 64rem) {
 		.columns {
-			display: grid;
-			grid-template-columns: minmax(0, 1fr) minmax(0, var(--answer-column));
-			align-items: start;
+			position: relative;
+			flex-direction: row;
+			align-items: flex-start;
 			gap: var(--space-6);
+		}
+
+		.controls {
+			flex: 1 1 auto;
+			min-width: 0;
+			max-width: 40rem;
+		}
+
+		/*
+		 * Phase two. The column takes its width and the page takes its wide cap together, which
+		 * pushes the controls left as the answer opens. It is clipped, so the skeleton is already
+		 * inside it on the way out rather than reflowing behind it. R10.27.
+		 */
+		.answer {
+			flex: 0 0 var(--answer-column);
+			min-width: 0;
+			overflow: clip;
+			transition: flex-basis var(--motion-slow) var(--ease-in);
+		}
+
+		.answer.narrow {
+			flex-basis: 0;
+		}
+
+		.answer-body {
+			width: var(--answer-column);
+			min-height: calc(var(--space-8) * 8);
+		}
+
+		/* Phase one, at the column's future left edge, which is the right edge of the row while the
+		   column has no width yet. */
+		.opening-line {
+			display: block;
+			position: absolute;
+			inset: 0 0 0 auto;
+			width: 2px;
+			background: var(--accent);
+			animation: line-grow var(--motion) var(--ease-in);
+		}
+	}
+
+	@keyframes line-grow {
+		from {
+			transform: scaleY(0);
 		}
 	}
 </style>

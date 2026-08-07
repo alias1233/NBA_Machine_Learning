@@ -98,8 +98,8 @@ export function chartRange(
 	return { first, last };
 }
 
-/** Only a whole number line can be landed on exactly, so a half number has no push to show. */
-export const hasPush = (line: number) => Number.isInteger(line);
+/** Only a whole number line can be landed on exactly, so a half number pushes with 0.0 percent. */
+const hasPush = (line: number) => Number.isInteger(line);
 
 /** The three odds written as percentages to one decimal. */
 export type OddsText = Record<keyof LineOdds, string>;

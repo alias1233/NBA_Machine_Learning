@@ -1,6 +1,6 @@
 <!--
 	A notice, in one of three tones. It is a panel, so it sits in the flow where the thing it is about
-	would have been. It never floats, never appears as a toast, and never dismisses itself. R10.24.
+	would have been. It never floats, never appears as a toast, and never dismisses itself. R10.32.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';

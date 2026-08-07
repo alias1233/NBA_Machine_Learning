@@ -2,7 +2,7 @@
 	The answer the page exists to produce. See section 10.8.
 
 	One box, three states. Empty, loading and answered all render the same scaffold at the same size,
-	so the page never jumps when a prediction lands. R10.22 and R10.23.
+	so the page never jumps when a prediction lands. R10.30 and R10.31.
 
 	It owns the chosen line, because the chart and the odds have to agree on it, and it writes that
 	line back into the address bar so a prediction is shareable at the line it is read on. The write
@@ -20,7 +20,6 @@
 		calculateOdds,
 		chartRange,
 		defaultLine,
-		hasPush,
 		mostLikelyOutcomes,
 		oddsPercentages,
 		outcomes
@@ -41,11 +40,14 @@
 		subheading: string;
 		/** The line the address bar already names, if it names one. */
 		openOn: number | null;
-		/** Whether this answer was asked for with a changed roster. R10.8. */
+		/** The family's own page, so a reader can get from the number to how it was reached. R11.11. */
+		aboutHref: string;
+		/** Whether this answer was asked for with a changed roster. R10.30. */
 		customRoster: boolean;
 	};
 
-	let { prediction, loading, stat, heading, subheading, openOn, customRoster }: Props = $props();
+	let { prediction, loading, stat, heading, subheading, openOn, aboutHref, customRoster }: Props =
+		$props();
 
 	const URL_SYNC_DELAY = 300;
 	const MOST_LIKELY = 5;
@@ -82,6 +84,8 @@
 		prediction ? chartRange(prediction.probabilities, prediction.minimum_value, line) : null
 	);
 
+	// The push sentence is always present, the same rule the readout follows. On a half number it
+	// reads 0.0 percent, because a half number cannot be landed on. R10.23.
 	const summary = $derived(
 		prediction
 			? [
@@ -89,10 +93,8 @@
 					`Most likely ${likeliest[0].value} ${stat}.`,
 					`Over ${line}, ${spoken.over} percent.`,
 					`Under ${line}, ${spoken.under} percent.`,
-					hasPush(line) ? `Push ${line}, ${spoken.push} percent.` : ''
-				]
-					.filter(Boolean)
-					.join(' ')
+					`Push ${line}, ${spoken.push} percent.`
+				].join(' ')
 			: ''
 	);
 
@@ -120,7 +122,7 @@
 	});
 </script>
 
-<!-- The one container carrying the accent top edge unhovered, because it is the answer. R10.8. -->
+<!-- The one container carrying the accent top edge unhovered, because it is the answer. R10.9. -->
 <section class="block answer">
 	<header>
 		<h2>{heading}</h2>
@@ -139,7 +141,7 @@
 	</div>
 
 	<!-- The chart, the line and the odds are one object on one surface, which is what puts data on
-	     neutral ground inside an inverted container. R3.4 and R10.17. -->
+	     neutral ground inside an inverted container. R3.4 and section 10.7. -->
 	<div class="surface reading">
 		{#if prediction && range && !loading}
 			<div class="plot">
@@ -153,7 +155,7 @@
 				/>
 				<LineControl bind:line {lowest} {highest} {range} />
 
-				<!-- Behind the drawing, available to anyone. R10.21. -->
+				<!-- Behind the drawing, available to anyone. R10.26. -->
 				<details>
 					<summary class="small link">All outcomes</summary>
 
@@ -217,10 +219,13 @@
 		{/if}
 	</div>
 
-	<!-- A changed answer must never look like the default one. R10.8. -->
+	<!-- A changed answer must never look like the default one. R10.30. -->
 	{#if customRoster && prediction && !loading}
 		<p><span class="tag micro">Custom roster</span></p>
 	{/if}
+
+	<!-- From the number to how it was reached, which is the second of the two links in R11.11. -->
+	<p class="small"><a href={aboutHref}>How this model works</a></p>
 </section>
 
 <style>

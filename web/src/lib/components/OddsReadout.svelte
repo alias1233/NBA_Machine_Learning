@@ -5,13 +5,13 @@
 	server for nothing. The words are always present and always in this order, because around one man
 	in twelve cannot separate the two hues. R3.8.
 
-	Push can only be landed on by a whole number line, so on a half number the box stays and its
-	contents go. A readout that resizes as the slider passes a whole number is the bug this prevents.
-	R10.18.
+	All three figures are shown at every line. Push reads 0.0 percent on a half number, because a
+	half number cannot be landed on. A figure that blinks in and out as the slider passes each whole
+	number is the bug that rule exists to prevent. R10.23.
 -->
 <script lang="ts">
 	import { rolling } from '$lib/motion';
-	import { hasPush, oddsPercentages } from '$lib/odds';
+	import { oddsPercentages } from '$lib/odds';
 
 	import type { LineOdds } from '$lib/odds';
 
@@ -42,7 +42,7 @@
 		<dd class="figure">{shown.under}%</dd>
 	</div>
 
-	<div class="push" class:landable={hasPush(line)}>
+	<div class="push">
 		<dt class="micro">Push</dt>
 		<dd class="figure">{shown.push}%</dd>
 	</div>
@@ -73,11 +73,6 @@
 
 	.push dd {
 		color: var(--chart-neutral);
-	}
-
-	/* The box is held at every line. Only what is in it comes and goes. */
-	.push:not(.landable) {
-		visibility: hidden;
 	}
 
 	/* Beside the chart from here, so the three stack at the top of the column instead of sitting

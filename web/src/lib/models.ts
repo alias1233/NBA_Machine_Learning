@@ -30,11 +30,14 @@ export const MODEL_FAMILIES: ModelFamily[] = [
 
 export const familyPath = (family: ModelFamily) => `/models/${family.slug}`;
 
+/** How that family predicts, and how well. Every figure about a family lives there. Section 11.4. */
+export const familyAboutPath = (family: ModelFamily) => `${familyPath(family)}/about`;
+
 /**
  * The families a reader can actually predict with.
  *
  * A family with no published model is not listed and carries no menu entry, because a reader has no
- * use for a model that does not exist. R11.8 and R11.9.
+ * use for a model that does not exist. R11.10 and R11.13.
  */
 export const publishedFamilies = (models: Model[]): ModelFamily[] =>
 	MODEL_FAMILIES.filter((family) =>

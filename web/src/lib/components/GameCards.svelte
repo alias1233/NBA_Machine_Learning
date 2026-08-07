@@ -4,7 +4,7 @@
 
 	Choosing a card changes parameters, it does not navigate. The reader stays exactly where they
 	were, and the URL is rewritten by replacing rather than pushing. The href is what the card falls
-	back to where scripting is off. R10.10.
+	back to where scripting is off. R10.14.
 -->
 <script lang="ts">
 	import { gameWhen } from '$lib/games';
@@ -61,27 +61,31 @@
 </ul>
 
 <style>
+	/* Small enough that the whole slate and the controls under it are one short scroll, and never
+	   wider than --card-max however much room the column has. R10.11. */
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, var(--card-max)));
 		gap: var(--space-4);
 		padding: 0;
 		list-style: none;
 	}
 
-	/* Square, so a card reads as an object rather than as a row. R10.4. */
+	/* Square, so a card reads as an object rather than as a row. Section 10.4. */
 	.card {
 		display: grid;
 		grid-template-rows: auto 1fr auto;
 		aspect-ratio: var(--card-ratio);
 		padding: var(--space-4);
 		text-align: center;
-		transition: transform var(--card-transition-time) ease-in-out;
-  		transform: scale(1);
+		transition: transform var(--motion) var(--ease-in);
 	}
 
-	.card:hover {
-		transform: scale(var(--card-select-hover-size-scale));
+	/* The one carve-out from R10.8, because a grid of squares needs a stronger signal than a
+	   hairline on one edge. R10.12. */
+	.card:hover,
+	.card:focus-visible {
+		transform: scale(var(--card-hover-scale));
 	}
 
 	.matchup {
@@ -109,12 +113,12 @@
 		color: var(--block-muted);
 	}
 
-	/* Colour is never the only marker, so the chosen card also carries a tag and aria-current.
-	   R10.11. */
+	/* Colour is never the only marker, so the chosen card also carries a tag and aria-current. It
+	   holds the hover scale, so choosing one reads as picking it up. R10.12 and R10.13. */
 	.chosen {
 		background: var(--accent);
 		color: var(--accent-on);
-		transform: scale(var(--card-select-hover-size-scale));
+		transform: scale(var(--card-hover-scale));
 	}
 
 	.chosen .muted,
@@ -123,9 +127,21 @@
 		color: var(--accent-on);
 	}
 
-	/* The accent edge of R10.7 would be invisible on an accent fill, so it inverts with the card. */
+	/* The accent edge of R10.8 would be invisible on an accent fill, so it inverts with the card. */
 	.chosen:hover,
 	.chosen:focus-visible {
 		border-top-color: var(--accent-on);
+	}
+
+	@media (min-width: 40rem) {
+		.cards {
+			grid-template-columns: repeat(3, minmax(0, var(--card-max)));
+		}
+	}
+
+	@media (min-width: 64rem) {
+		.cards {
+			grid-template-columns: repeat(4, minmax(0, var(--card-max)));
+		}
 	}
 </style>

@@ -96,7 +96,7 @@ check('the three shown odds are rounded to a hundred', oddsPercentages(calculate
 	push: '40.0'
 });
 
-check('a half line hides push and the pair still reads as a hundred', oddsPercentages(calculateOdds(probabilities, 2.5), 2.5), {
+check('a half line pushes at nothing and the pair still reads as a hundred', oddsPercentages(calculateOdds(probabilities, 2.5), 2.5), {
 	over: '35.0',
 	under: '65.0',
 	push: '0.0'

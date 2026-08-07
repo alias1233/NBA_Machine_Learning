@@ -1,14 +1,18 @@
 <!--
-	Finds a player by name and reports the one chosen.
+	Finds a player by name and reports the one chosen. See section 10.5.
+
+	Given rosters it opens on them, because with a game chosen that is who the reader almost always
+	wants. Typing searches the whole league instead, so a player who has just joined a team and is on
+	no roster yet is still reachable. R10.15.
 
 	The prediction service is not reachable from a browser, so the lookup goes through this site's own
 	/api/players route. What happens to a chosen player is the caller's business: the main picker
-	keeps the name in the box, and a picker taking several players empties it and adds a pill. R10.12.
+	keeps the name in the box, and a picker taking several players empties it and adds a pill.
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 
-	import type { Player } from '$lib/types';
+	import type { Player, Roster } from '$lib/types';
 
 	type Props = {
 		/** Unique on the page. It ties the field, its label and its listbox together. */
@@ -16,14 +20,14 @@
 		label: string;
 		/** Who the box names to begin with. */
 		initial?: Player | null;
+		/** Offered before anything is typed. Empty means the box opens only on a search. */
+		rosters?: Roster[];
 		/** Empties the box after a choice, which is what a picker taking several players wants. */
 		clearOnChoose?: boolean;
-		disabled?: boolean;
 		onchoose: (player: Player) => void;
 	};
 
-	let { id, label, initial = null, clearOnChoose = false, disabled = false, onchoose }: Props =
-		$props();
+	let { id, label, initial = null, rosters = [], clearOnChoose = false, onchoose }: Props = $props();
 
 	const TYPING_DELAY = 200;
 	const SHORTEST_SEARCH = 2;
@@ -39,13 +43,32 @@
 	let timer: ReturnType<typeof setTimeout>;
 	let inFlight: AbortController | undefined;
 
+	const searchable = $derived(text.trim().length >= SHORTEST_SEARCH);
+
+	/** What the listbox is showing, and the flat position of each entry for the arrow keys. */
+	const shown = $derived.by(() => {
+		const groups = searchable
+			? [{ label: '', players: results }]
+			: rosters.map((roster) => ({ label: roster.team.name, players: roster.players }));
+
+		let position = 0;
+
+		return groups.map((group) => ({
+			label: group.label,
+			entries: group.players.map((player) => ({ player, position: position++ }))
+		}));
+	});
+
+	const options = $derived(shown.flatMap((group) => group.entries.map(({ player }) => player)));
+
 	async function search(term: string) {
 		inFlight?.abort();
 
-		// The service refuses a search shorter than this, so there is nothing to ask for yet.
+		// The service refuses a search shorter than this, so the rosters are what is left to show.
 		if (term.trim().length < SHORTEST_SEARCH) {
-			open = false;
 			results = [];
+			active = -1;
+			open = rosters.length > 0;
 			return;
 		}
 
@@ -78,6 +101,7 @@
 	function choose(player: Player) {
 		text = clearOnChoose ? '' : player.name;
 		open = false;
+		active = -1;
 		results = [];
 		onchoose(player);
 	}
@@ -88,17 +112,22 @@
 			return;
 		}
 
-		if (!open || results.length === 0) return;
+		if (options.length === 0) return;
 
-		if (event.key === 'ArrowDown') {
+		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			event.preventDefault();
-			active = (active + 1) % results.length;
-		} else if (event.key === 'ArrowUp') {
+
+			// The first arrow on a closed box opens it rather than moving anything.
+			if (!open) {
+				open = true;
+				return;
+			}
+
+			const step = event.key === 'ArrowDown' ? 1 : -1;
+			active = (active + step + options.length) % options.length;
+		} else if (event.key === 'Enter' && open && active >= 0) {
 			event.preventDefault();
-			active = (active - 1 + results.length) % results.length;
-		} else if (event.key === 'Enter' && active >= 0) {
-			event.preventDefault();
-			choose(results[active]);
+			choose(options[active]);
 		}
 	}
 
@@ -122,30 +151,41 @@
 		autocomplete="off"
 		placeholder="Search players"
 		value={text}
-		{disabled}
 		oninput={onInput}
 		onkeydown={onKeydown}
+		onfocus={() => (open = options.length > 0)}
 		onblur={() => (open = false)}
 	/>
 
 	{#if open}
-		<ul class="panel" id="{id}-options" role="listbox" aria-label="Players">
-			{#if results.length === 0}
+		<ul
+			class="panel"
+			id="{id}-options"
+			role="listbox"
+			aria-label={searchable ? 'Players' : 'This game'}
+		>
+			{#if options.length === 0}
 				<li class="empty muted small">{searching ? 'Searching' : 'No player found.'}</li>
 			{:else}
-				{#each results as player, index (player.id)}
-					<!-- The input keeps focus and owns the keyboard, so the option only handles pointers. -->
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<li
-						id="{id}-option-{index}"
-						role="option"
-						aria-selected={index === active}
-						class:active={index === active}
-						onpointerdown={(event) => event.preventDefault()}
-						onclick={() => choose(player)}
-					>
-						{player.name}
-					</li>
+				{#each shown as group (group.label)}
+					{#if group.label}
+						<li class="group micro muted" role="presentation">{group.label}</li>
+					{/if}
+
+					{#each group.entries as entry (entry.player.id)}
+						<!-- The input keeps focus and owns the keyboard, so the option only handles pointers. -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<li
+							id="{id}-option-{entry.position}"
+							role="option"
+							aria-selected={entry.position === active}
+							class:active={entry.position === active}
+							onpointerdown={(event) => event.preventDefault()}
+							onclick={() => choose(entry.player)}
+						>
+							{entry.player.name}
+						</li>
+					{/each}
 				{/each}
 			{/if}
 		</ul>
@@ -158,7 +198,7 @@
 	}
 
 	/* Floats above the page, so it is the one other thing besides the models menu that is raised.
-	   R5.5 and R10.12. */
+	   R5.5 and R10.16. */
 	ul {
 		position: absolute;
 		z-index: 10;
@@ -182,8 +222,14 @@
 		cursor: pointer;
 	}
 
-	li.empty {
+	li.empty,
+	li.group {
 		cursor: default;
+	}
+
+	/* Names which side of the game a run of players is, so the two rosters read as two lists. */
+	li.group {
+		min-height: var(--space-6);
 	}
 
 	li[role='option']:hover,

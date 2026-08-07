@@ -1,12 +1,13 @@
 <!--
 	The line, as a handle on the chart's x axis and as a number beside it. See section 10.7.
 
-	The handle travels across the outcomes the chart draws, so it stays under the bars it is splitting.
-	The field accepts any outcome the model can answer with, and the chart widens to hold whatever it
-	is given, so nothing is out of reach.
+	The handle travels the drawn run plus three outcomes at each end. The moment the line goes past
+	the run, the chart widens to hold it and three more outcomes of headroom open up beyond that, so
+	the reader reaches every outcome the model has by dragging alone and the handle is always under
+	the bars it is splitting. R10.19 and R10.20.
 
-	Steps of a half. Arrow keys move one step and Page Up and Page Down move five, which a range input
-	does not do on its own.
+	Steps of a half. Arrow keys move one step and Page Up and Page Down move five, which a range
+	input does not do on its own.
 -->
 <script lang="ts">
 	type Props = {
@@ -14,7 +15,7 @@
 		/** The outcomes the model can answer with, which is what the field accepts. */
 		lowest: number;
 		highest: number;
-		/** The outcomes the chart draws, which is what the handle travels across. */
+		/** The outcomes the chart draws, which the handle travels with headroom past each end. */
 		range: { first: number; last: number };
 	};
 
@@ -22,6 +23,15 @@
 
 	const STEP = 0.5;
 	const PAGE_STEPS = 5;
+
+	// The headroom of R10.20. A handle that stops at the edge of the first drawing, and makes the
+	// reader type a number to go further, has broken that rule.
+	const HEADROOM = 3;
+
+	const travel = $derived({
+		first: Math.max(lowest, range.first - HEADROOM),
+		last: Math.min(highest, range.last + HEADROOM)
+	});
 
 	function onKeydown(event: KeyboardEvent) {
 		const direction = event.key === 'PageUp' ? 1 : event.key === 'PageDown' ? -1 : 0;
@@ -33,13 +43,16 @@
 </script>
 
 <div class="control">
+	<!-- The travel is written before the value, so a drag that widens the run is never clamped back
+	     by the bounds it just outgrew. -->
 	<input
 		type="range"
 		aria-labelledby="line-label"
-		min={range.first}
-		max={range.last}
+		min={travel.first}
+		max={travel.last}
 		step={STEP}
-		bind:value={line}
+		value={line}
+		oninput={(event) => (line = event.currentTarget.valueAsNumber)}
 		onkeydown={onKeydown}
 	/>
 

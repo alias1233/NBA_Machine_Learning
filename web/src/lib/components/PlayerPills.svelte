@@ -1,5 +1,5 @@
 <!--
-	The players a picker has been given, each as a removable pill. R10.13.
+	The players a picker has been given, each as a removable pill. R10.17.
 
 	The hidden inputs are what put the choice in the URL when the form is submitted, so a prediction
 	made with a changed roster is still a shareable link.
