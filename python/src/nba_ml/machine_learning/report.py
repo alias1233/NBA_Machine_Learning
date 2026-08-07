@@ -5,9 +5,7 @@ from pathlib import Path
 from typing import Any, Mapping, Self
 
 def count_parameters(model: nn.Module) -> tuple[int, int]:
-    """
-    Returns (total parameters, trainable parameters).
-    """
+    """Returns (total parameters, trainable parameters)."""
 
     total = sum(parameter.numel() for parameter in model.parameters())
     trainable = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
@@ -15,9 +13,7 @@ def count_parameters(model: nn.Module) -> tuple[int, int]:
     return (total, trainable)
 
 def describe_model(model: nn.Module) -> dict[str, Any]:
-    """
-    Summarizes a model's size, with a parameter count for each of its direct submodules.
-    """
+    """Summarizes a model's size, with a parameter count for each of its direct submodules."""
 
     total, trainable = count_parameters(model)
 
@@ -34,9 +30,7 @@ def describe_model(model: nn.Module) -> dict[str, Any]:
     return description
 
 def values_of(instance: Any) -> dict[str, Any]:
-    """
-    Flattens a dataclass into a name to value mapping so it can be reported field by field.
-    """
+    """Flattens a dataclass into a name to value mapping so it can be reported field by field."""
 
     if not is_dataclass(instance):
         raise TypeError(f"Expected a dataclass, got {type(instance).__name__}.")
@@ -44,9 +38,7 @@ def values_of(instance: Any) -> dict[str, Any]:
     return {field.name.replace('_', ' '): getattr(instance, field.name) for field in fields(instance)}
 
 def format_value(value: Any) -> str:
-    """
-    Renders one reported value as a short line of text.
-    """
+    """Renders one reported value as a short line of text."""
 
     if isinstance(value, bool):
         return str(value)
@@ -70,18 +62,14 @@ def format_value(value: Any) -> str:
     return str(value)
 
 def print_values(heading: str, values: Mapping[str, Any]):
-    """
-    Prints one reported section to the console in the same shape the report file uses.
-    """
+    """Prints one reported section to the console in the same shape the report file uses."""
 
     print(f"\n--- {heading} ---")
     for name, value in values.items():
         print(f"{name}: {format_value(value)}")
 
 class TrainingReport():
-    """
-    Collects labeled sections of a training run and writes them to a plain text file.
-    """
+    """Collects labeled sections of a training run and writes them to a plain text file."""
 
     def __init__(self, title: str):
         self.title = title
@@ -93,9 +81,7 @@ class TrainingReport():
         return self
 
     def add_text(self, heading: str, text: str) -> Self:
-        """
-        Adds a section that is already formatted, such as a model printed layer by layer.
-        """
+        """Adds a section that is already formatted, such as a model printed layer by layer."""
 
         self._sections.append((heading, text))
 
@@ -121,9 +107,8 @@ class TrainingReport():
 
         return "\n".join(lines) + "\n"
 
-    def write(self, file_path: str) -> str:
-        path = Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.render(), encoding="utf-8")
+    def write(self, file_path: Path) -> Path:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(self.render(), encoding="utf-8")
 
-        return str(path)
+        return file_path

@@ -19,7 +19,8 @@ class SeasonType(Enum):
     PLAYOFFS = "PLAYOFFS"
     PLAY_IN = "PLAY_IN"
 
-# A season is named after the year it starts in, and the next one starts in October.
+# A season is named after the year it starts in, and the next one starts in October. This is the
+# only place that boundary is decided. game_columns.season_of applies the same rule to a column.
 SEASON_START_MONTH = 10
 
 def season_of(day: date) -> int:
@@ -29,6 +30,29 @@ def season_of(day: date) -> int:
 
 def current_season() -> int:
     return season_of(datetime.now())
+
+# A game id such as "0022300001" writes its season phase in the third character. Ids are stored as
+# numbers, so the two leading zeros are gone and it is the first one. This is the only place that
+# mapping is decided, and both the feature columns and the schedule read it.
+GAME_ID_PREFIXES = {
+    SeasonType.PRESEASON: "1",
+    SeasonType.REGULAR_SEASON: "2",
+    SeasonType.PLAYOFFS: "4",
+    SeasonType.PLAY_IN: "5"
+}
+
+def season_type_of_game_id(game_id: int) -> SeasonType | None:
+    """
+    The phase a game id belongs to, or None for a phase this project does not model. The All-Star
+    game is the one of those that appears on a schedule, and it never appears in a box score.
+    """
+
+    prefix = str(game_id)[0]
+
+    return next(
+        (season_type for season_type, value in GAME_ID_PREFIXES.items() if value == prefix),
+        None
+    )
 
 DATE_FORMAT = "%Y-%m-%d"
 

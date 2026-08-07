@@ -7,56 +7,37 @@ from dataclasses import dataclass
 
 @dataclass
 class RollingCategory():
-    """
-    Defines a rolling category which calculates rolling functions on another column.
-    """
+    """One new column, built by running a function over a window of another column."""
 
     column_name: str
-    """
-    Name of the rolling category column
-    """
+    """What the new column is called."""
 
     calculated_from_column_name: str
-    """
-    Name of the targeted column to calculate rolling functions on
-    """
+    """The column the window reads."""
 
     rolling_function: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series]
-    """
-    Function to apply to calculate the new column
-    """
 
     max_window_length: int | None = None
-    """
-    Max window length of the rolling calculations.
-    If None, then the rolling function will calculate based on every value in the entire column.
-    """
+    """How many rows the window holds. None reads every earlier row."""
 
     halflife: float | None = None
     """
-    If set, the window is exponentially weighted instead of flat, with a value this many rows back
-    counting half as much as the newest one. max_window_length is ignored, because every earlier
-    value still counts for something.
-
-    A flat window treats the row before last exactly like the oldest row still inside it. A weighted
-    one reacts to a change straight away, which is what a recent form column is asked for.
+    If set, the window is exponentially weighted rather than flat, with a value this many rows back
+    counting half as much as the newest one. max_window_length is then ignored. A flat window treats
+    the row before last exactly like the oldest row still inside it, and a weighted one does not.
     """
 
     min_window_length: int = 1
-    """
-    Minimum window length of the rolling calculations.. 
-    """
+    """How many rows the window needs before it produces a value rather than a blank."""
 
     exclusive: bool = True
     """
-    If True, the value at an index of the rolling column will exclude the corresponding value at the same index from the calcualted_from_column   
+    Leaves a row's own value out of its window, so a column built this way only ever holds what was
+    known before that row. This is what makes one feature build valid for a game not yet played.
     """
 
     fill_na_value: int | None = 0
-    """
-    The value to fill NAN values with in the rolling column after calculations.
-    If None, then the NAN values will be left as NAN in the rolling column.
-    """
+    """What a blank becomes. None leaves it blank."""
 
 MEAN_FUNCTION: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series] = lambda x : x.mean()
 STD_FUNCTION: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series] = lambda x : x.std()

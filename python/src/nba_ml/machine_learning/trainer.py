@@ -53,9 +53,7 @@ def one_cycle_scheduler_factory(
 
 @dataclass
 class TrainingConfiguration():
-    """
-    Every knob of a training run, grouped so that a run can be logged and reproduced as a unit.
-    """
+    """Every knob of a training run, grouped so that a run can be logged and reproduced as a unit."""
 
     epochs: int
     batch_size: int = 256
@@ -96,9 +94,7 @@ class EpochResult():
 
 @dataclass
 class TrainingRun():
-    """
-    The record of one call to train, held together so it can be graphed and written to a report.
-    """
+    """The record of one call to train, held together so it can be graphed and reported."""
 
     epoch_results: list[EpochResult]
     best_epoch: int
@@ -125,8 +121,11 @@ class TrainingRun():
 
 class EarlyStopper():
     """
-    Handles ending training early if progress is slowing or reversing.
-    Holds the best weights the model has reached for loading later.
+    Ends training when progress slows or reverses, and holds the best weights reached so far.
+
+    Args:
+        patience is how many evaluations may pass without progress before training ends.
+        min_delta is the smallest drop in loss that counts as progress.
     """
 
     def __init__(
@@ -134,12 +133,6 @@ class EarlyStopper():
         patience: int = 10,
         min_delta: float = 0.001
         ):
-        """
-        Args:
-            patience is the number of times that the validation loss can stop making progress before training ends.
-            min_delta is the minimum drop in loss to be considered making progress.
-        """
-
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
@@ -154,10 +147,7 @@ class EarlyStopper():
         epoch: int,
         model: nn.Module
         ) -> bool:
-        """
-        Called whenever the validation dataset is evaluated.
-        Returns True to continue training, returns False to end early.
-        """
+        """Called after each validation evaluation. Returns False to end training early."""
 
         # The best weights track the true minimum, while patience tracks the last loss that
         # improved by more than min_delta. Sharing one threshold lets a worse model be kept.

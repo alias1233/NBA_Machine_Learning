@@ -1,5 +1,5 @@
 """
-Fitting a player prop model and recording what the run did.
+Fitting a player game statistics model and recording what the run did.
 
 This never runs on the server. Training happens on the developer machine and the model file is
 published from there.
@@ -14,7 +14,7 @@ import torch, torch.nn as nn
 from nba_ml.machine_learning import datasets, evaluation, report, serialization, trainer
 from nba_ml.machine_learning.architectures.gru_feed_forward import GRUFeedForward
 from nba_ml.machine_learning.datasets import SequenceGameDataset
-from nba_ml.models.player_stats import features as player_prop_features
+from nba_ml.models.player_stats import features as stat_features
 from nba_ml.models.player_stats.features import FeatureSet
 from nba_ml.models.player_stats.specifications import (
     GRU_DROPOUT_RATE,
@@ -26,28 +26,40 @@ from nba_ml.models.player_stats.specifications import (
     ModelSpecification
 )
 
-# A cached build is only reused when it was built from the columns the model asks for today, so a
-# feature set change rebuilds instead of silently training on the previous one.
-SAVE_PROCESSED_TRAINING_DATA = True
-LOAD_SAVED_PROCESSED_TRAINING_DATA = False
-
 CACHED_DATASETS = 'datasets'
 CACHED_COLUMNS = 'columns'
 
 RANDOM_SEED = 12156666
 
 CHUNK_STEP_SIZE = 1
+
+# Games are split by date, so a model is always scored on games played after the ones it learned
+# from. A game on a start date belongs to the earlier split.
 VALIDATION_START_DATE = datetime(2025, 8, 1)
-TEST_START_DATE = datetime(2026, 6, 8) # TESTING WITH LARGER VALIDATION SET WITH NO DISJOINT TEST DATASET
+TEST_START_DATE = datetime(2026, 6, 8)
+
+EVALUATE_ON_VALIDATION_SET = True
+"""
+Scores the finished model on the validation set rather than the test set, which is far larger and so
+a steadier reading while tuning. That score is not held out, because the run already used those games
+to pick its stopping epoch. Turn this off before publishing an accuracy anywhere it matters.
+"""
+
+HELD_OUT_LABEL = "Test set"
+VALIDATION_LABEL = "Validation set, not held out"
 
 def _build_datasets(
         model_specs: ModelSpecification,
         feature_set: FeatureSet,
+        use_cached_build: bool = True,
+        save_cached_build: bool = True,
         print_debug: bool = False
         ) -> tuple[SequenceGameDataset, SequenceGameDataset, SequenceGameDataset, dict]:
     """
-    Builds the three splits and the scalers fitted on the training one, reusing the last run's
-    build when it was made from the same columns and caching it when it was not.
+    Builds the three splits and the scalers fitted on the training one.
+
+    A cached build is only reused when it was made from the columns the model asks for today, so a
+    feature set change rebuilds instead of silently training on the previous one.
 
     Returns:
         (training, validation, test, scaler name to fitted scaler)
@@ -57,7 +69,7 @@ def _build_datasets(
     columns = (feature_set.sequence_columns, feature_set.static_columns)
     cached = None
 
-    if LOAD_SAVED_PROCESSED_TRAINING_DATA and file_path.exists():
+    if use_cached_build and file_path.exists():
         if print_debug:
             print("Loading in preprocessed data...")
 
@@ -71,7 +83,7 @@ def _build_datasets(
             print("The saved data was built from different columns, so it is being rebuilt...")
 
     if cached is None:
-        labeled_data = player_prop_features.get_all_player_props_labeled_data(
+        labeled_data = stat_features.get_all_labeled_data(
             feature_set,
             VALIDATION_START_DATE,
             TEST_START_DATE,
@@ -87,7 +99,7 @@ def _build_datasets(
             standardize_input=True
         )
 
-        if SAVE_PROCESSED_TRAINING_DATA:
+        if save_cached_build:
             if print_debug:
                 print("Saving preprocessed data...")
 
@@ -110,7 +122,7 @@ def _describe_features(feature_set: FeatureSet) -> dict:
     return {
         "predicted value": " + ".join(feature_set.output_columns),
         "past games read": MAX_SEQUENCE_LENGTH if MAX_SEQUENCE_LENGTH is not None else "every game",
-        "past games required": player_prop_features.MINIMUM_PAST_GAMES,
+        "past games required": stat_features.MINIMUM_PAST_GAMES,
         "columns per past game": len(feature_set.sequence_columns),
         "columns on the game being predicted": len(feature_set.static_columns)
     }
@@ -137,6 +149,7 @@ def _describe_data(
         "test samples": len(test_dataset),
         "validation starts": VALIDATION_START_DATE.date(),
         "test starts": TEST_START_DATE.date(),
+        "scored on": VALIDATION_LABEL if EVALUATE_ON_VALIDATION_SET else HELD_OUT_LABEL,
         "sample step size": CHUNK_STEP_SIZE,
         "random seed": str(RANDOM_SEED)
     }
@@ -155,13 +168,13 @@ def _describe_run(training_run: trainer.TrainingRun) -> dict:
 
 def _evaluate_saved_model(
         model_specs: ModelSpecification,
-        test_dataset: SequenceGameDataset,
+        evaluation_dataset: SequenceGameDataset,
         loss_function: trainer.LossFunction,
         training_run: trainer.TrainingRun
     ) -> dict:
     """
-    Reloads the model that was just saved and scores it on the held out test set, which also
-    proves that the saved file round trips back into a working model.
+    Reloads the model that was just saved and scores it, which also proves that the saved file round
+    trips back into a working model.
     """
 
     graphs_directory = model_specs.graphs_directory()
@@ -174,7 +187,7 @@ def _evaluate_saved_model(
     configuration = model_specs.training_parameters.configuration
     predictions = trainer.predict(
         model,
-        test_dataset,
+        evaluation_dataset,
         configuration.batch_size,
         configuration.device,
         datasets.collate_sequence_batch
@@ -184,14 +197,14 @@ def _evaluate_saved_model(
     if isinstance(loss_function, nn.Module):
         loss_function = loss_function.cpu()
 
-    test_outputs = test_dataset.outputs
+    outputs = evaluation_dataset.outputs
     metrics = {
-        "test loss": float(loss_function(predictions, test_outputs)),
-        "test cross entropy": float(nn.functional.cross_entropy(predictions, test_outputs))
+        "loss": float(loss_function(predictions, outputs)),
+        "cross entropy": float(nn.functional.cross_entropy(predictions, outputs))
     }
     metrics.update(evaluation.output_test_evaluation_classification(
         predictions.numpy(),
-        test_outputs.numpy(),
+        outputs.numpy(),
         label=model_specs.name,
         ordinal=True,
         output_size=20,
@@ -203,11 +216,17 @@ def _evaluate_saved_model(
 def train(
         model_specs: ModelSpecification,
         output_evaluations: bool = True,
+        use_cached_build: bool = True,
+        save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
         ):
     """
     Fits one model spec, saves it, and writes a report of the run next to it.
+
+    Args:
+        use_cached_build reuses the last run's preprocessed build when it was made from the same
+        columns. save_cached_build writes this run's build for the next one to reuse.
     """
 
     if print_all_debug:
@@ -223,12 +242,12 @@ def train(
     training_dataset, validation_dataset, test_dataset, scaler_parameters = _build_datasets(
         model_specs,
         feature_set,
+        use_cached_build,
+        save_cached_build,
         print_debug
     )
 
-    # TESTING WITH LARGER VALIDATION SET WITH NO DISJOINT TEST DATASET
-    test_dataset = validation_dataset
-    # END TEST
+    evaluation_dataset = validation_dataset if EVALUATE_ON_VALIDATION_SET else test_dataset
 
     model = GRUFeedForward(
         training_dataset.sequence_input_dim,
@@ -313,12 +332,10 @@ def train(
     )
 
     if output_evaluations:
-        training_report.add("Test set", _evaluate_saved_model(
-            model_specs,
-            test_dataset,
-            loss_function,
-            training_run
-        ))
+        training_report.add(
+            VALIDATION_LABEL if EVALUATE_ON_VALIDATION_SET else HELD_OUT_LABEL,
+            _evaluate_saved_model(model_specs, evaluation_dataset, loss_function, training_run)
+        )
 
     report_path = training_report.write(model_specs.training_report_file())
 

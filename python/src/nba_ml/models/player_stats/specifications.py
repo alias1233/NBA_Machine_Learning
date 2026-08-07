@@ -1,8 +1,8 @@
 """
-The player prop models: what each one predicts, how it is shaped, and how it is fit.
+The player game statistics models: what each one predicts, how it is shaped, and how it is fit.
 
 Both training and inference read this, so it holds nothing that only one of them needs. Adding a
-stat model means adding a ModelSpecification here and a TargetStat in features.py.
+model means adding a ModelSpecification here and, for a new stat, a TargetStat in features.py.
 """
 
 from dataclasses import dataclass
@@ -17,7 +17,8 @@ from nba_ml.machine_learning.architectures.feed_forward import LayerParameters
 from nba_ml.machine_learning.losses.gaussian_smoothed_cross_entropy import GaussianSmoothedCrossEntropyLoss
 from nba_ml.models.player_stats.features import FeatureSet, TargetStat, build_feature_set
 
-MODEL_CATEGORY = "player_prop"
+MODEL_CATEGORY = "player_stats"
+"""Names the folder every model of this family is saved under."""
 
 SEQUENCE_SCALER = 'sequence_scaler'
 STATIC_SCALER = 'static_scaler'
@@ -40,7 +41,7 @@ def cross_entropy_loss(num_classifications: int) -> trainer.LossFunction:
 def gaussian_smoothed_cross_entropy_loss(sigma: float) -> LossFunctionFactory:
     """
     Spreads each label over its neighbouring classes, so guessing 21 points when 20 happened costs
-    less than guessing 40. Set this on a model spec to train against it instead of plain cross entropy.
+    less than guessing 40.
 
     Args:
         sigma is how far the label spreads, measured in classes.
@@ -50,9 +51,7 @@ def gaussian_smoothed_cross_entropy_loss(sigma: float) -> LossFunctionFactory:
 
 @dataclass(frozen=True)
 class TrainingParameters():
-    """
-    Everything that decides how a model is fit, grouped so a run can be logged and repeated as a unit.
-    """
+    """Everything that decides how a model is fit, grouped so a run can be logged and repeated."""
 
     configuration: trainer.TrainingConfiguration
     hidden_layers: list[LayerParameters]
@@ -76,14 +75,23 @@ DEFAULT_TRAINING_PARAMETERS = TrainingParameters(
     learning_rate=0.00001
 )
 
-@dataclass
+@dataclass(frozen=True)
 class ModelSpecification():
+    """
+    One trained model: the name it is saved under, what it predicts, and how it is fit.
+
+    The name is what `nba-train --model` and `nba-predict --model` take, so two models predicting the
+    same stat with different settings are two specifications with different names.
+    """
+
     name: str
-    target_stats: list[TargetStat]
+    target_stats: tuple[TargetStat, ...]
     minimum_of_stat: int
+    """The outcome the first predicted probability stands for."""
+
     number_of_stat_classifications: int
     training_parameters: TrainingParameters = DEFAULT_TRAINING_PARAMETERS
-    """Set this to train the stat with parameters other than the shared defaults."""
+    """Set this to train with parameters other than the shared defaults."""
 
     def get_feature_set(self) -> FeatureSet:
         """
@@ -105,32 +113,30 @@ class ModelSpecification():
     def graphs_directory(self) -> Path:
         return paths.graphs_directory(MODEL_CATEGORY, self.name)
 
-PLAYER_PROPS_POINTS_MODEL = ModelSpecification(
+POINTS_MODEL = ModelSpecification(
     "points",
-    [TargetStat.POINTS],
+    (TargetStat.POINTS,),
     0,
     60
     )
 
-PLAYER_PROPS_REBOUNDS_MODEL = ModelSpecification(
+REBOUNDS_MODEL = ModelSpecification(
     "rebounds",
-    [TargetStat.REBOUNDS],
+    (TargetStat.REBOUNDS,),
     0,
     25
     )
 
-PLAYER_PROPS_ASSISTS_MODEL = ModelSpecification(
+ASSISTS_MODEL = ModelSpecification(
     "assists",
-    [TargetStat.ASSISTS],
+    (TargetStat.ASSISTS,),
     0,
     20
     )
 
-PLAYER_PROPS_POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
+POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
     "points_rebounds_assists",
-    [TargetStat.POINTS,
-    TargetStat.REBOUNDS,
-    TargetStat.ASSISTS],
+    (TargetStat.POINTS, TargetStat.REBOUNDS, TargetStat.ASSISTS),
     0,
     80
     )
@@ -138,9 +144,12 @@ PLAYER_PROPS_POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
 ALL_MODEL_SPECIFICATIONS = {
     specification.name: specification
     for specification in (
-        PLAYER_PROPS_POINTS_MODEL,
-        PLAYER_PROPS_REBOUNDS_MODEL,
-        PLAYER_PROPS_ASSISTS_MODEL,
-        PLAYER_PROPS_POINTS_REBOUNDS_ASSISTS_MODEL
+        POINTS_MODEL,
+        REBOUNDS_MODEL,
+        ASSISTS_MODEL,
+        POINTS_REBOUNDS_ASSISTS_MODEL
     )
 }
+
+MODEL_NAMES = sorted(ALL_MODEL_SPECIFICATIONS)
+"""What `--model` accepts, so a command can list its choices without rebuilding them."""

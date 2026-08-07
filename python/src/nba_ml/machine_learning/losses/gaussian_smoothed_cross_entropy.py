@@ -3,8 +3,8 @@ import torch.nn.functional as F
 
 class GaussianSmoothedCrossEntropyLoss(torch.nn.Module):
     """
-    Cross-entropy loss with Gaussian soft labels.
-    Predicting a classification near the true classification is penalized less than predicting one far away.
+    Cross entropy against a label spread over its neighbouring classes, so predicting near the true
+    class costs less than predicting far from it.
     """
 
     indices: torch.Tensor
@@ -12,10 +12,9 @@ class GaussianSmoothedCrossEntropyLoss(torch.nn.Module):
     def __init__(self, num_classes: int, sigma: float):
         """
         Args:
-            num_classes: Total number of classes.
-            sigma: Std dev of the Gaussian in class-index units.
+            sigma is how far the label spreads, measured in classes.
         """
-        
+
         super().__init__()
 
         self.num_classes = num_classes
@@ -27,9 +26,7 @@ class GaussianSmoothedCrossEntropyLoss(torch.nn.Module):
         return f"num_classes={self.num_classes}, sigma={self.sigma}"
 
     def _make_soft_labels(self, target: torch.Tensor) -> torch.Tensor:
-        """
-        Build a normalized Gaussian distribution over classes for each target.
-        """
+        """Builds a normalized Gaussian over the classes, centred on each target."""
 
         centers = target.float().unsqueeze(1)
         weights = torch.exp(-0.5 * ((self.indices - centers) / self.sigma) ** 2)

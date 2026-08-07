@@ -17,8 +17,8 @@ class LayerParameters():
 
 def encode_layer_parameters(hidden_layers: list[LayerParameters]) -> list[dict[str, Any]]:
     """
-    Turns the layer settings into plain dictionaries, so that a saved model keeps loading even
-    after this module moves.
+    Turns the layer settings into plain dictionaries, so a saved model keeps loading after this
+    module moves.
     """
 
     return [
@@ -35,9 +35,7 @@ def decode_layer_parameters(saved_hidden_layers: list) -> list[LayerParameters]:
 LAYER_PARAMETERS_CODEC = {HIDDEN_LAYERS: (encode_layer_parameters, decode_layer_parameters)}
 
 class FeedForward(SavableModule):
-    """
-    Simple configurable feed forward model
-    """
+    """A configurable stack of fully connected layers."""
 
     SAVED_ARGUMENT_NAMES = (INPUT_DIM, OUTPUT_DIM, HIDDEN_LAYERS)
     SAVED_ARGUMENT_CODECS = LAYER_PARAMETERS_CODEC
@@ -49,10 +47,8 @@ class FeedForward(SavableModule):
             hidden_layers: list[LayerParameters]
             ) -> None:
         """
-        Initializes the model.
-
         Args:
-            hidden_layers: holds the parameters for each hidden layer, with each index corresponding to a seperate hidden layer.
+            hidden_layers: one entry per hidden layer, in order.
         """
         super().__init__()
 

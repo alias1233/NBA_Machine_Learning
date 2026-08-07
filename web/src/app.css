@@ -1,0 +1,537 @@
+/*
+ * The machine-readable copy of docs/WEBSITE_DESIGN_DOCUMENT.md sections 3 to 7.
+ *
+ * Every colour, type size, space, radius and duration the site uses is named here, and nothing
+ * outside this file holds a raw one. `light-dark()` picks per theme from a single declaration, so a
+ * token is never written twice and there is no theme-specific block.
+ */
+
+@font-face {
+	font-family: 'Instrument Serif';
+	src: url('/fonts/instrument-serif-latin.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Inter Tight';
+	src: url('/fonts/inter-tight-latin.woff2') format('woff2');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+	font-weight: 100 800;
+	font-style: normal;
+	font-display: swap;
+}
+
+:root {
+	color-scheme: light dark;
+
+	/* The five planes. A block is the opposite theme's paper, which is what gives a page its
+	   composition, so it carries an ink family of its own. */
+	--page: light-dark(#f8f5ee, #141311);
+	--panel: light-dark(#eae2d2, #26231c);
+	--block: light-dark(#22201c, #ede7d9);
+	--surface: light-dark(#fffdf9, #1a1815);
+	--surface-sunken: light-dark(#d9cfba, #312d25);
+
+	--ink: light-dark(#1c1a16, #f0ebdf);
+	--ink-muted: light-dark(#5c574b, #a69e8c);
+	--block-ink: light-dark(#f5f1e8, #1c1a16);
+	--block-muted: light-dark(#b0a896, #5c574b);
+
+	--hairline: light-dark(#e3dccc, #2e2b24);
+	--hairline-panel: light-dark(#d6cdb9, #3d392f);
+	--hairline-block: light-dark(#3a362e, #cfc7b4);
+	--control-border: light-dark(#6b6559, #807969);
+
+	/* Accent and meaning */
+	--accent: light-dark(#a83c1e, #e28b5c);
+	--accent-on: light-dark(#ffffff, #141311);
+	--accent-block: light-dark(#e9a177, #a83c1e);
+	--over: light-dark(#0b6845, #4bcf9a);
+	--under: light-dark(#b01d57, #f072b0);
+	--warn-wash: light-dark(#f8edd6, #2a2211);
+	--warn-border: light-dark(#dfc79b, #5c4a1d);
+	--chart-neutral: light-dark(#8a8375, #807969);
+
+	/* Type. One family per job: the serif holds the name and the large headings, the interface face
+	   holds every sentence, and the mono face holds every figure and every micro label. */
+	--font-display: 'Instrument Serif', Georgia, serif;
+	--font-ui: 'Inter Tight', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+	--type-display: clamp(3rem, 9vw, 6rem);
+	--type-h1: clamp(2rem, 5vw, 3.25rem);
+	--type-h2: clamp(1.5rem, 3vw, 2rem);
+	--type-h3: 1.0625rem;
+	--type-body: 1rem;
+	--type-small: 0.875rem;
+	--type-micro: 0.75rem;
+	--type-figure: 1.25rem;
+	--type-figure-lead: clamp(2.5rem, 6vw, 3.5rem);
+
+	/* Space */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2.5rem;
+	--space-7: 4rem;
+	--space-8: 6rem;
+
+	--control-padding-y: 0.55rem;
+	--control-padding-x: 0.75rem;
+	--tap-target: 44px;
+
+	/* Shape */
+	--radius: 8px;
+	--radius-lg: 14px;
+	--radius-full: 999px;
+	--card-ratio: 1 / 1;
+	--card-transition-time: 0.2s;
+	--card-select-hover-size-scale: 1.03;
+
+	/* Elevation. Flat is the plane tint and nothing else. Raised adds --shadow, and only a thing
+	   that floats above the page is raised. */
+	--rule: 1px solid var(--hairline);
+	--rule-panel: 1px solid var(--hairline-panel);
+	--rule-block: 1px solid var(--hairline-block);
+	--rule-control: 1px solid var(--control-border);
+	--rule-accent: 2px solid var(--accent);
+	--rule-current: 1px solid currentColor;
+	--shadow: 0 4px 24px light-dark(rgb(28 26 22 / 0.16), rgb(0 0 0 / 0.55));
+
+	/* Motion */
+	--motion-fast: 120ms;
+	--motion: 200ms;
+	--motion-slow: 320ms;
+	--motion-entry: 900ms;
+	--collage-stagger: 120ms;
+	--float-cycle: 9s;
+	--ease-in: cubic-bezier(0.2, 0, 0, 1);
+	--ease-out: cubic-bezier(0.4, 0, 1, 1);
+	--ease-float: cubic-bezier(0.45, 0, 0.55, 1);
+
+	/* The landing collage. The filter is what makes a set of unrelated pictures read as one piece of
+	   art rather than as a mood board, and it is the one place to dial that back. R8.6. */
+	--collage-opacity: light-dark(0.45, 0.5);
+	--collage-filter: saturate(0.8);
+	--collage-drift: 16px;
+	--float-distance: 10px;
+
+	/* Layout */
+	--content-width: 64rem;
+	--content-width-wide: 76rem;
+	--answer-column: 30rem;
+
+	/* Ads. A slot holds this height whenever ads are on, so nothing shifts when one arrives. */
+	--ad-height: 250px;
+	--ad-height-wide: 90px;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+/* The page tone is painted on the root, so nothing the browser draws outside the document, including
+   an overscroll or a view transition snapshot, can reveal the default white canvas. R7.5. */
+html {
+	background: var(--page);
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	display: flex;
+	flex-direction: column;
+	min-height: 100svh;
+	margin: 0;
+	background: var(--page);
+	color: var(--ink);
+	font-family: var(--font-ui);
+	font-size: var(--type-body);
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* The serif carries the name and the two large heading levels. It has one weight, so it never holds
+   small text. Anything below h2 is the interface face. */
+h1,
+h2,
+.type-h2 {
+	margin: 0;
+	font-family: var(--font-display);
+	font-weight: 400;
+}
+
+h1 {
+	font-size: var(--type-h1);
+	letter-spacing: -0.015em;
+	line-height: 1.05;
+}
+
+h2,
+.type-h2 {
+	font-size: var(--type-h2);
+	letter-spacing: -0.01em;
+	line-height: 1.15;
+}
+
+h3,
+.type-h3 {
+	margin: 0;
+	font-family: var(--font-ui);
+	font-size: var(--type-h3);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.25;
+}
+
+/* Prose measures no wider than 68 characters, wherever it lands. R4.8. */
+p {
+	margin: 0;
+	max-width: 68ch;
+}
+
+ul,
+ol,
+dl,
+figure {
+	margin: 0;
+}
+
+a {
+	color: var(--accent);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 2px;
+}
+
+/* Something the copy calls a link that is not one, such as a disclosure. */
+.link {
+	color: var(--accent);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+:focus-visible {
+	outline: var(--rule-accent);
+	outline-offset: 2px;
+}
+
+/* A block inverts the theme, so a ring drawn inside one inverts with it. A ring around a whole
+   block is drawn on the page, so it keeps the page accent. R12.2. */
+.block :focus-visible {
+	outline-color: var(--accent-block);
+}
+
+/* The interface face, not the serif, so the small mark never competes with the name at display
+   size. R4.6 fixes every value here. */
+.wordmark {
+	font-family: var(--font-ui);
+	font-size: var(--type-h3);
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+/* Type roles the element selectors above do not cover. */
+.display {
+	font-family: var(--font-display);
+	font-size: var(--type-display);
+	font-weight: 400;
+	letter-spacing: -0.02em;
+	line-height: 0.95;
+}
+
+.micro {
+	font-family: var(--font-mono);
+	font-size: var(--type-micro);
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	line-height: 1.4;
+	text-transform: uppercase;
+}
+
+.figure {
+	font-family: var(--font-mono);
+	font-size: var(--type-figure);
+	font-weight: 500;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	font-variant-numeric: tabular-nums;
+}
+
+.figure-lead {
+	font-family: var(--font-mono);
+	font-size: var(--type-figure-lead);
+	font-weight: 500;
+	letter-spacing: -0.03em;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+}
+
+.small {
+	font-size: var(--type-small);
+	line-height: 1.5;
+}
+
+/* A figure set in the interface face still lines its digits up. Mono gives this for free. R4.5. */
+.numeric {
+	font-variant-numeric: tabular-nums;
+}
+
+.muted {
+	color: var(--ink-muted);
+}
+
+/* Read by a screen reader, never drawn. */
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* Every page sits in one of these. The wide one is a model page and nothing else. */
+.page {
+	width: 100%;
+	max-width: var(--content-width);
+	margin-inline: auto;
+	padding-inline: var(--space-4);
+}
+
+.page--wide {
+	max-width: var(--content-width-wide);
+}
+
+/* Sections sit --space-8 apart on desktop and the page tone shows between them. R5.1, R6.9. */
+.sections {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+/* An accent block above the page title. R3, "A page title rule". */
+.page-title::before {
+	content: '';
+	display: block;
+	width: var(--space-6);
+	margin-bottom: var(--space-3);
+	border-top: var(--rule-accent);
+}
+
+/*
+ * The two containers, and no others. Both are --radius-lg with --space-5 of padding, no border and
+ * no shadow. The transparent top edge is what R10.7 and R10.8 colour in without moving anything.
+ */
+.panel,
+.block {
+	padding: var(--space-5);
+	border-top: var(--rule-accent);
+	border-top-color: transparent;
+	border-radius: var(--radius-lg);
+}
+
+.panel {
+	background: var(--panel);
+}
+
+/* A block is the opposite theme's paper, so everything on it comes from the block family. R3.3. */
+.block {
+	background: var(--block);
+	color: var(--block-ink);
+}
+
+.block .muted {
+	color: var(--block-muted);
+}
+
+.block a {
+	color: var(--accent-block);
+}
+
+/* A nested data or image area inside a block. The page-side tokens apply again here. R3.4. */
+.surface {
+	padding: var(--space-4);
+	background: var(--surface);
+	color: var(--ink);
+	border-radius: var(--radius);
+}
+
+.surface .muted {
+	color: var(--ink-muted);
+}
+
+/* A whole container that leads somewhere is one link, and shows it as a top edge and nothing
+   else: no lift, no scale, no shadow, no background change. R10.7. */
+a.panel,
+a.block {
+	display: block;
+	text-decoration: none;
+	transition: border-top-color var(--motion-fast) var(--ease-in);
+}
+
+/* A block already sets its own ink. A panel takes the page's. */
+a.panel {
+	color: inherit;
+}
+
+a.panel:hover,
+a.panel:focus-visible {
+	border-top-color: var(--accent);
+}
+
+a.block:hover,
+a.block:focus-visible {
+	border-top-color: var(--accent-block);
+}
+
+/* A tag takes its colour from what it sits on, so one shape serves a block, an accent card and a
+   page. R10.4, R10.11, 10.8. */
+.tag {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 var(--space-2);
+	border: var(--rule-current);
+	border-radius: var(--radius-full);
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.field > label {
+	color: var(--ink-muted);
+}
+
+input,
+select,
+button {
+	font: inherit;
+	color: inherit;
+}
+
+input[type='text'],
+input[type='search'],
+input[type='date'],
+input[type='number'],
+select {
+	width: 100%;
+	min-height: var(--tap-target);
+	padding: var(--control-padding-y) var(--control-padding-x);
+	background: var(--surface);
+	color: var(--ink);
+	border: var(--rule-control);
+	border-radius: var(--radius);
+}
+
+input:disabled,
+select:disabled {
+	background: var(--surface-sunken);
+	color: var(--ink-muted);
+	cursor: not-allowed;
+}
+
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2);
+	min-height: var(--tap-target);
+	padding: var(--control-padding-y) var(--space-4);
+	background: var(--accent);
+	color: var(--accent-on);
+	border: none;
+	border-radius: var(--radius);
+	font-weight: 600;
+	text-decoration: none;
+	cursor: pointer;
+	transition: filter var(--motion-fast) var(--ease-in);
+}
+
+.button:hover:not(:disabled) {
+	filter: brightness(1.08);
+}
+
+.button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* The loudest control on the site, once, on the landing screen. R11.2. */
+.button--lead {
+	padding-inline: var(--space-5);
+	font-size: var(--type-h3);
+}
+
+/*
+ * Navigation cross-fades and never shows white. The outgoing snapshot holds at full opacity for the
+ * whole transition and the incoming one fades in on top of it. Blending both to partial opacity is
+ * what lets the canvas show through, which is the flash. R7.5.
+ */
+::view-transition-old(root) {
+	animation: none;
+	mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+	animation: cross-fade var(--motion) var(--ease-in);
+	mix-blend-mode: normal;
+}
+
+@keyframes cross-fade {
+	from {
+		opacity: 0;
+	}
+}
+
+@media (min-width: 40rem) {
+	.sections {
+		gap: var(--space-8);
+	}
+}
+
+@media (min-width: 64rem) {
+	.page {
+		padding-inline: var(--space-5);
+	}
+}
+
+/* Nothing draws, drifts, floats or scrolls smoothly. Colour and opacity still change, at
+   --motion-fast. Never disable a state change, only its animation. R7.10. */
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	*,
+	*::before,
+	*::after {
+		animation-delay: 0ms !important;
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: var(--motion-fast) !important;
+	}
+}

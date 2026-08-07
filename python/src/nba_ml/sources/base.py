@@ -1,13 +1,12 @@
 """
 What every NBA data source has to provide.
 
-A source is the only part of the pipeline that talks to an outside service. It hands back rows and
-identities named the way the stores hold them, so swapping one source for another changes nothing
-downstream. Rate limiting and retrying live here too, because how fast a service may be asked and
-how it fails are properties of that service and not of the code collecting from it.
+A source is the only part of the pipeline that talks to an outside service. It hands back rows named
+the way the stores hold them, so swapping one source for another changes nothing downstream. Rate
+limiting and retrying live here, because they are properties of the service being asked.
 
-Nothing here searches or reads. A source only fetches. Finding a player or a team by name is a
-question about what is already stored, so it lives in the stores and needs no service at all.
+A source only fetches. Finding a player or a team by name is a question about what is already
+stored, so it lives in the stores and needs no service at all.
 """
 
 import time
@@ -18,17 +17,15 @@ from typing import Callable, TypeVar
 import pandas as pd
 
 from nba_ml import season
-from nba_ml.entities import Player, Team
+from nba_ml.entities import Player, ScheduledGame, Team
 from nba_ml.season import SeasonType
 
 Fetched = TypeVar("Fetched")
 
 class DataSource(ABC):
     """
-    One provider of NBA data.
-
-    Subclasses implement the fetches. Pacing requests and retrying them are shared here, so a second
-    service is one module that says where its data comes from and what its columns are called.
+    One provider of NBA data. Subclasses implement the fetches, and pacing and retrying are shared
+    here, so a second service is one module saying where its data comes from and how it names it.
     """
 
     name: str
@@ -118,5 +115,17 @@ class DataSource(ABC):
         date_to: date | None = None
         ) -> pd.DataFrame | None:
         """The same as player_games, one row per team per game instead of per player."""
+
+        pass
+
+    @abstractmethod
+    def schedule(self, season_year: int) -> list[ScheduledGame] | None:
+        """
+        Every game of one season, whether or not it has been played.
+
+        This is the only fetch that returns games with no box score, and it is what tells the site
+        which games are still to come. A game whose phase this project does not model, or whose two
+        teams are not both decided yet, is left out.
+        """
 
         pass

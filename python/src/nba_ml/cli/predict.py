@@ -14,6 +14,8 @@ from nba_ml.stores import players, teams
 
 SEASON_TYPES = {season_type.name.lower(): season_type for season_type in season.SeasonType}
 
+MOST_LIKELY_OUTCOMES_SHOWN = 5
+
 def _player_id(name: str) -> int:
     found = players.find_by_name(name, limit=1)
     if not found:
@@ -31,15 +33,10 @@ def _team_id(abbreviation_or_name: str) -> int:
     return team.id
 
 def _print_result(probabilities: list[float], minimum_value: int, line: float | None):
-    expected_value = sum(
-        (minimum_value + offset) * probability
-        for offset, probability in enumerate(probabilities)
-    )
-
-    print(f"\nExpected value: {expected_value:.2f}")
+    print(f"\nExpected value: {odds.expected_value(probabilities, minimum_value):.2f}")
     print("Most likely outcomes:")
-    for offset, probability in sorted(enumerate(probabilities), key=lambda pair: -pair[1])[:5]:
-        print(f"  {minimum_value + offset:>3}  {probability:.4f}")
+    for value, probability in odds.most_likely_outcomes(probabilities, MOST_LIKELY_OUTCOMES_SHOWN, minimum_value):
+        print(f"  {value:>3}  {probability:.4f}")
 
     if line is not None:
         line_odds = odds.calculate_odds(probabilities, line, minimum_value)
@@ -52,14 +49,14 @@ def main():
     parser = argparse.ArgumentParser(
         description="Predicts the probability of every whole number outcome of one player's stat in one game."
     )
-    parser.add_argument("-stat", required=True, choices=sorted(specifications.ALL_MODEL_SPECIFICATIONS))
-    parser.add_argument("-player", required=True, help="Full player name.")
-    parser.add_argument("-home", required=True, help="The home team, by tricode or name.")
-    parser.add_argument("-away", required=True, help="The away team, by tricode or name.")
-    parser.add_argument("-date", required=True, help="Game date, as YYYY-MM-DD.")
-    parser.add_argument("-season_type", default="regular_season", choices=sorted(SEASON_TYPES))
+    parser.add_argument("--model", required=True, choices=specifications.MODEL_NAMES, help="Which model to predict with.")
+    parser.add_argument("--player", required=True, help="Full player name.")
+    parser.add_argument("--home", required=True, help="The home team, by tricode or name.")
+    parser.add_argument("--away", required=True, help="The away team, by tricode or name.")
+    parser.add_argument("--date", required=True, help="Game date, as YYYY-MM-DD.")
+    parser.add_argument("--season-type", default="regular_season", choices=sorted(SEASON_TYPES))
     parser.add_argument(
-        "-team",
+        "--team",
         help="The player's team, by tricode or name. Only needed when they have just moved and no game records it."
     )
     parser.add_argument(
@@ -76,11 +73,11 @@ def main():
         metavar="PLAYER",
         help="Core teammates who missed the last game and are expected to play this one."
     )
-    parser.add_argument("-line", type=float, help="If given, also report over, under, and push odds for this line.")
+    parser.add_argument("--line", type=float, help="If given, also report over, under, and push odds for this line.")
     parser.add_argument("--quiet", action="store_true", help="Only print the result.")
     arguments = parser.parse_args()
 
-    specification = specifications.ALL_MODEL_SPECIFICATIONS[arguments.stat]
+    specification = specifications.ALL_MODEL_SPECIFICATIONS[arguments.model]
 
     game = Game(
         season.from_date_string(arguments.date).date(),

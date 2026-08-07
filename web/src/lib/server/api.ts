@@ -1,0 +1,100 @@
+/**
+ * The one place the site talks to the prediction service.
+ *
+ * The service listens on the internal network and is never reachable from a browser, so every call
+ * is made here, on the server. When the PostgreSQL prediction cache is built it is read in front of
+ * `predictPlayerStat`, and nothing above this file has to change.
+ *
+ * A failed call throws SvelteKit's HttpError carrying the service's own message. A loader that lets
+ * it bubble gets the error page. A loader that wants to keep rendering catches it with `isHttpError`.
+ */
+
+import { env } from '$env/dynamic/private';
+import { error } from '@sveltejs/kit';
+
+import type {
+	Health,
+	Model,
+	Player,
+	Prediction,
+	PredictionRequest,
+	Roster,
+	ScheduledGame,
+	Team
+} from '$lib/types';
+
+const DEFAULT_URL = 'http://127.0.0.1:8000';
+
+function baseUrl(): string {
+	return (env.NBA_API_URL || DEFAULT_URL).replace(/\/+$/, '');
+}
+
+/** FastAPI reports a refusal as `detail`, either a message or a list of validation problems. */
+async function messageOf(response: Response): Promise<string> {
+	const detail = await response.json().then((body) => body?.detail, () => null);
+
+	if (typeof detail === 'string') return detail;
+	if (Array.isArray(detail)) return detail.map((problem) => problem?.msg).filter(Boolean).join('. ');
+
+	return `The prediction service answered ${response.status}.`;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+	let response: Response;
+
+	try {
+		response = await fetch(baseUrl() + path, init);
+	} catch {
+		error(503, 'The prediction service is not reachable.');
+	}
+
+	if (!response.ok) error(response.status, await messageOf(response));
+
+	return response.json() as Promise<T>;
+}
+
+export const getHealth = () => request<Health>('/health');
+
+export const getTeams = () => request<Team[]>('/teams');
+
+export const getModels = () => request<Model[]>('/models');
+
+export const getPlayer = (id: number) => request<Player>(`/players/${id}`);
+
+/** Who plays for a team, which is the player list once a game has been chosen. */
+export const getTeamPlayers = (abbreviation: string) =>
+	request<Player[]>(`/teams/${encodeURIComponent(abbreviation)}/players`);
+
+/** Both sides of a chosen game, away first, which is the order a matchup is written in. */
+export async function getRosters(game: ScheduledGame): Promise<Roster[]> {
+	const [away, home] = await Promise.all([
+		getTeamPlayers(game.away_team.abbreviation),
+		getTeamPlayers(game.home_team.abbreviation)
+	]);
+
+	return [
+		{ team: game.away_team, players: away },
+		{ team: game.home_team, players: home }
+	];
+}
+
+/**
+ * The games that can be predicted right now, soonest first. A game stays off this list until every
+ * earlier game of both its teams has been collected, because until then a model would read one of
+ * the two teams as a game out of date.
+ */
+export const getUpcomingGames = () => request<ScheduledGame[]>('/games/upcoming');
+
+export function searchPlayers(search: string, limit = 10) {
+	const query = new URLSearchParams({ search, limit: String(limit) });
+
+	return request<Player[]>(`/players?${query}`);
+}
+
+export function predictPlayerStat(model: string, body: PredictionRequest) {
+	return request<Prediction>(`/predictions/player-stats/${encodeURIComponent(model)}`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body)
+	});
+}

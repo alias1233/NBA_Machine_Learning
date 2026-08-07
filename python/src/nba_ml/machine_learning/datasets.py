@@ -13,9 +13,8 @@ def _adjust_classification_outputs(
     num_classifications: int | None
     ) -> np.ndarray:
     """
-    Shifts the outputs so the lowest one becomes class 0, then folds anything past the last class
-    into it. Values below the minimum are folded into class 0, because a negative class index
-    would silently corrupt Cross Entropy Loss.
+    Shifts the outputs so the lowest one becomes class 0, folding anything outside the class range
+    into the nearest end of it.
     """
 
     adjusted = outputs.astype(np.int64) - min_output_value
@@ -265,9 +264,7 @@ def build_inference_dataset(
     sequence_scaler: StandardScaler,
     static_scaler: StandardScaler
     ) -> SequenceGameDataset:
-    """
-    Applies already fit scalers to labeled data so that it can be inferenced on.
-    """
+    """Applies a saved model's own scalers, so it reads a new sample the way it was trained."""
 
     player_game_sequences, (samples,) = _standardize_sequence_data(
         player_game_sequences,

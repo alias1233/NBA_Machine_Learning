@@ -57,11 +57,11 @@ def get_all_player_game_data() -> pd.DataFrame:
     return data
 
 def get_specific_player_game_data(
-        player_id: str,
+        player_id: int,
         date_start: datetime | None = None
         ) -> pd.DataFrame:
     SQL_condition = f"{PLAYER_ID.category_name} = :{PLAYER_ID.category_name}"
-    condition_params = {PLAYER_ID : player_id}
+    condition_params: dict = {PLAYER_ID : player_id}
 
     if date_start is not None:
         SQL_condition += f" AND {GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
@@ -75,13 +75,10 @@ def get_specific_player_game_data(
     return data
 
 def get_game_data_after_date(date_start: datetime) -> pd.DataFrame:
-    SQL_condtition = f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
-    condition_params = {GAME_DATE : season.to_date_string(date_start)}
-
     with DATABASE:
         data = DATABASE.query_dataframe(
-            SQL_condition=SQL_condtition,
-            condition_params=condition_params
+            SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",
+            condition_params={GAME_DATE : season.to_date_string(date_start)}
         )
 
     return data
@@ -117,6 +114,27 @@ def latest_team_id(player_id: int, before: date | None = None) -> int | None:
         )
 
     return None if not rows else int(rows[0][0])
+
+def player_ids_on_team(team_id: int, date_start: date) -> list[int]:
+    """
+    Who a team's players are, taken as everyone whose most recent game since the given date was
+    for that team. A traded player therefore lands on the team they last played for.
+    """
+
+    with DATABASE:
+        rows = DATABASE.query(
+            SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",
+            condition_params={GAME_DATE : season.to_date_string(date_start)},
+            categories=[PLAYER_ID, TEAM_ID, GAME_DATE]
+        )
+
+    latest: dict[int, tuple[str, int]] = {}
+    for player_id, played_for, game_date in rows:
+        player_id = int(player_id)
+        if game_date >= latest.get(player_id, ("", 0))[0]:
+            latest[player_id] = (game_date, int(played_for))
+
+    return sorted(player_id for player_id, (_, played_for) in latest.items() if played_for == team_id)
 
 def player_ids_since(date_start: date) -> list[int]:
     """Who has played since the given date, which is who is worth refreshing information for."""

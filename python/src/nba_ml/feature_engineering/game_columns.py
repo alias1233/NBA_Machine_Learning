@@ -2,12 +2,10 @@ import numpy as np
 import pandas as pd
 from typing import Any
 
-from nba_ml.season import SeasonType
+from nba_ml.season import GAME_ID_PREFIXES, SEASON_START_MONTH, SeasonType
 
 def _encode_equality_as_integer(column: pd.Series, value: Any) -> pd.Series:
-    """
-    Returns a series where each value is 1 if the value corresponding to the given series equals the given string, and 0 otherwise.  
-    """
+    """One where the value matches, zero everywhere else."""
 
     return (column == value).astype(int)
 
@@ -20,8 +18,8 @@ def _column_or_grouped_column(
     group_by_column: str | list[str] | None
     ):
     """
-    Returns the column, grouped when a group column is given, so that diff and shift stay inside one
-    group instead of reading the row above whatever it belongs to.
+    Returns the column, grouped when a group column is given, so diff and shift stay inside one
+    group instead of reading whatever row happens to sit above.
     """
 
     if group_by_column is None:
@@ -35,10 +33,11 @@ SEASON_OPENER = 'SEASON_OPENER'
 CAREER_DEBUT = 'CAREER_DEBUT'
 MAX_REST = 7
 MAX_BREAK_DAYS = 90
-# NBA seasons run October to June, so a season is named for the calendar year it started in.
-SEASON_START_MONTH = 8
 def season_of(game_dates: pd.Series) -> pd.Series:
-    """The calendar year each game's season started in. The dates must be in datetime form."""
+    """
+    The calendar year each game's season started in, which is season.season_of over a whole column.
+    The dates must be in datetime form.
+    """
 
     return game_dates.dt.year - (game_dates.dt.month < SEASON_START_MONTH)
 
@@ -52,13 +51,12 @@ def add_break_columns(
     """
     Adds the four columns describing the gap before each game.
 
-    REST holds days off capped at max_rest, which is the range almost every game falls in.
-    BREAK_LENGTH covers the whole range as the logarithm of one plus the days off, so a week off
-    sits as far from a fortnight as a fortnight does from a month, which is how the effect actually
-    grows. SEASON_OPENER and CAREER_DEBUT mark the two gaps that are not layoffs at all.
+    REST is days off capped at max_rest, the range almost every game falls in. BREAK_LENGTH covers
+    the whole range as the logarithm of one plus the days off. SEASON_OPENER and CAREER_DEBUT mark
+    the two gaps that are not layoffs at all, and a career debut is given the longest gap.
 
     The given game_data must be sorted by game date, grouped by id, and the game_date column must be
-    in datetime form. A career debut has no gap behind it, so it is given the longest one.
+    in datetime form.
 
     Args:
         group_by_column covers every group in one pass. Without it the frame must hold one group.
@@ -86,11 +84,8 @@ def add_games_played_column(
     group_by_column: str
     ) -> pd.DataFrame:
     """
-    Counts how many games came before each row, within each group.
-
-    Rolling columns fill their first rows with a set value, so without this a career average built
-    from no games looks exactly like one that really is zero. The count tells a model how much of
-    the averages beside it are worth trusting.
+    Counts how many games came before each row, within each group. Rolling columns fill their first
+    rows with a set value, so this is what tells a model whether to trust the averages beside it.
 
     The given game_data must be sorted so that each group runs from oldest to newest.
     """
@@ -118,9 +113,9 @@ def add_changed_team_column(
 
 POINTS = 'POINTS'
 def add_points_column(
-    game_data: pd.DataFrame, 
-    fgm_column: str, 
-    fg3m_column: str, 
+    game_data: pd.DataFrame,
+    fgm_column: str,
+    fg3m_column: str,
     ftm_column: str
     ) -> pd.DataFrame:
     fgm = game_data[fgm_column]
@@ -131,8 +126,8 @@ def add_points_column(
 
 REBOUNDS = 'REBOUNDS'
 def add_total_rebounds_column(
-    game_data: pd.DataFrame, 
-    orb_column: str, 
+    game_data: pd.DataFrame,
+    orb_column: str,
     drb_column: str
     ) -> pd.DataFrame:
     orb = game_data[orb_column]
@@ -142,10 +137,10 @@ def add_total_rebounds_column(
 
 POSSESSIONS = 'POSSESSIONS'
 def add_possessions_column(
-    team_game_data: pd.DataFrame, 
-    fga_column: str, 
-    fta_column: str, 
-    orb_column: str, 
+    team_game_data: pd.DataFrame,
+    fga_column: str,
+    fta_column: str,
+    orb_column: str,
     tov_column: str
     ) -> pd.DataFrame:
     fga = team_game_data[fga_column]
@@ -164,10 +159,8 @@ def add_differences_columns(
     dataframe: pd.DataFrame,
     stat_columns: list[tuple[str, str]]
 ) -> pd.DataFrame:
-    """
-    For each entry in stat_columns, add a column containing the difference between the first column and the second column.
-    """
-    
+    """Adds one column per pair, holding the first column minus the second."""
+
     for minuend_column, subtrahend_column in stat_columns:
         dataframe[minuend_column + DIFFERENCE_INFIX + subtrahend_column] = (
             dataframe[minuend_column] - dataframe[subtrahend_column]
@@ -203,33 +196,40 @@ def merge_player_team_game_data(
     game_id_column_player: str,
     team_id_column_team: str,
     team_id_column_player: str,
-    duplicate_categories_player: list[str] = [],
+    duplicate_categories_player: list[str] | None = None,
     ) -> pd.DataFrame:
+    """
+    Joins each player's game row onto their own team's row for that game.
 
-    non_duplicate_player_game_data = player_game_data.drop(columns=duplicate_categories_player, errors='ignore')
+    Args:
+        duplicate_categories_player names player columns the team frame also holds, which are
+        dropped rather than suffixed.
+    """
+
+    non_duplicate_player_game_data = player_game_data.drop(columns=duplicate_categories_player or [], errors='ignore')
 
     player_team_game_data: pd.DataFrame = non_duplicate_player_game_data.merge(
-        team_game_data, 
-        left_on=game_id_column_player, 
+        team_game_data,
+        left_on=game_id_column_player,
         right_on=game_id_column_team,
         suffixes=(PLAYER_SUFFIX, TEAM_SUFFIX)
         )
-    
+
     if team_id_column_team == team_id_column_player:
         player_team_game_data = player_team_game_data[
-            player_team_game_data[team_id_column_team + PLAYER_SUFFIX] 
+            player_team_game_data[team_id_column_team + PLAYER_SUFFIX]
             == player_team_game_data[team_id_column_player + TEAM_SUFFIX]
             ]
-        
+
         player_team_game_data = player_team_game_data.drop(columns=team_id_column_player + PLAYER_SUFFIX, errors='ignore')
         player_team_game_data = player_team_game_data.rename(columns={team_id_column_team + TEAM_SUFFIX : team_id_column_player}, errors='ignore')
 
     else:
         player_team_game_data = player_team_game_data[
-            player_team_game_data[team_id_column_team] 
+            player_team_game_data[team_id_column_team]
             == player_team_game_data[team_id_column_player]
             ]
-    
+
     return player_team_game_data
 
 OPPONENT_PREFIX = 'OPP_'
@@ -293,16 +293,13 @@ def add_availability_columns(
     max_games_missed: int = MAX_TEAM_GAMES_MISSED
     ) -> pd.DataFrame:
     """
-    Adds how much of their team's recent schedule the player has actually been available for.
-
-    Rest and break length only see the gap in days, so a player in and out of the lineup with a
-    nagging injury reads as well rested. These count the team's games instead.
+    Adds how much of their team's recent schedule the player has been available for. Rest only sees
+    the gap in days, so a player in and out of the lineup reads as well rested without these.
 
     TEAM_GAMES_MISSED is how many games the team played since the player last appeared for them.
     RECENT_AVAILABILITY is the share of its games the player played over their last window
-    appearances, so one means they have missed nothing and a half means they played every other
-    game. Both are unknown until the player has a history with the team, and an unknown reads as
-    fully available, which is what a player with no missed games looks like.
+    appearances. Both are unknown until the player has a history with the team, and an unknown reads
+    as fully available.
 
     Neither frame needs to be sorted. team_game_data supplies the order of a team's games and needs
     its date column in datetime form.
@@ -344,9 +341,7 @@ def add_recent_game_count_columns(
     ) -> pd.DataFrame:
     """
     Adds how many games came before each one within the given number of days, not counting itself.
-
-    Rest only measures the last gap. Three games in five nights and one game in five nights both
-    leave a day of rest behind them, and only one of them is a tired player.
+    Rest only measures the last gap, so three games in five nights reads the same as one without it.
 
     The frame need not be sorted, but its row labels must be unique and the date column must be in
     datetime form.
@@ -399,17 +394,10 @@ def add_core_teammate_columns(
     stat_columns. Those columns should hold what a player was averaging going into the game rather
     than what they did in it, so a total says what the team has, not what it got.
 
-    Gained and lost compare this game's roster to the previous one. Gained means a core player who
-    was not there last time, lost means a core player from last time who is not here now. Losing a
-    thirty point scorer and losing a bench player used to read the same, because this was two yes or
-    no columns.
-
-    Absent is the shortfall against what the team normally has available, taken over its last
-    rotation_window games. The other two only fire on the game a teammate first goes missing, so
-    without this a star sitting out ten straight games is invisible after the first one.
-
-    Gained and lost leave the player's own numbers out of their own row. Absent is a team total
-    where a player present in both the shortfall and the usual level cancels out of it.
+    Gained and lost compare this game's roster to the previous one, and leave the player's own
+    numbers out of their own row. Absent is the shortfall against what the team normally has
+    available over its last rotation_window games, which is what carries a star's whole absence
+    rather than only the first game of it.
 
     Args:
         minutes_played_column decides who was core in a game that was played.
@@ -501,9 +489,8 @@ def _add_years_between_static_player_event_and_game_column(
     new_column_name: str,
     ) -> pd.DataFrame:
     """
-    Adds a column to game_data representing the time elapsed between a static event's date and the current game date.
-    The static event's dates are represented inside of a dataframe where each player_id corresponds to the static event's time.
-    The static_player_event_time and game_date columns must be represented in datetime form.
+    Adds the years between a date held once per player, such as their birthdate, and each game they
+    played. Both date columns must be in datetime form.
     """
 
     TEMP = 'TEMP'
@@ -573,10 +560,8 @@ ALL_SEASON_TYPES = [
     PLAY_IN
 ]
 SEASON_ENCODINGS = {
-    PRESEASON : "1",
-    REGULAR_SEASON : "2",
-    PLAYOFFS : "4",
-    PLAY_IN : "5"
+    season_type.value : prefix
+    for season_type, prefix in GAME_ID_PREFIXES.items()
 }
 def add_encoded_season_type_columns(
     team_game_data: pd.DataFrame,
@@ -599,10 +584,7 @@ def encode_win_loss_column_as_integer(
     game_data: pd.DataFrame,
     win_loss_column: str
     ) -> pd.DataFrame:
-    """
-    Converts the given game_data's win/loss columnn from a string represenation to an interger representation.
-    A value of 0 representing a loss, and a value of 1 representing a win.
-    """
+    """Rewrites the win/loss column as one for a win and zero for a loss."""
 
     game_data[win_loss_column] = _encode_equality_as_integer(game_data[win_loss_column], "W")
     return game_data
@@ -622,10 +604,9 @@ def add_season_standings_columns(
     """
     Adds how far into its season each team game sits and how the team's season is going.
 
-    SEASON_GAME_NUMBER and DAYS_INTO_SEASON place the game in the season, which is what tells a
-    model that a regular playing fewer minutes in April is the calendar rather than a decline.
-    TEAM_WIN_PERCENTAGE says how much the game is still worth to the team, which is what separates
-    a contender resting a star from an eliminated team handing minutes to its bench.
+    SEASON_GAME_NUMBER and DAYS_INTO_SEASON place the game in the season. TEAM_WIN_PERCENTAGE says
+    how much the game is still worth to the team, which separates a contender resting a star from an
+    eliminated team handing minutes to its bench.
 
     Only regular season games count towards the record, and a game never counts itself. A playoff
     game therefore reads the record the team finished the regular season on, and a preseason game
@@ -653,40 +634,31 @@ def add_season_standings_columns(
     ).dt.days
     return team_game_data
 
-UNKNOWN_HEIGHT = 'UNKNOWN_HEIGHT'
 def convert_height_to_inches(
     player_info: pd.DataFrame,
     height_column: str,
-    add_unknown_heights_column: bool = False,
     fill_unknown_with_mean: bool = False
     ) -> pd.DataFrame:
-    heights = player_info[height_column]
-    heights_split = heights.str.split("-", expand=True)
+    """Rewrites a height written as feet-inches, such as 6-7, as a number of inches."""
+
+    heights_split = player_info[height_column].str.split("-", expand=True)
     feet = pd.to_numeric(heights_split[0], errors="coerce")
     inches = pd.to_numeric(heights_split[1], errors="coerce")
     player_info[height_column] = feet * 12 + inches
-    
-    if add_unknown_heights_column:
-        player_info[UNKNOWN_HEIGHT] = _encode_equality_as_integer(heights, "")
 
     if fill_unknown_with_mean:
         player_info[height_column] = player_info[height_column].fillna(player_info[height_column].mean())
 
     return player_info
 
-UNKNOWN_WEIGHT = 'UNKNOWN_WEIGHT'
 def handle_unknown_weight(
     player_info: pd.DataFrame,
     weight_column: str,
-    add_unknown_weights_column: bool = False,
     fill_unknown_with_mean: bool = False
     ) -> pd.DataFrame:
-    weights = player_info[weight_column]
-    player_info[weight_column] = pd.to_numeric(weights, errors='coerce')
+    """Makes the weight column a number, since an unknown weight arrives as empty text."""
 
-    if add_unknown_weights_column:
-        player_info[UNKNOWN_WEIGHT] = _encode_equality_as_integer(weights, "")
-        player_info[weight_column] = player_info[weight_column].fillna(0)
+    player_info[weight_column] = pd.to_numeric(player_info[weight_column], errors='coerce')
 
     if fill_unknown_with_mean:
         player_info[weight_column] = player_info[weight_column].fillna(player_info[weight_column].mean())
@@ -696,7 +668,7 @@ def handle_unknown_weight(
 UNDRAFTED = 'Undrafted'
 def encode_undrafted(
     player_info: pd.DataFrame,
-    draft_number_column: str, 
+    draft_number_column: str,
     ) -> pd.DataFrame:
     draft_number = player_info[draft_number_column]
     player_info[UNDRAFTED] = _encode_equality_as_integer(draft_number, UNDRAFTED)

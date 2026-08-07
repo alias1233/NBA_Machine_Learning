@@ -55,16 +55,35 @@ def get_all_team_game_data() -> pd.DataFrame:
     return data
 
 def get_game_data_after_date(date_start: datetime) -> pd.DataFrame:
-    SQL_condtition = f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
-    condition_params = {GAME_DATE : season.to_date_string(date_start)}
-
     with DATABASE:
         data = DATABASE.query_dataframe(
-            SQL_condition=SQL_condtition,
-            condition_params=condition_params
+            SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",
+            condition_params={GAME_DATE : season.to_date_string(date_start)}
         )
 
     return data
+
+def stored_game_ids(date_start: date | None = None) -> set[int]:
+    """
+    Which games have a box score held, which is what says a scheduled game has actually been
+    collected. A date narrows the scan to the games that could still matter.
+    """
+
+    SQL_condition = None
+    condition_params = None
+
+    if date_start is not None:
+        SQL_condition = f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
+        condition_params = {GAME_DATE : season.to_date_string(date_start)}
+
+    with DATABASE:
+        rows = DATABASE.query(
+            SQL_condition=SQL_condition,
+            condition_params=condition_params,
+            categories=[GAME_ID]
+        )
+
+    return {int(row[0]) for row in rows}
 
 def latest_game_date() -> date | None:
     """The newest game held, which is where an update run starts from. None when nothing is held."""

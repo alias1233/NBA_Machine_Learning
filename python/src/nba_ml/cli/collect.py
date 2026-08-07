@@ -9,7 +9,7 @@ import argparse
 from datetime import date
 
 from nba_ml import season, sources
-from nba_ml.data_collection import games, players, teams
+from nba_ml.data_collection import games, players, schedule, teams
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
 from nba_ml.stores import player_games
@@ -92,6 +92,15 @@ def main():
 
     commands.add_parser("teams", help="Collect the thirty teams and their tricodes.")
 
+    schedule_command = commands.add_parser("schedule", help="Collect the games of a season, played or not.")
+    schedule_command.add_argument(
+        "--seasons",
+        nargs="+",
+        type=int,
+        metavar="YEAR",
+        help="Seasons to collect, each named by the year it starts in. Defaults to this one and the next."
+    )
+
     players_command = commands.add_parser("players", help="Collect player information, one request per player.")
     players_command.add_argument("--all", action="store_true", help="Collect every player the source knows of.")
     players_command.add_argument(
@@ -122,6 +131,8 @@ def main():
     match arguments.command:
         case "teams":
             rows_written = teams.collect(source, print_debug)
+        case "schedule":
+            rows_written = schedule.collect(source, arguments.seasons, print_debug)
         case "players":
             rows_written = _collect_players(source, arguments)
         case "player-games":
@@ -129,11 +140,13 @@ def main():
         case "team-games":
             rows_written = _collect_games(source, arguments, for_teams=True)
         case _:
+            # The schedule comes last so that it is read against the box scores just collected.
             rows_written = (
                 teams.collect(source, print_debug)
                 + games.update_player_games(source, print_debug)
                 + games.update_team_games(source, print_debug)
                 + players.update(source, print_debug)
+                + schedule.collect(source, print_debug=print_debug)
             )
 
     print(f"Wrote {rows_written} rows.")

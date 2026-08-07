@@ -1,3 +1,10 @@
+"""
+Turning the stored box scores into the inputs a player game statistics model reads.
+
+The same feature build runs for training and for a prediction, so a predicted game is fed through it
+as one more row rather than assembled by hand.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -16,17 +23,15 @@ from nba_ml.stores import player_games, players, team_games
 
 ROLLING_WINDOW = 15
 
-# How fast the weighted recent form columns forget, in games. One means the game before last counts
-# half as much as the last one. Swept over halflives from a half to ten and against flat windows of
-# one to twenty five games, and this was the best of them on all three stats.
+# How fast the weighted recent form columns forget, in games. Swept against flat windows and beat
+# all of them on every stat.
 RECENT_FORM_HALFLIFE = 1
 
 # How much history a prediction reads out of the databases.
 HISTORICAL_WINDOW_LENGTH_YEARS = 5
 
-# How far back the long window player columns read. This is a fixed number of games rather than the
-# player's whole career, so that a prediction reading only HISTORICAL_WINDOW_LENGTH_YEARS of games
-# builds the same value training did. It must stay small enough to fit inside that window.
+# How far back the long window player columns read. A fixed number of games rather than a whole
+# career, so a prediction reading only HISTORICAL_WINDOW_LENGTH_YEARS builds what training built.
 CAREER_WINDOW = 200
 
 PAST_CAREER_MEAN_PREFIX = "PAST_CAREER_MEAN_"
@@ -722,7 +727,6 @@ def _preprocess_game_data(
         by=[player_games.PLAYER_ID.category_name, team_games.GAME_DATE.category_name]
         ).reset_index(drop=True)
 
-    # TODO: Potentially move this elsewhere so that resources are not wasted during inferencing by generating more data than needed
     player_team_game_data[OUTPUT] = player_team_game_data[features.output_columns].sum(axis=1)
 
     histories = _split_into_player_histories(
@@ -783,15 +787,12 @@ def _print_progress(count: int):
 
 # TRAINING DATA: #
 def _get_player_info_width(histories: dict[int, PlayerGameHistory]) -> int:
-    for history in histories.values():
-        return len(history.static_player_info)
+    """How many columns a player's own information takes up, which is the same for every player."""
 
-    return 0
+    return next((len(history.static_player_info) for history in histories.values()), 0)
 
 class _SampleAccumulator():
-    """
-    Collects the samples of one split before they are packed into arrays.
-    """
+    """Collects the samples of one split before they are packed into arrays."""
 
     def __init__(self):
         self.player_indices: list[int] = []
@@ -823,7 +824,7 @@ class _SampleAccumulator():
             np.array(self.outputs, dtype=np.float64)
         )
 
-def get_all_player_props_labeled_data(
+def get_all_labeled_data(
         features: FeatureSet,
         validation_split_start_date: datetime,
         test_split_start_date: datetime,
@@ -836,7 +837,7 @@ def get_all_player_props_labeled_data(
             SequenceInputSamples
             ]:
     """
-    Returns a labeled training dataset for over/under prediction.
+    Builds every labeled sample the league holds, split into training, validation and test by date.
 
     Each player's games are kept once and the samples only hold where in them to read, so that a
     sample can look back over a long history without storing its own copy of it.
@@ -844,8 +845,8 @@ def get_all_player_props_labeled_data(
     Games played against the predicted game's opponent are marked inside the sequence itself, so a
     sample is kept even when the player has rarely faced them.
 
-    The returned data is in the form of a tuple consisting of:
-    (games of every player, training samples, validation samples, test samples)
+    Returns:
+        (games of every player, training samples, validation samples, test samples)
     """
 
     histories = _get_all_preprocessed_game_data(features, print_debug)
@@ -921,17 +922,13 @@ def _get_inference_player_game_data(
     is only the player's real rest while the databases are current, so collect before predicting.
 
     Args:
-        removed_core_teammate_player_ids hold a set of players who played more than 25 minutes in the previous game for the target team,
-        and are not playing for the target game.
-
-        added_core_teammate_player_ids hold a set of players who did not play in the previous game for the target team, but
-        are now projected to play more than 25 minutes for the target game.
+        removed_core_teammate_player_ids are core players from the team's last game who are out for
+        this one. added_core_teammate_player_ids are the reverse, players expected back in. Core
+        means the minutes cutoff in game_columns.
 
     Returns:
         (the target player's history, the position of the predicted game within it)
     """
-
-    # TODO: Potentially refactor the process of encoding current known information into the input data
 
     if print_debug:
         print("Querying data from databases...")
@@ -1053,7 +1050,7 @@ def _get_inference_player_game_data(
 
     return (history, int(target_indices[0]))
 
-def get_player_prop_inference_data(
+def get_inference_data(
     features: FeatureSet,
     target_player_id: int,
     target_player_team_id: int,
@@ -1063,10 +1060,8 @@ def get_player_prop_inference_data(
     print_debug: bool = False
     ) -> tuple[PlayerGameSequences, SequenceInputSamples]:
     """
-    Creates input data for a given target game for inferencing.
-
-    Returns the target player's games and the single sample that reads them.
-    See _get_inference_player_game_data for what the target game arguments mean.
+    Builds the input for one prediction: the target player's games and the single sample reading
+    them. See _get_inference_player_game_data for what the target game arguments mean.
     """
 
     history, target_index = _get_inference_player_game_data(

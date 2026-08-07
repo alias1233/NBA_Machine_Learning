@@ -148,10 +148,12 @@ def plot_calibration(
         save_graph_directory_path: Path | None = None
         ):
     """
-    For each classification, plot a reliability diagram depicted the accuracy of a predicted probability.
-    predicted_probabilities: shape (n_samples, n_classes)
-    actuals: shape (n_samples,) with integer class labels
-    row_columns: Num of rows and columns of graphs per page
+    Plots one reliability diagram per class, which shows whether a predicted probability happens as
+    often as it claims.
+
+    Args:
+        predicted_probabilities is shaped (samples, classes) and actuals holds one class per sample.
+        rows_columns is how many graphs fit across and down one page.
     """
 
     n_classes = predicted_probabilities.shape[1]
@@ -317,12 +319,11 @@ def output_test_evaluation_classification(
         save_graph_directory_path: Path | None = None
     ) -> dict[str, float]:
     """
-    Graphs information about the predicted classification and the actual classifications of model predictions.
+    Scores a finished model's predictions and graphs them.
 
     Args:
-        predictions are be the outputted logits of the model.
-        actuals are the true classification of the values.
-        save_graph_directory_path if set is a string path to a directory to save the evaluation graphs to.
+        predictions are the model's logits, and actuals the class that happened.
+        save_graph_directory_path saves the graphs there instead of showing them.
 
     Returns:
         Every metric that was scored, so it can be recorded alongside the model.
@@ -340,11 +341,9 @@ def output_test_evaluation_classification(
     if ordinal:
         metrics.update(calculate_classification_ordinal_errors(predicted_probabilities, actuals))
 
-    print("\n===== TEST RESULTS =====")
+    print(f"\n===== SCORES FOR {label.upper()} =====")
     for name, value in metrics.items():
         print(f"{name}: {value:.6f}")
-
-    print("\n===== SAMPLE PREDICTIONS =====")
 
     _plot_predicted_distributions(
         predicted_probabilities,

@@ -2,25 +2,24 @@
 The prediction service.
 
 Every identifier a caller uses is one this project owns and stores: a player id, a team tricode such
-as LAL, a stat name, and a season phase. None of them come from a data service, so the browser never
-has to know which service the data was collected from and a change of service cannot break a saved
-link.
+as LAL, a model name, and a season phase. None of them come from a data service, so a change of
+service cannot break a saved link.
 
 A game is named by its date and its two teams rather than by a team, an opponent and a home flag,
-which means a caller cannot describe a game that could not happen. Once the schedule is stored, a
-stored game id becomes a second way to say the same thing.
+which means a caller cannot describe a game that could not happen.
 
 The answer is a probability for every whole number outcome. Over and under odds for any line are the
 sum of the probabilities past it, which the browser does on its own.
 """
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from nba_ml.entities import Game
-from nba_ml.models.player_stats import inference, specifications
+from nba_ml import upcoming
+from nba_ml.entities import Game, ScheduledGame
+from nba_ml.models.player_stats import inference, odds, specifications
 from nba_ml.season import SeasonType
 from nba_ml.stores import player_games, players, teams
 
@@ -28,6 +27,10 @@ app = FastAPI(
     title="NBA Machine Learning",
     summary="Predicts the probability of every whole number outcome of a player's stat in one game."
 )
+
+# How far back a team's players are read from. Long enough that the answer survives an off season,
+# since who last played for a team is the only roster this project holds.
+ROSTER_WINDOW = timedelta(days=365)
 
 # Answers
 class TeamResponse(BaseModel):
@@ -38,20 +41,42 @@ class PlayerResponse(BaseModel):
     id: int
     name: str
 
-class StatModelResponse(BaseModel):
-    stat: str
+class ScheduledGameResponse(BaseModel):
+    """One upcoming game that can be predicted right now."""
+
+    id: int
+    date: date
+    tipoff: datetime | None
+    """When the game starts, in UTC. Null when the schedule does not name a time."""
+
+    home_team: TeamResponse
+    away_team: TeamResponse
+    season_type: SeasonType
+    is_mock: bool
+    """Added by hand for testing rather than collected, so a page can say so."""
+
+class ModelResponse(BaseModel):
+    name: str
+    """What to pass as the model in a prediction request."""
+
+    family: str
+    """Which group of models this belongs to, which is the page it is predicted on."""
+
+    stats: list[str]
     minimum_value: int
     """The value the first probability stands for."""
 
     outcomes: int
+    published: bool
+    """Whether a trained file exists, so a caller can offer the model without every request failing."""
 
 class HealthResponse(BaseModel):
-    stats: list[str]
+    models: list[str]
     newest_stored_game: date | None
     """A prediction reads rest off the gap to the player's last game, so stale data reads as a layoff."""
 
-class PlayerPropResponse(BaseModel):
-    stat: str
+class PredictionResponse(BaseModel):
+    model: str
     minimum_value: int
     probabilities: list[float]
     expected_value: float
@@ -71,7 +96,7 @@ class ScenarioRequest(BaseModel):
     without: list[int] = Field(default_factory=list)
     returning: list[int] = Field(default_factory=list)
 
-class PlayerPropRequest(BaseModel):
+class PredictionRequest(BaseModel):
     player_id: int
     game: GameRequest
     player_team: str | None = None
@@ -86,10 +111,24 @@ def _team_id(abbreviation_or_name: str) -> int:
 
     return team.id
 
+def _scheduled_game_response(
+    scheduled: ScheduledGame,
+    named_teams: dict[int, TeamResponse]
+    ) -> ScheduledGameResponse:
+    return ScheduledGameResponse(
+        id=scheduled.id,
+        date=scheduled.game.date,
+        tipoff=scheduled.tipoff,
+        home_team=named_teams[scheduled.game.home_team_id],
+        away_team=named_teams[scheduled.game.away_team_id],
+        season_type=scheduled.game.season_type,
+        is_mock=scheduled.is_mock
+    )
+
 @app.get("/health")
 def health() -> HealthResponse:
     return HealthResponse(
-        stats=sorted(specifications.ALL_MODEL_SPECIFICATIONS),
+        models=specifications.MODEL_NAMES,
         newest_stored_game=player_games.latest_game_date()
     )
 
@@ -99,6 +138,38 @@ def all_teams() -> list[TeamResponse]:
         TeamResponse(abbreviation=team.abbreviation, name=team.name)
         for team in sorted(teams.all_teams(), key=lambda team: team.abbreviation)
     ]
+
+@app.get("/teams/{abbreviation}/players")
+def team_players(abbreviation: str) -> list[PlayerResponse]:
+    """
+    Who plays for a team, taken as everyone whose most recent game in the last year was for it.
+
+    This is what fills the player list once a game has been chosen. There is no roster feed, so a
+    player traded in the off season stays on their old team until they play for the new one.
+    """
+
+    player_ids = player_games.player_ids_on_team(_team_id(abbreviation), date.today() - ROSTER_WINDOW)
+
+    return [
+        PlayerResponse(id=player.id, name=player.name)
+        for player in sorted(players.get_players(player_ids), key=lambda player: player.name)
+    ]
+
+@app.get("/games/upcoming")
+def upcoming_games() -> list[ScheduledGameResponse]:
+    """
+    The games that can be predicted right now, soonest first.
+
+    A game is left out until every earlier game of both its teams has been collected, because until
+    then the model would read one of them as a game out of date. See nba_ml/upcoming.py.
+    """
+
+    named_teams = {
+        team.id: TeamResponse(abbreviation=team.abbreviation, name=team.name)
+        for team in teams.all_teams()
+    }
+
+    return [_scheduled_game_response(scheduled, named_teams) for scheduled in upcoming.predictable_games()]
 
 @app.get("/players")
 def find_players(
@@ -110,25 +181,41 @@ def find_players(
         for player in players.find_by_name(search, limit)
     ]
 
-@app.get("/stat-models")
-def all_stat_models() -> list[StatModelResponse]:
+@app.get("/players/{player_id}")
+def get_player(player_id: int) -> PlayerResponse:
+    """Names a player from a stored id, so a saved prediction link reads without a search."""
+
+    player = players.get_player(player_id)
+    if player is None:
+        raise HTTPException(404, f"No stored player has the id {player_id}.")
+
+    return PlayerResponse(id=player.id, name=player.name)
+
+@app.get("/models")
+def all_models() -> list[ModelResponse]:
     return [
-        StatModelResponse(
-            stat=specification.name,
+        ModelResponse(
+            name=specification.name,
+            family=specifications.MODEL_CATEGORY,
+            stats=[stat.name.lower() for stat in specification.target_stats],
             minimum_value=specification.minimum_of_stat,
-            outcomes=specification.number_of_stat_classifications
+            outcomes=specification.number_of_stat_classifications,
+            published=inference.can_load(specification)
         )
         for specification in specifications.ALL_MODEL_SPECIFICATIONS.values()
     ]
 
-@app.post("/predictions/player-props/{stat}")
-def predict_player_prop(stat: str, request: PlayerPropRequest) -> PlayerPropResponse:
-    specification = specifications.ALL_MODEL_SPECIFICATIONS.get(stat)
+@app.post("/predictions/player-stats/{model}")
+def predict_player_stat(model: str, request: PredictionRequest) -> PredictionResponse:
+    specification = specifications.ALL_MODEL_SPECIFICATIONS.get(model)
     if specification is None:
-        raise HTTPException(404, f"No model predicts {stat}. See /stat-models.")
+        raise HTTPException(404, f"No model is named {model}. See /models.")
 
     if players.get_player(request.player_id) is None:
         raise HTTPException(404, f"No stored player has the id {request.player_id}.")
+
+    if not inference.can_load(specification):
+        raise HTTPException(503, f"The {specification.name} model has no published file yet.")
 
     game = Game(
         request.game.date,
@@ -150,12 +237,9 @@ def predict_player_prop(stat: str, request: PlayerPropRequest) -> PlayerPropResp
     except ValueError as error:
         raise HTTPException(422, str(error))
 
-    return PlayerPropResponse(
-        stat=specification.name,
+    return PredictionResponse(
+        model=specification.name,
         minimum_value=specification.minimum_of_stat,
         probabilities=probabilities,
-        expected_value=sum(
-            (specification.minimum_of_stat + offset) * probability
-            for offset, probability in enumerate(probabilities)
-        )
+        expected_value=odds.expected_value(probabilities, specification.minimum_of_stat)
     )

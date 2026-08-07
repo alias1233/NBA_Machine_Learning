@@ -5,6 +5,8 @@ The name is held here as well as the modelled columns, because it is what a pers
 page displays, and neither should need a data service to answer.
 """
 
+from typing import Iterable
+
 import pandas as pd
 
 from nba_ml import paths
@@ -76,6 +78,13 @@ def _named_players(
         )
 
     return [Player(int(player_id), name) for player_id, name in rows if name is not None]
+
+def get_players(player_ids: Iterable[int]) -> list[Player]:
+    """The named players among the given ids, in the order they were given."""
+
+    named = {player.id: player for player in _named_players()}
+
+    return [named[player_id] for player_id in player_ids if player_id in named]
 
 def get_player(player_id: int) -> Player | None:
     found = _named_players(

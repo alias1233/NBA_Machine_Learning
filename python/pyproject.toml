@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 nba-collect = "nba_ml.cli.collect:main"
+nba-schedule = "nba_ml.cli.schedule:main"
 nba-train = "nba_ml.cli.train:main"
 nba-predict = "nba_ml.cli.predict:main"
 

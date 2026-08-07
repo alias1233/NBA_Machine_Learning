@@ -1,13 +1,13 @@
 """
 The things this project talks about: a player, a team, and one game.
 
-These are named in our own vocabulary rather than any data service's, so they are what an endpoint,
-a command and a store all speak. A source translates its own shapes into these on the way in, which
-is what keeps a change of service from reaching anything downstream.
+These are named in our own vocabulary rather than any data service's, so an endpoint, a command and a
+store all speak the same one. A source translates its own shapes into these on the way in.
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from enum import Enum
 
 from nba_ml.season import SeasonType
 
@@ -48,6 +48,37 @@ class Game():
         raise ValueError(f"Team {team_id} is not playing in this game.")
 
     def is_home(self, team_id: int) -> bool:
-        self.opponent_of(team_id)
+        """
+        Raises:
+            ValueError if the team is not playing in this game, so a wrong team is never read as away.
+        """
+
+        if team_id not in (self.home_team_id, self.away_team_id):
+            raise ValueError(f"Team {team_id} is not playing in this game.")
 
         return team_id == self.home_team_id
+
+class GameStatus(Enum):
+    SCHEDULED = "SCHEDULED"
+    LIVE = "LIVE"
+    FINAL = "FINAL"
+
+@dataclass(frozen=True)
+class ScheduledGame():
+    """
+    One game on the published schedule, played or not.
+
+    A Game says what a prediction needs. This adds what the schedule itself carries: the id the game
+    is published under, how far along it is, and when it starts.
+    """
+
+    id: int
+    game: Game
+    status: GameStatus
+    tipoff: datetime | None = None
+    is_mock: bool = False
+    """Added by hand for testing rather than fetched. See nba_ml/cli/schedule.py."""
+
+    @property
+    def team_ids(self) -> tuple[int, int]:
+        return (self.game.home_team_id, self.game.away_team_id)

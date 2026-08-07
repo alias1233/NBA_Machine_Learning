@@ -34,9 +34,7 @@ class SavableModule(nn.Module):
         return instance
 
     def get_save_parameters_dict(self) -> dict[str, Any]:
-        """
-        Returns a dictionary containing the parameters of this model for loading and saving.
-        """
+        """Everything needed to rebuild this model: its shape arguments and its weights."""
 
         saved: dict[str, Any] = {}
         for name in self.SAVED_ARGUMENT_NAMES:

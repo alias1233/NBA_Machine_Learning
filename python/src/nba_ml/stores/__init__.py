@@ -1,9 +1,9 @@
 """
 Where collected data is held, and how it is read back.
 
-One module per table. A module owns its columns, its writes, and its queries, and knows nothing
-about where the rows came from. Everything downstream of collection reads from here, including the
-search that turns a typed name into an id, so nothing has to ask a data service who someone is.
+One module per table, owning its columns, its writes and its queries, and knowing nothing about
+where the rows came from. Everything downstream of collection reads from here, including the search
+that turns a typed name into an id, so nothing has to ask a data service who someone is.
 """
 
 import unicodedata
