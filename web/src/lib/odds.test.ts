@@ -1,7 +1,8 @@
 /**
- * Checks `odds.ts` against the answers `python/src/nba_ml/models/player_stats/odds.py` gives for the
- * same input. That file is the original and this is a hand port of it, so this is what catches the
- * two drifting apart.
+ * Checks `odds.ts` against answers small enough to work out by hand.
+ *
+ * Nothing else checks this arithmetic. The service sends a distribution and every figure a reader
+ * reads off it is worked out here, so this is the only thing standing behind those numbers.
  *
  * Run with `npm test`. Node reads the TypeScript directly, so there is nothing to install.
  */
@@ -72,7 +73,6 @@ check('the likeliest outcomes come back in order', mostLikelyOutcomes(probabilit
 
 check('ranking leaves the given array alone', probabilities, [0.1, 0.15, 0.4, 0.25, 0.1]);
 
-// The rest is the site's own reading of a prediction. There is no Python to check it against.
 check('a result opens on the half number below what is expected', defaultLine(23.1), 23.5);
 check('and on the same one from above it', defaultLine(23.7), 23.5);
 

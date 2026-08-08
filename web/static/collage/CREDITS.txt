@@ -1,15 +1,3 @@
-Collage credits
+Collage credits 
 
-Every image in `static/collage/` should have a row here.
-
-A row records the file name, where the image came from, its licence, and who made it. If the image
-was generated rather than sourced, the source column says so and names the tool.
-
-Before adding a row, look at the image at full size and check it against R8.2: no player faces, no
-legible jersey number or name, no team or league mark, no arena signage, and no readable brand.
-
-| File | Source | Licence | Author |
-| --- | --- | --- | --- |
-
-No images yet. The tiles in `src/lib/collage.ts` paint a placeholder shape until this table has
-rows.
+Will fill out later once site images are finalized. Currently, all collage images are placeholders.

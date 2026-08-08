@@ -9,6 +9,6 @@ export const ADS_ENABLED = false;
 
 /** There are two slots and no more. A third needs the user's agreement first. */
 export const AD_SLOTS = {
-	modelsFooter: 'ad-models-footer',
+	homeModels: 'ad-home-models',
 	modelBelowResult: 'ad-model-below-result'
 } as const;

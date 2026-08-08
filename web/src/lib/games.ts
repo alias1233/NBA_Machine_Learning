@@ -7,9 +7,6 @@
 
 import type { ScheduledGame } from '$lib/types';
 
-export const matchup = (game: ScheduledGame) =>
-	`${game.away_team.abbreviation} at ${game.home_team.abbreviation}`;
-
 export const gameDay = (date: string) =>
 	new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
 		weekday: 'short',

@@ -1,4 +1,4 @@
-import { publishedFamilies } from '$lib/models';
+import { listedFamilies } from '$lib/models';
 import { getHealth, getModels } from '$lib/server/api';
 
 import type { LayoutServerLoad } from './$types';
@@ -11,5 +11,5 @@ export const load: LayoutServerLoad = async () => {
 		getModels().catch(() => [])
 	]);
 
-	return { health, families: publishedFamilies(models) };
+	return { health, families: listedFamilies(models) };
 };

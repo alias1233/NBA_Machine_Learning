@@ -1,6 +1,4 @@
 /*
- * The machine-readable copy of docs/WEBSITE_DESIGN_DOCUMENT.md sections 3 to 7.
- *
  * Every colour, type size, space, radius and duration the site uses is named here, and nothing
  * outside this file holds a raw one. `light-dark()` picks per theme from a single declaration, so a
  * token is never written twice and there is no theme-specific block.
@@ -35,15 +33,14 @@
 
 	/* The five planes. A block is the opposite theme's paper, which is what gives a page its
 	   composition, so it carries an ink family of its own. */
-	--page: light-dark(#f8f5ee, #171616);
-	--header: light-dark(#ffffff, #000000);
-	--panel: light-dark(#eae2d2, #282725);
+	--page: light-dark(#f8f5ee, #1b1a1a);
+	--panel: light-dark(#eae2d2, #2e2d2b);
 	--block: light-dark(#222120, #ede7d9);
 	--surface: light-dark(#fffdf9, #242321);
 	--surface-sunken: light-dark(#d9cfba, #32302c);
 
 	--ink: light-dark(#1e1e1c, #f0ebdf);
-	--ink-muted: light-dark(#5c574b, #a69e8c);
+	--ink-muted: light-dark(#5c574b, #bbb29f);
 	--block-ink: light-dark(#f5f1e8, #1c1a16);
 	--block-muted: light-dark(#b0a896, #5c574b);
 
@@ -92,9 +89,9 @@
 	--control-padding-x: 0.75rem;
 	--tap-target: 44px;
 
-	/* Chrome. The header is fixed, so the page reserves exactly what it takes. R10.3. */
+	/* Chrome. The header is fixed, so the page reserves exactly what it takes. */
 	--header-height: calc(var(--tap-target) + var(--space-2) * 2);
-	--header-reveal-zone: 16px;
+	--header-reveal-zone: 64px;
 
 	/* Shape */
 	--radius: 8px;
@@ -123,18 +120,24 @@
 	--ease-in: cubic-bezier(0.2, 0, 0, 1);
 	--ease-out: cubic-bezier(0.4, 0, 1, 1);
 
-	/* The landing collage. The filter is what makes a set of unrelated pictures read as one piece of
-	   art rather than as a mood board, and it is the one place to dial that back. R8.6. */
+	/*
+	 * The hero. The backdrop is inset from the page edges, so the page tone frames it and a tile can
+	 * cross its edge. It extends almost the entire vertical space when a user initially enters the site,
+	 * just enough so that a user cannot see the Model section below the hero.
+	 *
+	 * The collage filter is what makes a set of unrelated pictures read as one piece of art rather
+	 * than as a mood board, and it is the one place to dial that back.
+	 */
+	--hero-inset: var(--space-5);
+	--hero-height: max(28rem, calc(100svh - var(--header-height) - var(--space-7)));
 	--collage-opacity: 0.7;
 	--collage-filter: saturate(0.8);
 	--collage-gap: var(--space-3);
 
-	/* The landing backdrop is inset from every edge, so the page tone frames it. R11.2. */
-	--landing-inset: var(--space-4);
-
 	/* Layout */
 	--content-width: 64rem;
 	--content-width-wide: 76rem;
+	--control-column: 40rem;
 	--answer-column: 30rem;
 
 	/* Ads. A slot holds this height whenever ads are on, so nothing shifts when one arrives. */
@@ -149,12 +152,15 @@
 }
 
 /* The page tone is painted on the root, so nothing the browser draws outside the document, including
-   an overscroll or a view transition snapshot, can reveal the default white canvas. R7.5. */
+   an overscroll or a view transition snapshot, can reveal the default white canvas. */
 html {
 	background: var(--page);
 	-webkit-text-size-adjust: 100%;
-	/* The header is fixed, so an anchor stops below it rather than under it. R10.3. */
+	/* The header is fixed, so an anchor stops below it rather than under it. */
 	scroll-padding-top: var(--header-height);
+	/* Held on every page, so the header and the page under it sit in the same place whether or not
+	   that page is long enough to scroll. */
+	scrollbar-gutter: stable;
 }
 
 body {
@@ -203,7 +209,7 @@ h3,
 	line-height: 1.25;
 }
 
-/* Prose measures no wider than 68 characters, wherever it lands. R4.8. */
+/* Prose measures no wider than 68 characters, wherever it lands. */
 p {
 	margin: 0;
 	max-width: 68ch;
@@ -235,13 +241,13 @@ a {
 }
 
 /* A block inverts the theme, so a ring drawn inside one inverts with it. A ring around a whole
-   block is drawn on the page, so it keeps the page accent. R12.2. */
+   block is drawn on the page, so it keeps the page accent. */
 .block :focus-visible {
 	outline-color: var(--accent-block);
 }
 
 /* The interface face, not the serif, so the small mark never competes with the name at display
-   size. R4.6 fixes every value here. */
+   size. */
 .wordmark {
 	font-family: var(--font-ui);
 	font-size: var(--type-h3);
@@ -291,7 +297,7 @@ a {
 	line-height: 1.5;
 }
 
-/* A figure set in the interface face still lines its digits up. Mono gives this for free. R4.5. */
+/* A figure set in the interface face still lines its digits up. Mono gives this for free. */
 .numeric {
 	font-variant-numeric: tabular-nums;
 }
@@ -312,7 +318,8 @@ a {
 	white-space: nowrap;
 }
 
-/* Every page sits in one of these. The wide one is a model page and nothing else. */
+/* Every page sits in one of these. The wide one is a model page with its answer open and nothing
+   else. */
 .page {
 	width: 100%;
 	max-width: var(--content-width);
@@ -324,20 +331,14 @@ a {
 	max-width: var(--content-width-wide);
 }
 
-/* Sections sit --space-8 apart on desktop and the page tone shows between them. R5.1, R6.9. */
+/* Sections sit far apart and the page tone shows between them. */
 .sections {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
 }
 
-.stack {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-4);
-}
-
-/* An accent block above the page title. R3, "A page title rule". */
+/* An accent rule above the page title. */
 .page-title::before {
 	content: '';
 	display: block;
@@ -348,7 +349,8 @@ a {
 
 /*
  * The two containers, and no others. Both are --radius-lg with --space-5 of padding, no border and
- * no shadow. The transparent top edge is what R10.8 and R10.9 colour in without moving anything.
+ * no shadow. The transparent top edge is what a link and the answer colour in without moving
+ * anything.
  */
 .panel,
 .block {
@@ -362,7 +364,7 @@ a {
 	background: var(--panel);
 }
 
-/* A block is the opposite theme's paper, so everything on it comes from the block family. R3.3. */
+/* A block is the opposite theme's paper, so everything on it comes from the block family. */
 .block {
 	background: var(--block);
 	color: var(--block-ink);
@@ -374,10 +376,17 @@ a {
 
 /* Style only links which are not buttons. */
 .block a:not(.button) {
-    color: var(--accent-block);
+	color: var(--accent-block);
 }
 
-/* A nested data or image area inside a block. The page-side tokens apply again here. R3.4. */
+/* A filled accent control on a block takes the block-side accent, because the page-side one has no
+   edge against block paper. Its own text is then the block's paper. */
+.block .button {
+	background: var(--accent-block);
+	color: var(--block);
+}
+
+/* A nested data or image area inside a block. The page-side tokens apply again here. */
 .surface {
 	padding: var(--space-4);
 	background: var(--surface);
@@ -390,7 +399,7 @@ a {
 }
 
 /* A whole container that leads somewhere is one link, and shows it as a top edge and nothing
-   else: no lift, no shadow, no background change. An upcoming game card also scales. R10.8. */
+   else: no lift, no shadow, no background change. An upcoming game card also scales. */
 a.panel,
 a.block {
 	display: block;
@@ -414,7 +423,7 @@ a.block:focus-visible {
 }
 
 /* A tag takes its colour from what it sits on, so one shape serves a block, an accent card and a
-   page. Sections 10.4 and 10.8, R10.13. */
+   page. */
 .tag {
 	display: inline-flex;
 	align-items: center;
@@ -488,17 +497,16 @@ select:disabled {
 	cursor: not-allowed;
 }
 
-/* The loudest control on the site, once, on the landing screen. R11.5. */
+/* The loudest control on the site, once, in the hero. */
 .button--lead {
 	padding-inline: var(--space-5);
 	font-size: var(--type-h3);
-	color: var(--ink);
 }
 
 /*
  * Navigation cross-fades and never shows white. The outgoing snapshot holds at full opacity for the
  * whole transition and the incoming one fades in on top of it. Blending both to partial opacity is
- * what lets the canvas show through, which is the flash. R7.5.
+ * what lets the canvas show through, which is the flash.
  */
 ::view-transition-old(root) {
 	animation: none;
@@ -518,7 +526,7 @@ select:disabled {
 
 @media (min-width: 40rem) {
 	:root {
-		--landing-inset: var(--space-6);
+		--hero-inset: var(--space-7);
 	}
 
 	.sections {
@@ -533,12 +541,8 @@ select:disabled {
 }
 
 /* Nothing draws, opens or scrolls smoothly. Colour and opacity still change, at --motion-fast.
-   Never disable a state change, only its animation. R7.13. */
+   Never disable a state change, only its animation. */
 @media (prefers-reduced-motion: reduce) {
-	html {
-		scroll-behavior: auto;
-	}
-
 	*,
 	*::before,
 	*::after {

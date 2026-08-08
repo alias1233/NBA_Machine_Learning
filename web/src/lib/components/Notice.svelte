@@ -1,6 +1,6 @@
 <!--
 	A notice, in one of three tones. It is a panel, so it sits in the flow where the thing it is about
-	would have been. It never floats, never appears as a toast, and never dismisses itself. R10.32.
+	would have been. It never floats, never appears as a toast, and never dismisses itself.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
@@ -26,7 +26,7 @@
 	}
 
 	/* The one place a data colour is allowed outside data, because a red error is a convention older
-	   than this site. The tone is carried by the words as well, never by the colour alone. R3.9. */
+	   than this site. The tone is carried by the words as well, never by the colour alone. */
 	.error p {
 		color: var(--under);
 	}

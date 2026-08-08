@@ -1,5 +1,5 @@
 <!--
-	The players a picker has been given, each as a removable pill. R10.17.
+	The players a picker has been given, each as a removable pill.
 
 	The hidden inputs are what put the choice in the URL when the form is submitted, so a prediction
 	made with a changed roster is still a shareable link.
@@ -57,7 +57,7 @@
 		border-radius: var(--radius-full);
 	}
 
-	/* The cross sits beside the player's name, which is the text label it belongs to. R8.10. */
+	/* The cross sits beside the player's name, which is the text label it belongs to. */
 	button {
 		display: flex;
 		align-items: center;
@@ -73,8 +73,8 @@
 		transition: color var(--motion-fast) var(--ease-in);
 	}
 
-	/* Emphasis rather than accent, because a remove control is not one of the marks section 3 lets
-	   the accent have. */
+	/* Emphasis rather than accent, because a remove control is not one of the marks the accent is
+	   allowed. */
 	button:hover {
 		color: var(--ink);
 	}

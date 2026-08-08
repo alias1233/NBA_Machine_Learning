@@ -1,11 +1,10 @@
 <!--
-	What the site is, and nothing about any one model. See section 11.5.
+	What the site is, and nothing about any one model.
 
 	No model is explained here and no accuracy figure appears here. A reader who wants either is sent
 	to the family's own page, so this page does not grow a section every time a family is added.
-	R11.23.
 
-	The three bodies are placeholders. Writing them is an open decision in section 16.
+	The three bodies are placeholders. Writing them is the user's to settle.
 -->
 <script lang="ts">
 	import Notice from '$lib/components/Notice.svelte';
@@ -36,7 +35,7 @@
 		<Notice>This section is not written yet.</Notice>
 
 		<!-- How a probability turns into odds is the same on every model, which is why it lives here.
-		     How one particular model reaches that probability does not. R9.2. -->
+		     How one particular model reaches that probability does not. -->
 		<ul class="links">
 			{#each data.families as family (family.name)}
 				<li><a href={familyAboutPath(family)}>How this model works</a></li>

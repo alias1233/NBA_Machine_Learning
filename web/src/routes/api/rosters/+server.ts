@@ -2,7 +2,7 @@
  * Both sides of an upcoming game, for the browser.
  *
  * Choosing a game card changes parameters without navigating, so the player list it switches to has
- * to be fetched rather than loaded. R10.14.
+ * to be fetched rather than loaded.
  */
 
 import { json } from '@sveltejs/kit';

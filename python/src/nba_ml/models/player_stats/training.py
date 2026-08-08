@@ -23,7 +23,7 @@ from nba_ml.models.player_stats.specifications import (
     MAX_SEQUENCE_LENGTH,
     SEQUENCE_SCALER,
     STATIC_SCALER,
-    ModelSpecification
+    PlayerStatModelSpecification
 )
 
 CACHED_DATASETS = 'datasets'
@@ -49,7 +49,7 @@ HELD_OUT_LABEL = "Test set"
 VALIDATION_LABEL = "Validation set, not held out"
 
 def _build_datasets(
-        model_specs: ModelSpecification,
+        model_specs: PlayerStatModelSpecification,
         feature_set: FeatureSet,
         use_cached_build: bool = True,
         save_cached_build: bool = True,
@@ -94,8 +94,8 @@ def _build_datasets(
         cached = datasets.build_classification_datasets(
             *labeled_data,
             max_sequence_length=MAX_SEQUENCE_LENGTH,
-            min_output_value=model_specs.minimum_of_stat,
-            num_classifications=model_specs.number_of_stat_classifications,
+            min_output_value=model_specs.minimum_value,
+            num_classifications=model_specs.outcomes,
             standardize_input=True
         )
 
@@ -167,7 +167,7 @@ def _describe_run(training_run: trainer.TrainingRun) -> dict:
     }
 
 def _evaluate_saved_model(
-        model_specs: ModelSpecification,
+        model_specs: PlayerStatModelSpecification,
         evaluation_dataset: SequenceGameDataset,
         loss_function: trainer.LossFunction,
         training_run: trainer.TrainingRun
@@ -214,7 +214,7 @@ def _evaluate_saved_model(
     return metrics
 
 def train(
-        model_specs: ModelSpecification,
+        model_specs: PlayerStatModelSpecification,
         output_evaluations: bool = True,
         use_cached_build: bool = True,
         save_cached_build: bool = True,
@@ -252,7 +252,7 @@ def train(
     model = GRUFeedForward(
         training_dataset.sequence_input_dim,
         training_dataset.static_input_dim,
-        model_specs.number_of_stat_classifications,
+        model_specs.outcomes,
         parameters.hidden_layers,
         GRU_HIDDEN_DIM,
         GRU_LAYERS,
@@ -264,14 +264,14 @@ def train(
         lr=parameters.learning_rate,
         weight_decay=parameters.weight_decay
     )
-    loss_function = parameters.build_loss_function(model_specs.number_of_stat_classifications)
+    loss_function = parameters.build_loss_function(model_specs.outcomes)
 
     model_description = report.describe_model(model)
     feature_description = _describe_features(feature_set)
     data_description = _describe_data(training_dataset, validation_dataset, test_dataset)
     label_description = datasets.summarize_classification_outputs(
         training_dataset.outputs,
-        model_specs.number_of_stat_classifications
+        model_specs.outcomes
     )
     hyperparameters = {
         "optimizer": type(optimizer).__name__,

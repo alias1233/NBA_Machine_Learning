@@ -9,7 +9,7 @@
  * and no precedence to keep straight.
  *
  * Only published models are returned. A model that has no trained file is not offered at all, so a
- * reader is never shown a stat that cannot answer. R11.13.
+ * reader is never shown a stat that cannot answer.
  */
 
 import { isHttpError } from '@sveltejs/kit';
@@ -23,6 +23,7 @@ import {
 	predictPlayerStat
 } from '$lib/server/api';
 
+import type { HttpError } from '@sveltejs/kit';
 import type { Model, Player, Prediction, ScheduledGame, SeasonType, Team } from '$lib/types';
 import type { PageServerLoad } from './$types';
 
@@ -31,7 +32,6 @@ const FAMILY = 'player_stats';
 const SEASON_TYPES: SeasonType[] = ['REGULAR_SEASON', 'PLAYOFFS', 'PLAY_IN', 'PRESEASON'];
 
 const UNREACHABLE = 'The prediction service is not reachable. Try again shortly.';
-const TOO_FEW_GAMES = 'This player has too few recorded games to predict.';
 const SAME_TEAM = 'A game needs two different teams.';
 const REFUSED = 'The prediction could not be made. Try again shortly.';
 
@@ -84,16 +84,22 @@ const readIds = (parameters: URLSearchParams, name: string) =>
 		.filter((id) => Number.isInteger(id) && id > 0);
 
 /**
- * What went wrong, in words a reader can act on.
+ * What each refusal the service names means to a reader.
  *
- * The service's own message names teams, players and status codes, none of which belong on a page,
- * so only the shape of the failure crosses over. R9.11.
+ * The service's own message states ids and is for a log. Only the reason crosses over, and the
+ * words a reader sees are written here.
  */
-function reasonFor(status: number): string {
-	if (status === 503) return UNREACHABLE;
-	if (status === 422) return TOO_FEW_GAMES;
+const REASONS: Record<string, string> = {
+	too_few_games: 'This player has too few recorded games to predict.',
+	missing_player_information: 'Too little is known about this player to predict.',
+	unknown_player_team: 'Say which of the two teams this player is on.',
+	no_team_history: 'This team has no earlier game to read.'
+};
 
-	return REFUSED;
+function reasonFor(thrown: HttpError): string {
+	if (thrown.status === 503) return UNREACHABLE;
+
+	return REASONS[thrown.body.reason ?? ''] ?? REFUSED;
 }
 
 /** A line the reader shared. Anything that is not a number is dropped rather than argued with. */
@@ -131,11 +137,16 @@ export const load: PageServerLoad = async ({ url }) => {
 	const choice = readChoice(parameters);
 	const selectedGame = games.find((game) => isGame(game, choice)) ?? null;
 
+	// Which side a player who has just moved is on. Nothing stored says it, so the reader names it,
+	// and only one of the game's two teams is an answer to the question.
+	const namedTeam = parameters.get('team') ?? '';
+	const playerTeam = [choice.awayTeam, choice.homeTeam].includes(namedTeam) ? namedTeam : '';
+
 	const playerId = Number(parameters.get('player')) || null;
 
 	// A chosen player is never dropped for being off both rosters. Somebody who has just joined a
 	// team has no game on it yet and so appears on neither, and predicting exactly them is one of
-	// the things this site is for. R10.15.
+	// the things this site is for.
 	const [rosters, player] = await Promise.all([
 		selectedGame === null ? [] : getRosters(selectedGame).catch(() => []),
 		playerId === null ? null : getPlayer(playerId).catch(() => null)
@@ -165,6 +176,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					away_team: choice.awayTeam,
 					season_type: choice.seasonType
 				},
+				player_team: playerTeam || undefined,
 				scenario: {
 					without: out.map(({ id }) => id),
 					returning: joined.map(({ id }) => id)
@@ -173,7 +185,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		} catch (thrown) {
 			if (!isHttpError(thrown)) throw thrown;
 
-			error = reasonFor(thrown.status);
+			error = reasonFor(thrown);
 		}
 	}
 
@@ -186,6 +198,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		teams,
 		choice,
 		player,
+		playerTeam,
 		out,
 		joined,
 		prediction,

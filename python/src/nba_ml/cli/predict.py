@@ -9,7 +9,8 @@ import argparse
 
 from nba_ml import season
 from nba_ml.entities import Game
-from nba_ml.models.player_stats import inference, odds, specifications
+from nba_ml.models.errors import PredictionRefused
+from nba_ml.models.player_stats import inference, specifications
 from nba_ml.stores import players, teams
 
 SEASON_TYPES = {season_type.name.lower(): season_type for season_type in season.SeasonType}
@@ -32,18 +33,22 @@ def _team_id(abbreviation_or_name: str) -> int:
 
     return team.id
 
-def _print_result(probabilities: list[float], minimum_value: int, line: float | None):
-    print(f"\nExpected value: {odds.expected_value(probabilities, minimum_value):.2f}")
-    print("Most likely outcomes:")
-    for value, probability in odds.most_likely_outcomes(probabilities, MOST_LIKELY_OUTCOMES_SHOWN, minimum_value):
-        print(f"  {value:>3}  {probability:.4f}")
+def _print_result(probabilities: list[float], minimum_value: int):
+    """
+    A readable summary of the answer, which is a probability per whole number outcome.
 
-    if line is not None:
-        line_odds = odds.calculate_odds(probabilities, line, minimum_value)
-        print(f"\nLine {line}:")
-        print(f"  over   {line_odds.over:.4f}")
-        print(f"  under  {line_odds.under:.4f}")
-        print(f"  push   {line_odds.push:.4f}")
+    Sixty of those are unreadable printed out, so this prints what they average to and the handful
+    carrying the most weight.
+    """
+
+    outcomes = [(minimum_value + offset, probability) for offset, probability in enumerate(probabilities)]
+    expected_value = sum(value * probability for value, probability in outcomes)
+
+    print(f"\nExpected value: {expected_value:.2f}")
+    print("Most likely outcomes:")
+
+    for value, probability in sorted(outcomes, key=lambda outcome: -outcome[1])[:MOST_LIKELY_OUTCOMES_SHOWN]:
+        print(f"  {value:>3}  {probability:.4f}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -73,7 +78,6 @@ def main():
         metavar="PLAYER",
         help="Core teammates who missed the last game and are expected to play this one."
     )
-    parser.add_argument("--line", type=float, help="If given, also report over, under, and push odds for this line.")
     parser.add_argument("--quiet", action="store_true", help="Only print the result.")
     arguments = parser.parse_args()
 
@@ -86,17 +90,20 @@ def main():
         SEASON_TYPES[arguments.season_type]
     )
 
-    probabilities = inference.predict(
-        specification,
-        _player_id(arguments.player),
-        game,
-        {_player_id(name) for name in arguments.without},
-        {_player_id(name) for name in arguments.returning},
-        target_player_team_id=None if arguments.team is None else _team_id(arguments.team),
-        print_debug=not arguments.quiet
-    )
+    try:
+        probabilities = inference.predict(
+            specification,
+            _player_id(arguments.player),
+            game,
+            {_player_id(name) for name in arguments.without},
+            {_player_id(name) for name in arguments.returning},
+            target_player_team_id=None if arguments.team is None else _team_id(arguments.team),
+            print_debug=not arguments.quiet
+        )
+    except PredictionRefused as refusal:
+        raise SystemExit(str(refusal))
 
-    _print_result(probabilities, specification.minimum_of_stat, arguments.line)
+    _print_result(probabilities, specification.minimum_value)
 
 if __name__ == '__main__':
     main()

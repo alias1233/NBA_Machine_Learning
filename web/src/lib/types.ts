@@ -27,11 +27,12 @@ export type Model = {
 	name: string;
 	/** The group of models this belongs to, which is the page it is predicted on. */
 	family: string;
-	stats: string[];
+	/** What the model answers about, in the words a reader sees. */
+	predicts: string[];
 	/** The outcome the first probability stands for. */
 	minimum_value: number;
 	outcomes: number;
-	/** Whether a trained file exists for it. A model without one is offered but cannot be asked. */
+	/** Whether a trained file exists for it. A model without one is listed but cannot be asked. */
 	published: boolean;
 };
 
@@ -54,11 +55,16 @@ export type Health = {
 	newest_stored_game: string | null;
 };
 
+/**
+ * One answer: a probability for every whole number outcome, counting up from `minimum_value`.
+ *
+ * Expected value and the odds for a line are sums over that array, so `src/lib/odds.ts` works them
+ * out here rather than asking the service again.
+ */
 export type Prediction = {
 	model: string;
 	minimum_value: number;
 	probabilities: number[];
-	expected_value: number;
 };
 
 export type GameRequest = {
@@ -82,5 +88,7 @@ export type Scenario = {
 export type PredictionRequest = {
 	player_id: number;
 	game: GameRequest;
+	/** The player's team. Only needed when they have just moved and no game records it yet. */
+	player_team?: string;
 	scenario?: Scenario;
 };

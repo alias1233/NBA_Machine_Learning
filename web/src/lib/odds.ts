@@ -1,9 +1,9 @@
 /**
  * Reading a predicted distribution: the value it expects, and the odds it gives a line.
  *
- * A port of `python/src/nba_ml/models/player_stats/odds.py`. It lives in the browser because a
- * prediction is a probability for every whole number outcome, so moving the line is a sum over an
- * array the page already holds. No request is needed to answer a new line.
+ * The only place this arithmetic lives. A prediction is a probability for every whole number
+ * outcome, so every question about a line is a sum over an array the page already holds. The service
+ * sends the distribution and nothing else, and no request is needed to answer a new line.
  */
 
 export type Outcome = {

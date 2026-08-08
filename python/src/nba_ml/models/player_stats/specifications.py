@@ -2,17 +2,17 @@
 The player game statistics models: what each one predicts, how it is shaped, and how it is fit.
 
 Both training and inference read this, so it holds nothing that only one of them needs. Adding a
-model means adding a ModelSpecification here and, for a new stat, a TargetStat in features.py.
+model means adding a PlayerStatModelSpecification here and, for a new stat, a TargetStat in
+features.py.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Callable
+from typing import Callable, ClassVar
 
 import torch.nn as nn
 
-from nba_ml import paths
 from nba_ml.machine_learning import trainer
+from nba_ml.models.specifications import ModelSpecification
 from nba_ml.machine_learning.architectures.feed_forward import LayerParameters
 from nba_ml.machine_learning.losses.gaussian_smoothed_cross_entropy import GaussianSmoothedCrossEntropyLoss
 from nba_ml.models.player_stats.features import FeatureSet, TargetStat, build_feature_set
@@ -76,22 +76,18 @@ DEFAULT_TRAINING_PARAMETERS = TrainingParameters(
 )
 
 @dataclass(frozen=True)
-class ModelSpecification():
-    """
-    One trained model: the name it is saved under, what it predicts, and how it is fit.
+class PlayerStatModelSpecification(ModelSpecification):
+    """One player game statistics model: which stats it adds together, and how it is fit."""
 
-    The name is what `nba-train --model` and `nba-predict --model` take, so two models predicting the
-    same stat with different settings are two specifications with different names.
-    """
+    model_category: ClassVar[str] = MODEL_CATEGORY
 
-    name: str
     target_stats: tuple[TargetStat, ...]
-    minimum_of_stat: int
-    """The outcome the first predicted probability stands for."""
-
-    number_of_stat_classifications: int
     training_parameters: TrainingParameters = DEFAULT_TRAINING_PARAMETERS
     """Set this to train with parameters other than the shared defaults."""
+
+    @property
+    def predicts(self) -> tuple[str, ...]:
+        return tuple(stat.name.lower() for stat in self.target_stats)
 
     def get_feature_set(self) -> FeatureSet:
         """
@@ -101,44 +97,32 @@ class ModelSpecification():
 
         return build_feature_set(self.target_stats)
 
-    def model_file(self) -> Path:
-        return paths.model_file(MODEL_CATEGORY, self.name)
-
-    def training_report_file(self) -> Path:
-        return paths.training_report_file(MODEL_CATEGORY, self.name)
-
-    def training_cache_file(self) -> Path:
-        return paths.training_cache_file(MODEL_CATEGORY, self.name)
-
-    def graphs_directory(self) -> Path:
-        return paths.graphs_directory(MODEL_CATEGORY, self.name)
-
-POINTS_MODEL = ModelSpecification(
-    "points",
-    (TargetStat.POINTS,),
-    0,
-    60
+POINTS_MODEL = PlayerStatModelSpecification(
+    name="points",
+    minimum_value=0,
+    outcomes=60,
+    target_stats=(TargetStat.POINTS,)
     )
 
-REBOUNDS_MODEL = ModelSpecification(
-    "rebounds",
-    (TargetStat.REBOUNDS,),
-    0,
-    25
+REBOUNDS_MODEL = PlayerStatModelSpecification(
+    name="rebounds",
+    minimum_value=0,
+    outcomes=25,
+    target_stats=(TargetStat.REBOUNDS,)
     )
 
-ASSISTS_MODEL = ModelSpecification(
-    "assists",
-    (TargetStat.ASSISTS,),
-    0,
-    20
+ASSISTS_MODEL = PlayerStatModelSpecification(
+    name="assists",
+    minimum_value=0,
+    outcomes=20,
+    target_stats=(TargetStat.ASSISTS,)
     )
 
-POINTS_REBOUNDS_ASSISTS_MODEL = ModelSpecification(
-    "points_rebounds_assists",
-    (TargetStat.POINTS, TargetStat.REBOUNDS, TargetStat.ASSISTS),
-    0,
-    80
+POINTS_REBOUNDS_ASSISTS_MODEL = PlayerStatModelSpecification(
+    name="points_rebounds_assists",
+    minimum_value=0,
+    outcomes=80,
+    target_stats=(TargetStat.POINTS, TargetStat.REBOUNDS, TargetStat.ASSISTS)
     )
 
 ALL_MODEL_SPECIFICATIONS = {

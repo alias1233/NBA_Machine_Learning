@@ -1,10 +1,9 @@
 <!--
 	The fast path into a prediction: one square block per game that can be predicted right now.
-	See section 10.4.
 
 	Choosing a card changes parameters, it does not navigate. The reader stays exactly where they
 	were, and the URL is rewritten by replacing rather than pushing. The href is what the card falls
-	back to where scripting is off. R10.14.
+	back to where scripting is off.
 -->
 <script lang="ts">
 	import { gameWhen } from '$lib/games';
@@ -62,7 +61,7 @@
 
 <style>
 	/* Small enough that the whole slate and the controls under it are one short scroll, and never
-	   wider than --card-max however much room the column has. R10.11. */
+	   wider than --card-max however much room the column has. */
 	.cards {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, var(--card-max)));
@@ -71,7 +70,7 @@
 		list-style: none;
 	}
 
-	/* Square, so a card reads as an object rather than as a row. Section 10.4. */
+	/* Square, so a card reads as an object rather than as a row. */
 	.card {
 		display: grid;
 		grid-template-rows: auto 1fr auto;
@@ -81,8 +80,8 @@
 		transition: transform var(--motion) var(--ease-in);
 	}
 
-	/* The one carve-out from R10.8, because a grid of squares needs a stronger signal than a
-	   hairline on one edge. R10.12. */
+	/* The one container that lifts rather than only colouring its top edge, because a grid of
+	   squares needs a stronger signal than a hairline. */
 	.card:hover,
 	.card:focus-visible {
 		transform: scale(var(--card-hover-scale));
@@ -114,7 +113,7 @@
 	}
 
 	/* Colour is never the only marker, so the chosen card also carries a tag and aria-current. It
-	   holds the hover scale, so choosing one reads as picking it up. R10.12 and R10.13. */
+	   holds the hover scale, so choosing one reads as picking it up. */
 	.chosen {
 		background: var(--accent);
 		color: var(--accent-on);
@@ -127,7 +126,7 @@
 		color: var(--accent-on);
 	}
 
-	/* The accent edge of R10.8 would be invisible on an accent fill, so it inverts with the card. */
+	/* The accent top edge would be invisible on an accent fill, so it inverts with the card. */
 	.chosen:hover,
 	.chosen:focus-visible {
 		border-top-color: var(--accent-on);

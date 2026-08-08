@@ -1,5 +1,5 @@
 <!--
-	The whole prediction, one bar per whole number outcome. See section 10.7.
+	The whole prediction, one bar per whole number outcome.
 
 	Bars are discrete because the outcomes are. A smooth curve would claim the model answers in
 	fractions of a point. The line splits the chart and the two masses either side of it are the odds,
@@ -10,6 +10,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
+	import { MOTION_SLOW } from '$lib/motion';
 	import { outcomes } from '$lib/odds';
 
 	type Props = {
@@ -20,18 +21,15 @@
 		line: number;
 		/** The outcomes to draw. Its caller owns it, because the handle travels across the same run. */
 		range: { first: number; last: number };
-		/** Stands in for the drawing when it cannot be seen. R10.26. */
+		/** Stands in for the drawing when it cannot be seen. */
 		summary: string;
 	};
 
 	let { probabilities, minimumValue, stat, line, range, summary }: Props = $props();
 
 	// A one pixel gap needs a bar this wide to still read as a bar. Below it the bars run together
-	// into one silhouette, which is better than a comb of slivers. R10.21.
+	// into one silhouette, which is better than a comb of slivers.
 	const GAP_ABOVE_WIDTH = 6;
-	// The whole draw finishes inside 400ms: --motion-slow plus the last bar's share of this. R7.4.
-	const STAGGER_TOTAL = 80;
-	const DRAW_TOTAL = 400;
 
 	const bars = $derived(
 		outcomes(probabilities, minimumValue).filter(
@@ -40,7 +38,6 @@
 	);
 
 	const tallest = $derived(Math.max(...bars.map(({ probability }) => probability)));
-	const stagger = $derived(Math.min(8, STAGGER_TOTAL / bars.length));
 
 	// Unmeasured on the server, and a gap is the usual answer, so it holds one until it knows better.
 	let width = $state(0);
@@ -82,20 +79,21 @@
 		reading = Math.min(Math.max((reading ?? Math.round(line)) + step, range.first), range.last);
 	}
 
+	// Once the draw is over the class comes off, so a bar the line brings into range later arrives
+	// without replaying it.
 	onMount(() => {
-		const timer = setTimeout(() => (drawn = true), DRAW_TOTAL);
+		const timer = setTimeout(() => (drawn = true), MOTION_SLOW);
 
 		return () => clearTimeout(timer);
 	});
 </script>
 
-<figure style="--columns: {bars.length}; --gap: {gap}px; --stagger: {stagger}ms">
+<figure style="--columns: {bars.length}; --gap: {gap}px">
 	<p class="readout small muted numeric" aria-hidden="true">
 		{read ? `${read.value} ${stat}, ${percent(read.probability)}` : ''}
 	</p>
 
-	<!-- One focusable element, not sixty. What it says is in the label and in the table below.
-	     R10.25. -->
+	<!-- One focusable element, not sixty. What it says is in the label and in the table below. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 	<div
 		class="bars"
@@ -109,13 +107,13 @@
 		onkeydown={readByKey}
 		onblur={() => (reading = null)}
 	>
-		{#each bars as bar, index (bar.value)}
+		{#each bars as bar (bar.value)}
 			<div
 				class="bar"
 				class:over={bar.value > line}
 				class:under={bar.value < line}
 				class:reading={bar.value === reading}
-				style="height: {(bar.probability / tallest) * 100}%; --index: {index}"
+				style="height: {(bar.probability / tallest) * 100}%"
 			></div>
 		{/each}
 	</div>
@@ -150,7 +148,7 @@
 		touch-action: pan-y;
 	}
 
-	/* No radius. A rounded bar misreports its own height. R5.3. */
+	/* No radius. A rounded bar misreports its own height. */
 	.bar {
 		background: var(--chart-neutral);
 		transform-origin: bottom;
@@ -168,10 +166,9 @@
 		outline: var(--rule-accent);
 	}
 
-	/* Once, on first render. Recolouring as the line moves is instant and never runs this. R7.3. */
+	/* Once, on first render. Recolouring as the line moves is instant and never runs this. */
 	.drawing .bar {
 		animation: draw var(--motion-slow) var(--ease-in) backwards;
-		animation-delay: calc(var(--index) * var(--stagger));
 	}
 
 	@keyframes draw {

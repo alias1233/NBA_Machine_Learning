@@ -13,12 +13,13 @@ import torch
 from nba_ml.entities import Game
 from nba_ml.machine_learning import datasets, serialization, trainer
 from nba_ml.machine_learning.architectures.gru_feed_forward import GRUFeedForward
+from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.models.player_stats import features as stat_features
 from nba_ml.models.player_stats.specifications import (
     MAX_SEQUENCE_LENGTH,
     SEQUENCE_SCALER,
     STATIC_SCALER,
-    ModelSpecification
+    PlayerStatModelSpecification
 )
 from nba_ml.stores import player_games
 
@@ -33,7 +34,7 @@ def _load(model_file: Path) -> tuple[GRUFeedForward, dict[str, Any]]:
 
     return (GRUFeedForward.load_from_saved_parameters_dict(parameters_dict), parameters_dict)
 
-def can_load(specification: ModelSpecification) -> bool:
+def can_load(specification: PlayerStatModelSpecification) -> bool:
     """
     Whether this model has a file that can actually be read.
 
@@ -53,17 +54,24 @@ def team_of(player_id: int, game: Game) -> int:
     """
     Which of the game's two teams the player is on, taken from the last game they played before it.
 
+    A player who has just moved last played for neither of these teams, and nothing stored says which
+    one they joined, so the caller has to name it.
+
     Raises:
-        ValueError if the player has no recorded game, or last played for neither of these teams,
-        which is what a trade the databases have not caught up with looks like.
+        PredictionRefused if the player has no recorded game, or last played for neither of these
+        teams.
     """
 
     team_id = player_games.latest_team_id(player_id, before=game.date)
     if team_id is None:
-        raise ValueError(f"Player {player_id} has no recorded game before {game.date}.")
+        raise PredictionRefused(
+            Refusal.UNKNOWN_PLAYER_TEAM,
+            f"Player {player_id} has no recorded game before {game.date}."
+        )
 
     if team_id not in (game.home_team_id, game.away_team_id):
-        raise ValueError(
+        raise PredictionRefused(
+            Refusal.UNKNOWN_PLAYER_TEAM,
             f"Player {player_id} last played for team {team_id}, which is not in this game. "
             "Name their team outright if they have just moved."
         )
@@ -71,7 +79,7 @@ def team_of(player_id: int, game: Game) -> int:
     return team_id
 
 def predict(
-    model_specs: ModelSpecification,
+    model_specs: PlayerStatModelSpecification,
     target_player_id: int,
     target_game: Game,
     removed_core_teammate_player_ids: Collection[int] = (),

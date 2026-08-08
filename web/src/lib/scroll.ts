@@ -1,11 +1,11 @@
 /**
- * Walking the reader to whatever comes next. See section 7, Guided scrolling.
+ * Walking the reader to whatever comes next.
  *
  * The controls run down a long column, so after a choice the page moves to the next thing rather
  * than leaving the reader to find it. A scroll runs only when its target is not already fully in
- * view, because scrolling somebody to what they are looking at reads as a twitch. R7.7 and R7.8.
+ * view, because scrolling somebody to what they are looking at reads as a twitch.
  *
- * Focus never moves with the page. R12.11.
+ * Focus never moves with the page.
  */
 
 import { tick } from 'svelte';

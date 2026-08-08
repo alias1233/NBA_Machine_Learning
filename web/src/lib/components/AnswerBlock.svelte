@@ -1,8 +1,8 @@
 <!--
-	The answer the page exists to produce. See section 10.8.
+	The answer the page exists to produce.
 
 	One box, three states. Empty, loading and answered all render the same scaffold at the same size,
-	so the page never jumps when a prediction lands. R10.30 and R10.31.
+	so the page never jumps when a prediction lands.
 
 	It owns the chosen line, because the chart and the odds have to agree on it, and it writes that
 	line back into the address bar so a prediction is shareable at the line it is read on. The write
@@ -20,6 +20,7 @@
 		calculateOdds,
 		chartRange,
 		defaultLine,
+		expectedValue,
 		mostLikelyOutcomes,
 		oddsPercentages,
 		outcomes
@@ -40,9 +41,9 @@
 		subheading: string;
 		/** The line the address bar already names, if it names one. */
 		openOn: number | null;
-		/** The family's own page, so a reader can get from the number to how it was reached. R11.11. */
+		/** The family's own page, so a reader can get from the number to how it was reached. */
 		aboutHref: string;
-		/** Whether this answer was asked for with a changed roster. R10.30. */
+		/** Whether this answer was asked for with a changed roster. */
 		customRoster: boolean;
 	};
 
@@ -57,13 +58,17 @@
 		prediction ? prediction.minimum_value + prediction.probabilities.length - 1 : 0
 	);
 
+	// A prediction is a probability per outcome, so what it expects is a sum over that array rather
+	// than something the service is asked for.
+	const expected = $derived(
+		prediction ? expectedValue(prediction.probabilities, prediction.minimum_value) : 0
+	);
+
 	// Deliberately the opening value only. After that the reader owns it, and a new prediction
 	// remounts this component with its own.
 	// svelte-ignore state_referenced_locally
 	let line = $state(
-		prediction
-			? Math.min(Math.max(openOn ?? defaultLine(prediction.expected_value), lowest), highest)
-			: 0
+		prediction ? Math.min(Math.max(openOn ?? defaultLine(expected), lowest), highest) : 0
 	);
 
 	const odds = $derived(
@@ -85,11 +90,11 @@
 	);
 
 	// The push sentence is always present, the same rule the readout follows. On a half number it
-	// reads 0.0 percent, because a half number cannot be landed on. R10.23.
+	// reads 0.0 percent, because a half number cannot be landed on.
 	const summary = $derived(
 		prediction
 			? [
-					`Expected ${prediction.expected_value.toFixed(1)} ${stat}.`,
+					`Expected ${expected.toFixed(1)} ${stat}.`,
 					`Most likely ${likeliest[0].value} ${stat}.`,
 					`Over ${line}, ${spoken.over} percent.`,
 					`Under ${line}, ${spoken.under} percent.`,
@@ -122,7 +127,7 @@
 	});
 </script>
 
-<!-- The one container carrying the accent top edge unhovered, because it is the answer. R10.9. -->
+<!-- The one container carrying the accent top edge unhovered, because it is the answer. -->
 <section class="block answer">
 	<header>
 		<h2>{heading}</h2>
@@ -134,14 +139,14 @@
 	<div class="expected">
 		<p class="micro muted">Expected</p>
 		{#if prediction && !loading}
-			<p class="figure-lead">{prediction.expected_value.toFixed(1)}</p>
+			<p class="figure-lead">{expected.toFixed(1)}</p>
 		{:else}
 			<div class="waiting lead"></div>
 		{/if}
 	</div>
 
 	<!-- The chart, the line and the odds are one object on one surface, which is what puts data on
-	     neutral ground inside an inverted container. R3.4 and section 10.7. -->
+	     neutral ground inside an inverted container. -->
 	<div class="surface reading">
 		{#if prediction && range && !loading}
 			<div class="plot">
@@ -155,7 +160,7 @@
 				/>
 				<LineControl bind:line {lowest} {highest} {range} />
 
-				<!-- Behind the drawing, available to anyone. R10.26. -->
+				<!-- Behind the drawing, available to anyone. -->
 				<details>
 					<summary class="small link">All outcomes</summary>
 
@@ -219,12 +224,12 @@
 		{/if}
 	</div>
 
-	<!-- A changed answer must never look like the default one. R10.30. -->
+	<!-- A changed answer must never look like the default one. -->
 	{#if customRoster && prediction && !loading}
 		<p><span class="tag micro">Custom roster</span></p>
 	{/if}
 
-	<!-- From the number to how it was reached, which is the second of the two links in R11.11. -->
+	<!-- From the number to how it was reached. -->
 	<p class="small"><a href={aboutHref}>How this model works</a></p>
 </section>
 
@@ -256,7 +261,7 @@
 		min-width: 0;
 	}
 
-	/* Section 14 calls this a link, so it takes the link role from app.css. */
+	/* The copy calls this a link, so it takes the link role from app.css. */
 	summary {
 		display: flex;
 		align-items: center;
@@ -306,10 +311,18 @@
 	}
 
 	/* Reserved space on a block. The page's sunken tone would read as a bright bar here, so a
-	   skeleton on a block is drawn in the block's own hairline. */
+	   skeleton on a block is drawn in the block's own hairline. It pulses, so the box reads as
+	   loading rather than as a finished empty one. */
 	.waiting {
 		background: var(--hairline-block);
 		border-radius: var(--radius);
+		animation: pulse var(--motion-entry) var(--ease-in) infinite alternate;
+	}
+
+	@keyframes pulse {
+		to {
+			opacity: 0.4;
+		}
 	}
 
 	.waiting.lead {
@@ -350,7 +363,7 @@
 		gap: var(--space-3);
 	}
 
-	/* The odds sit beside the chart once there is room for both, on the same surface. Section 10.7. */
+	/* The odds sit beside the chart once there is room for both, on the same surface. */
 	@media (min-width: 64rem) {
 		.reading {
 			grid-template-columns: minmax(0, 1fr) auto;

@@ -1,13 +1,13 @@
 <!--
-	What the line settles at. Over first, then under, then push. See section 10.7.
+	What the line settles at. Over first, then under, then push.
 
 	Every answer is a sum over probabilities the page already holds, so moving the line asks the
 	server for nothing. The words are always present and always in this order, because around one man
-	in twelve cannot separate the two hues. R3.8.
+	in twelve cannot separate the two hues.
 
 	All three figures are shown at every line. Push reads 0.0 percent on a half number, because a
-	half number cannot be landed on. A figure that blinks in and out as the slider passes each whole
-	number is the bug that rule exists to prevent. R10.23.
+	half number cannot be landed on. Dropping it instead would blink a figure in and out as the
+	slider passed each whole number.
 -->
 <script lang="ts">
 	import { rolling } from '$lib/motion';

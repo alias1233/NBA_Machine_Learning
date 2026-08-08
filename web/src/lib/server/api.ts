@@ -5,8 +5,9 @@
  * is made here, on the server. When the PostgreSQL prediction cache is built it is read in front of
  * `predictPlayerStat`, and nothing above this file has to change.
  *
- * A failed call throws SvelteKit's HttpError carrying the service's own message. A loader that lets
- * it bubble gets the error page. A loader that wants to keep rendering catches it with `isHttpError`.
+ * A failed call throws SvelteKit's HttpError carrying the service's own message, and the reason the
+ * service named when it refused. A loader that lets it bubble gets the error page. A loader that
+ * wants to keep rendering catches it with `isHttpError` and words the reason for a reader.
  */
 
 import { env } from '$env/dynamic/private';
@@ -29,14 +30,22 @@ function baseUrl(): string {
 	return (env.NBA_API_URL || DEFAULT_URL).replace(/\/+$/, '');
 }
 
-/** FastAPI reports a refusal as `detail`, either a message or a list of validation problems. */
-async function messageOf(response: Response): Promise<string> {
+/**
+ * FastAPI reports a refusal as `detail`. It is a message, a list of validation problems, or, when
+ * the service could not answer from what it holds, a reason and a message.
+ */
+async function refusalOf(response: Response): Promise<App.Error> {
 	const detail = await response.json().then((body) => body?.detail, () => null);
 
-	if (typeof detail === 'string') return detail;
-	if (Array.isArray(detail)) return detail.map((problem) => problem?.msg).filter(Boolean).join('. ');
+	if (typeof detail === 'string') return { message: detail };
+	if (Array.isArray(detail)) {
+		return { message: detail.map((problem) => problem?.msg).filter(Boolean).join('. ') };
+	}
+	if (typeof detail?.message === 'string') {
+		return { message: detail.message, reason: detail.reason };
+	}
 
-	return `The prediction service answered ${response.status}.`;
+	return { message: `The prediction service answered ${response.status}.` };
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -48,7 +57,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 		error(503, 'The prediction service is not reachable.');
 	}
 
-	if (!response.ok) error(response.status, await messageOf(response));
+	if (!response.ok) error(response.status, await refusalOf(response));
 
 	return response.json() as Promise<T>;
 }

@@ -1,9 +1,9 @@
 <!--
-	Finds a player by name and reports the one chosen. See section 10.5.
+	Finds a player by name and reports the one chosen.
 
 	Given rosters it opens on them, because with a game chosen that is who the reader almost always
 	wants. Typing searches the whole league instead, so a player who has just joined a team and is on
-	no roster yet is still reachable. R10.15.
+	no roster yet is still reachable.
 
 	The prediction service is not reachable from a browser, so the lookup goes through this site's own
 	/api/players route. What happens to a chosen player is the caller's business: the main picker
@@ -39,6 +39,16 @@
 	let open = $state(false);
 	let active = $state(-1);
 	let searching = $state(false);
+	let box = $state<HTMLInputElement>();
+
+	/** Puts the reader in the box. The page is moved by whoever called, not by the focus. */
+	export function focus() {
+		box?.focus({ preventScroll: true });
+	}
+
+	export function clear() {
+		text = '';
+	}
 
 	let timer: ReturnType<typeof setTimeout>;
 	let inFlight: AbortController | undefined;
@@ -141,6 +151,7 @@
 	<label class="micro" for={id}>{label}</label>
 
 	<input
+		bind:this={box}
 		{id}
 		type="text"
 		role="combobox"
@@ -197,8 +208,7 @@
 		position: relative;
 	}
 
-	/* Floats above the page, so it is the one other thing besides the models menu that is raised.
-	   R5.5 and R10.16. */
+	/* Floats above the page, so it is the one other thing besides the models menu that is raised. */
 	ul {
 		position: absolute;
 		z-index: 10;

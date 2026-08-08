@@ -1,35 +1,59 @@
 <!--
-	The shell every page sits in: the header, the page itself, and the footer.
+	The shell every page sits in: the header, the page itself, and the footer. The wordmark and the
+	tabs are rooted, so they sit in the same place on every page.
 
 	The header is fixed and gets out of the way once the reader scrolls. Three things bring it back
 	and nothing else: the top of the page, a pointer in the top --header-reveal-zone, and focus
-	landing inside it. R10.3.
-
-	The landing screen is the one exception and section 11.1 spells it out. It drops the header's
-	background and wordmark, stays in the flow because that screen does not scroll, and carries no
-	footer, because it is one screen with one message.
+	landing inside it.
 -->
 <script lang="ts">
-	import '../app.css';
-
 	import { onMount } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { prefersReducedMotion } from 'svelte/motion';
 
+	import '../app.css';
+
 	import { longGameDay } from '$lib/games';
-	import { familyPath } from '$lib/models';
+	import { MODELS_PATH, MODELS_SECTION, familyPath } from '$lib/models';
 	import { SITE_NAME } from '$lib/site';
 
 	let { children, data } = $props();
 
 	const here = $derived(page.url.pathname);
-	const landing = $derived(here === '/');
+	const home = $derived(here === '/');
 	const onModels = $derived(here.startsWith('/models'));
+
+	// Every entry in the menu leads to a prediction page, so a family with nothing to predict yet is
+	// listed on the home page and not here.
+	const predictable = $derived(data.families.filter((family) => family.published));
 
 	const collectedThrough = $derived(
 		data.health?.newest_stored_game ? longGameDay(data.health.newest_stored_game) : null
 	);
+
+	// The Models tab points at a section of the home page, so there the mark follows the reader down
+	// the page rather than the address bar.
+	let atModels = $state(false);
+
+	$effect(() => {
+		if (!home) {
+			atModels = false;
+			return;
+		}
+
+		const section = document.getElementById(MODELS_SECTION);
+		if (!section) return;
+
+		// Marked once the section has reached the middle of the viewport.
+		const spy = new IntersectionObserver(([entry]) => (atModels = entry.isIntersecting), {
+			rootMargin: '-45% 0px'
+		});
+
+		spy.observe(section);
+
+		return () => spy.disconnect();
+	});
 
 	// The menu opens on hover and on focus. Escape closes it until the pointer or focus leaves.
 	let dismissed = $state(false);
@@ -54,9 +78,9 @@
 	let holdingFocus = $state(false);
 	let revealZone = $state(0);
 
-	// It hides only once the page has scrolled past its own height, so a small scroll never takes it
-	// away, and it returns at the very top rather than on the way back up. R10.3.
-	const hidden = $derived(!landing && (scrollY > headerHeight / 2) && !nearTop && !holdingFocus);
+	// It hides once the page has scrolled past half the header height, so a small scroll does not
+	// take it away, and it returns at the very top rather than on the way back up.
+	const hidden = $derived(scrollY > headerHeight / 2 && !nearTop && !holdingFocus);
 
 	// A touch leaves its last position behind, which would hold the header open after a scroll that
 	// started at the top of the screen. Only a pointer that hovers can reveal.
@@ -80,7 +104,7 @@
 
 	// Pages cross-fade. A change within one page never does, because the reader did not ask to go
 	// anywhere. Where the browser has no view transitions the navigation is simply instant, and
-	// reduced motion opts out the same way rather than through a shorter animation. R7.5 and R7.6.
+	// reduced motion opts out the same way rather than through a shorter animation.
 	onNavigate((navigation) => {
 		const samePage = navigation.from?.url.pathname === navigation.to?.url.pathname;
 
@@ -98,7 +122,6 @@
 <svelte:window bind:scrollY onpointermove={onPointerMove} />
 
 <header
-	class:landing
 	class:hidden
 	class:scrolled={scrollY > 0}
 	bind:clientHeight={headerHeight}
@@ -106,15 +129,12 @@
 	onfocusout={onHeaderFocusOut}
 >
 	<div class="page masthead">
-		<!-- The landing screen already prints the name at display size, so it drops the wordmark. -->
-		{#if !landing}
-			<a class="wordmark" href="/">{SITE_NAME}</a>
-		{/if}
+		<a class="wordmark" href="/">{SITE_NAME}</a>
 
 		<nav>
 			<ul class="tabs">
 				<li>
-					<a href="/" aria-current={landing ? 'page' : undefined}>Home</a>
+					<a href="/" aria-current={home && !atModels ? 'page' : undefined}>Home</a>
 				</li>
 
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -125,11 +145,17 @@
 					onpointerleave={() => (dismissed = false)}
 					onfocusout={onMenuFocusOut}
 				>
-					<a id="models-tab" href="/models" aria-current={onModels ? 'page' : undefined}>Models</a>
+					<a
+						id="models-tab"
+						href={MODELS_PATH}
+						aria-current={onModels ? 'page' : atModels ? 'location' : undefined}
+					>
+						Models
+					</a>
 
-					{#if data.families.length > 0}
+					{#if predictable.length > 0}
 						<ul class="panel" aria-labelledby="models-tab">
-							{#each data.families as family (family.name)}
+							{#each predictable as family (family.name)}
 								<li><a href={familyPath(family)}>{family.title}</a></li>
 							{/each}
 						</ul>
@@ -144,45 +170,41 @@
 	</div>
 </header>
 
-<main class:landing>
+<main>
 	{@render children()}
 </main>
 
-{#if !landing}
-	<footer>
-		<div class="page notes small muted">
-			<p>
-				Predictions are a model's estimate, published for information. This is not betting advice.
-			</p>
+<footer>
+	<div class="page notes small muted">
+		<p>Predictions are a model's estimate, published for information. This is not betting advice.</p>
 
-			{#if collectedThrough}
-				<p>Built from games played through {collectedThrough}.</p>
-			{:else}
-				<p>The prediction service is not answering.</p>
-			{/if}
+		{#if collectedThrough}
+			<p>Built from games played through {collectedThrough}.</p>
+		{:else}
+			<p>The prediction service is not answering.</p>
+		{/if}
 
-			<ul class="links">
-				<li><a href="/about">About</a></li>
-				<li><a href="/privacy">Privacy</a></li>
-			</ul>
-		</div>
-	</footer>
-{/if}
+		<ul class="links">
+			<li><a href="/about">About</a></li>
+			<li><a href="/privacy">Privacy</a></li>
+		</ul>
+	</div>
+</footer>
 
 <style>
-	/* The panel plane is what separates the header from the page, so it carries no rule. R10.1. */
+	/* The chrome tone is what separates the header from the page, so it carries no rule. */
 	header {
 		position: fixed;
 		z-index: 30;
 		inset: 0 0 auto;
-		background: var(--header);
+		background: var(--block);
 		transition:
 			translate var(--motion) var(--ease-in),
 			box-shadow var(--motion-fast) var(--ease-in);
 	}
 
 	/* A header returning over scrolled content with no shadow reads as a strip cut out of the page
-	   rather than as something above it. R10.3, R5.5. */
+	   rather than as something above it. */
 	header.scrolled {
 		box-shadow: var(--shadow);
 	}
@@ -190,15 +212,6 @@
 	header.hidden {
 		translate: 0 -100%;
 		transition-timing-function: var(--ease-out);
-	}
-
-	/* Nothing behind the tabs, so they read as floating over the backdrop. That screen does not
-	   scroll, so the header stays in the flow and the backdrop takes what is left. R10.4. */
-	header.landing {
-		position: static;
-		background: none;
-		box-shadow: none;
-		translate: none;
 	}
 
 	/* One row at every width. The page reserves exactly this height, so the wordmark gives up room
@@ -217,15 +230,13 @@
 		min-width: 0;
 		min-height: var(--tap-target);
 		overflow: hidden;
-		color: var(--ink);
+		color: var(--block-ink);
 		text-decoration: none;
 		white-space: nowrap;
 	}
 
-	/* Keeps the tabs on the right whether or not the wordmark is beside them. */
 	nav {
 		flex: none;
-		margin-left: auto;
 	}
 
 	.tabs {
@@ -245,7 +256,7 @@
 		min-height: var(--tap-target);
 		border-bottom: var(--rule-accent);
 		border-bottom-color: transparent;
-		color: var(--ink-muted);
+		color: var(--block-muted);
 		font-size: var(--type-small);
 		font-weight: 600;
 		text-decoration: none;
@@ -257,7 +268,7 @@
 		color: var(--accent);
 	}
 
-	/* Accent text plus a rule, never colour alone. R10.1. */
+	/* Accent text plus a rule, never colour alone. */
 	.tabs > li > a[aria-current] {
 		border-bottom-color: var(--accent);
 	}
@@ -317,7 +328,7 @@
 	}
 
 	/* A fixed header is out of flow, so the page reserves its height rather than shifting under it
-	   when it hides. R10.3. */
+	   when it hides. */
 	main {
 		display: flex;
 		flex-direction: column;
@@ -326,13 +337,7 @@
 		padding-block: calc(var(--header-height) + var(--space-5)) var(--space-8);
 	}
 
-	/* The landing screen fills what is left of the viewport, inset from every edge. R11.2. */
-	main.landing {
-		padding: var(--landing-inset);
-	}
-
 	footer {
-		background: var(--page);
 		border-top: var(--rule);
 	}
 

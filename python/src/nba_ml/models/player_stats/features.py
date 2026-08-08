@@ -19,6 +19,7 @@ from nba_ml.entities import Game
 from nba_ml.feature_engineering import game_columns, rolling
 from nba_ml.feature_engineering.rolling import RollingCategory
 from nba_ml.machine_learning.datasets import PlayerGameSequences, SequenceInputSamples
+from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.stores import player_games, players, team_games
 
 ROLLING_WINDOW = 15
@@ -904,6 +905,35 @@ def get_all_labeled_data(
     )
 
 # INFERENCE: #
+def _check_player_can_be_read(
+    target_player_id: int,
+    player_info: pd.DataFrame,
+    recorded_games: int
+    ):
+    """
+    Refuses a player the feature build would drop, before the build runs.
+
+    _preprocess_player_game_data keeps only players who have stored information and MINIMUM_PAST_GAMES
+    games. Left to itself, a dropped player is simply absent at the end, so this says why instead.
+
+    Args:
+        recorded_games is how many games the player has stored. The game being predicted is added as
+        one more row, which is why it counts towards the minimum.
+    """
+
+    if target_player_id not in player_info[players.PLAYER_ID.category_name].values:
+        raise PredictionRefused(
+            Refusal.MISSING_PLAYER_INFORMATION,
+            f"Nothing is stored about player {target_player_id} themselves, which every model reads."
+        )
+
+    if recorded_games + 1 < MINIMUM_PAST_GAMES:
+        raise PredictionRefused(
+            Refusal.TOO_FEW_GAMES,
+            f"Player {target_player_id} has {recorded_games} recorded games, and a prediction reads "
+            f"{MINIMUM_PAST_GAMES - 1}."
+        )
+
 def _get_inference_player_game_data(
     features: FeatureSet,
     target_player_id: int,
@@ -954,6 +984,8 @@ def _get_inference_player_game_data(
         subset=[player_games.PLAYER_ID.category_name, player_games.GAME_ID.category_name]
     )
 
+    _check_player_can_be_read(target_player_id, player_info, len(target_player_game_data))
+
     team_game_data: pd.DataFrame = team_games.get_game_data_after_date(historical_window_start_date)
     team_game_data = team_game_data.dropna()
 
@@ -971,7 +1003,10 @@ def _get_inference_player_game_data(
     ]
 
     if previous_team_games.empty:
-        raise ValueError(f"Team {target_player_team_id} has no recorded game before {target_game_date_str}.")
+        raise PredictionRefused(
+            Refusal.NO_TEAM_HISTORY,
+            f"Team {target_player_team_id} has no recorded game before {target_game_date_str}."
+        )
 
     previous_game_data = previous_team_games.sort_values(
         by=team_games.GAME_DATE.category_name
@@ -1042,7 +1077,15 @@ def _get_inference_player_game_data(
         print("Processing data...")
 
     histories = _preprocess_game_data(features, player_info, player_game_data, team_game_data)
-    history = histories[target_player_id]
+    history = histories.get(target_player_id)
+
+    # _check_player_can_be_read covers why this happens, so reaching here means the build dropped the
+    # player for a reason that check does not know about yet.
+    if history is None:
+        raise PredictionRefused(
+            Refusal.TOO_FEW_GAMES,
+            f"The feature build produced no games for player {target_player_id}."
+        )
 
     target_indices = np.flatnonzero(history.game_ids == target_game_placeholder_id)
     if len(target_indices) != 1:

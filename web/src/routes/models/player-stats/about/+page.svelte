@@ -1,11 +1,11 @@
 <!--
-	How the player game statistics family predicts, and how well. See section 11.4.
+	How the player game statistics family predicts, and how well.
 
 	It exists so a reader can decide whether to trust this family's numbers, and it is where every
-	figure about the family lives. Nothing here moves to /about, whatever the family is. R11.22.
+	figure about the family lives. Nothing here moves to /about, whatever the family is.
 
-	The bodies are placeholders. Writing them is an open decision in section 16, and the accuracy
-	table waits on the three untrained models and on a held-out score. R11.18 to R11.20.
+	The bodies are placeholders. Writing them is the user's to settle, and the accuracy table waits
+	on the three untrained models and on a held-out score.
 -->
 <script lang="ts">
 	import Notice from '$lib/components/Notice.svelte';
@@ -17,7 +17,7 @@
 
 	const published = $derived(data.families.some(({ name }) => name === FAMILY));
 
-	// Each carries a stable anchor, because the Why? link on the prediction page points at one.
+	// Each carries a stable anchor, so a section can be linked to on its own.
 	const sections = [
 		['how', 'How a prediction is made'],
 		['which-games', 'Which games can be predicted'],
@@ -39,7 +39,7 @@
 	<h1 class="page-title">How this model works</h1>
 
 	{#if !published}
-		<!-- A family with no published model carries no page of its own either. R11.10. -->
+		<!-- A family with no published model carries no page of its own either. -->
 		<Notice>No model is published right now.</Notice>
 	{:else}
 		{#each sections as [anchor, heading] (anchor)}

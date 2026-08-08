@@ -1,10 +1,10 @@
 <!--
-	The line, as a handle on the chart's x axis and as a number beside it. See section 10.7.
+	The line, as a handle on the chart's x axis and as a number beside it.
 
 	The handle travels the drawn run plus three outcomes at each end. The moment the line goes past
 	the run, the chart widens to hold it and three more outcomes of headroom open up beyond that, so
 	the reader reaches every outcome the model has by dragging alone and the handle is always under
-	the bars it is splitting. R10.19 and R10.20.
+	the bars it is splitting.
 
 	Steps of a half. Arrow keys move one step and Page Up and Page Down move five, which a range
 	input does not do on its own.
@@ -24,8 +24,8 @@
 	const STEP = 0.5;
 	const PAGE_STEPS = 5;
 
-	// The headroom of R10.20. A handle that stops at the edge of the first drawing, and makes the
-	// reader type a number to go further, has broken that rule.
+	// A handle that stops at the edge of the first drawing, and makes the reader type a number to go
+	// further, cannot reach every outcome by dragging. This is how far past it the handle travels.
 	const HEADROOM = 3;
 
 	const travel = $derived({
@@ -98,7 +98,7 @@
 		border-radius: var(--radius-full);
 	}
 
-	/* Filled accent at --radius-full. Section 10.7, "The line handle". */
+	/* Filled accent at --radius-full. */
 	input[type='range']::-webkit-slider-thumb {
 		appearance: none;
 		width: var(--space-5);
