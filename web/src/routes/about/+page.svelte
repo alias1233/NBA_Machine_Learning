@@ -60,7 +60,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
-		scroll-margin-top: var(--space-8);
 	}
 
 	.links {

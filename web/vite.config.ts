@@ -14,5 +14,12 @@ export default defineConfig({
 			// Served by Node behind Caddy on one server. See docs/ARCHITECTURE.md.
 			adapter: adapter()
 		})
-	]
+	],
+
+	// Allowing cloudflare tunnel hosting
+	server: {
+		allowedHosts: [
+			'pride-cow-attached-seattle.trycloudflare.com'
+		]
+	}
 });

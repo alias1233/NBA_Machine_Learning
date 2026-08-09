@@ -101,6 +101,20 @@
 	--card-max: 12rem;
 	--card-hover-scale: 1.03;
 
+	/*
+	 * A card reads at the size it is drawn. These are measured against the card rather than the
+	 * screen, so a card three across on a phone carries small text and one four across on a laptop
+	 * carries large text, and neither is decided by a breakpoint.
+	 *
+	 * They hold `cqi`, so each belongs on something inside a card and nowhere else. Used outside one
+	 * it silently measures the viewport instead.
+	 */
+	--card-padding: clamp(var(--space-2), 9cqi, var(--space-4));
+	--card-matchup: clamp(1.0625rem, 17cqi, var(--type-h2));
+	--card-label: clamp(0.625rem, 8cqi, var(--type-micro));
+	/* The square graphic beside a family's words, against the width of the card holding it. */
+	--card-graphic: min(28cqi, var(--card-max));
+
 	/* Elevation. Flat is the plane tint and nothing else. Raised adds --shadow, and only a thing
 	   that floats above the page is raised. */
 	--rule: 1px solid var(--hairline);
@@ -122,14 +136,18 @@
 
 	/*
 	 * The hero. The backdrop is inset from the page edges, so the page tone frames it and a tile can
-	 * cross its edge. It extends almost the entire vertical space when a user initially enters the site,
-	 * just enough so that a user cannot see the Model section below the hero.
+	 * cross its edge.
+	 *
+	 * Its height is the viewport less the three things above and below it: the fixed header, the
+	 * space the page opens with, and a strip of page tone at the fold. That strip is never wider
+	 * than the gap `.sections` leaves, so the Models section starts at the fold or below it at every
+	 * screen size, and a short viewport takes the floor instead and pushes it further down.
 	 *
 	 * The collage filter is what makes a set of unrelated pictures read as one piece of art rather
 	 * than as a mood board, and it is the one place to dial that back.
 	 */
 	--hero-inset: var(--space-5);
-	--hero-height: max(28rem, calc(100svh - var(--header-height) - var(--space-7)));
+	--hero-height: max(28rem, calc(100svh - var(--header-height) - var(--space-5) - var(--space-6)));
 	--collage-opacity: 0.7;
 	--collage-filter: saturate(0.8);
 	--collage-gap: var(--space-3);
@@ -139,6 +157,8 @@
 	--content-width-wide: 76rem;
 	--control-column: 40rem;
 	--answer-column: 30rem;
+	/* The widest figure the odds can reach, so a hundred percent never moves the chart beside it. */
+	--odds-column: 5rem;
 
 	/* Ads. A slot holds this height whenever ads are on, so nothing shifts when one arrives. */
 	--ad-height: 250px;
@@ -156,8 +176,9 @@
 html {
 	background: var(--page);
 	-webkit-text-size-adjust: 100%;
-	/* The header is fixed, so an anchor stops below it rather than under it. */
-	scroll-padding-top: var(--header-height);
+	/* The header is fixed, so an anchor stops below it rather than under it, with a little of the
+	   page tone above whatever was linked to. Nothing sets its own top margin for this. */
+	scroll-padding-top: calc(var(--header-height) + var(--space-6));
 	/* Held on every page, so the header and the page under it sit in the same place whether or not
 	   that page is long enough to scroll. */
 	scrollbar-gutter: stable;
@@ -450,18 +471,32 @@ button {
 	color: inherit;
 }
 
+/* Every control is given its width and allowed to shrink under it. Left alone, a date, number or
+   select field takes a width from its own content and pushes itself past the edge of the panel
+   holding it, which is only ever visible on a narrow screen. */
 input[type='text'],
 input[type='search'],
 input[type='date'],
 input[type='number'],
 select {
 	width: 100%;
+	min-width: 0;
 	min-height: var(--tap-target);
 	padding: var(--control-padding-y) var(--control-padding-x);
 	background: var(--surface);
 	color: var(--ink);
 	border: var(--rule-control);
 	border-radius: var(--radius);
+}
+
+/* A date field is drawn by the platform, and on iOS that means an intrinsic width no rule above can
+   reach and a value centred in it. Dropping the native appearance is what hands both back. */
+input[type='date'] {
+	appearance: none;
+}
+
+input[type='date']::-webkit-date-and-time-value {
+	text-align: left;
 }
 
 input:disabled,
@@ -521,6 +556,21 @@ select:disabled {
 @keyframes cross-fade {
 	from {
 		opacity: 0;
+	}
+}
+
+/*
+ * A link to a section of the page already shown travels to it rather than jumping. Anything
+ * arriving from another page lands on its section instead, because a scroll running under the
+ * cross-fade would jump the moment the fade ended.
+ */
+@media (prefers-reduced-motion: no-preference) {
+	html {
+		scroll-behavior: smooth;
+	}
+
+	html.arriving {
+		scroll-behavior: auto;
 	}
 }
 

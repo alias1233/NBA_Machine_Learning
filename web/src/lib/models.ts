@@ -29,10 +29,10 @@ export const MODEL_FAMILIES: ModelFamily[] = [
 		description: 'Points, rebounds and assists for one player in one game.'
 	},
 	{
-		name: 'team_point_differential',
-		slug: 'team-point-differential',
-		title: 'Team point differential',
-		description: 'How much a team wins or loses a game by.'
+		name: 'team_game_stats',
+		slug: 'team-game-stats',
+		title: 'Team game statistics',
+		description: 'How much a team wins by, how much it scores, and the game total.'
 	}
 ];
 

@@ -88,6 +88,13 @@
 					</div>
 				</article>
 			{/each}
+
+			<!-- Not a family and nothing to act on, so it is a panel rather than another block. -->
+			<div class="panel more">
+				<h3>More models</h3>
+				<p class="muted small">Each new family is listed here as it lands.</p>
+				<span class="tag micro">Coming soon</span>
+			</div>
 		{/if}
 
 		<AdSlot place="homeModels" />
@@ -184,19 +191,44 @@
 		gap: var(--space-5);
 	}
 
+	/* The graphic is beside the words at every width, and the card is what its size is measured
+	   against. In one column it takes the title beside it and the rest of the words run the full
+	   width underneath, so a narrow card spends its room on the sentence rather than on the square. */
 	.family {
+		container-type: inline-size;
 		display: grid;
-		gap: var(--space-5);
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-areas:
+			'graphic title'
+			'words words'
+			'ways ways';
+		align-items: center;
+		gap: var(--space-4) var(--space-5);
 	}
 
 	/* Square, like a game card, so a family reads in the same language as everything it leads to. It
 	   holds the same placeholder as a collage tile until a graphic lands on it. */
 	.graphic {
+		grid-area: graphic;
+		width: var(--card-graphic);
 		aspect-ratio: var(--card-ratio);
 		background: linear-gradient(160deg, var(--accent-block), var(--block-muted));
 	}
 
+	/* The words are the card's own rows until there is room to set them as one column. */
 	.about {
+		display: contents;
+	}
+
+	.about h3 {
+		grid-area: title;
+	}
+
+	.about p {
+		grid-area: words;
+	}
+
+	.more {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
@@ -206,6 +238,7 @@
 	/* The ways out sit away from the description rather than under it, so the block reads as a card
 	   with something to do at the bottom of it. */
 	.ways {
+		grid-area: ways;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -219,8 +252,21 @@
 		min-height: var(--tap-target);
 	}
 
-	/* Wider tiles, placed further apart, once there is room for the composition to breathe. */
+	/* Wider tiles, placed further apart, and the family's words set as one column beside its
+	   graphic, once there is room for the composition to breathe. */
 	@media (min-width: 40rem) {
+		.family {
+			grid-template-areas: 'graphic about';
+		}
+
+		.about {
+			grid-area: about;
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: var(--space-3);
+		}
+
 		.hero {
 			grid-template-areas:
 				't1 t1 .  .  t2 t2 .  . '
@@ -231,12 +277,6 @@
 				't6 t6 t4 t4 .  .  t5 t5'
 				't6 t6 .  .  .  .  t5 t5'
 				't6 t6 .  .  .  .  t5 t5';
-		}
-
-		/* The graphic moves beside the words once the block is wide enough to hold both. */
-		.family {
-			grid-template-columns: calc(var(--space-8) * 2) 1fr;
-			align-items: center;
 		}
 	}
 </style>

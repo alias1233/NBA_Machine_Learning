@@ -230,7 +230,7 @@
 	{/if}
 
 	<!-- From the number to how it was reached. -->
-	<p class="small"><a href={aboutHref}>How this model works</a></p>
+	<p class="about-link small"><a href={aboutHref}>How this model works</a></p>
 </section>
 
 <style>
@@ -267,6 +267,13 @@
 		align-items: center;
 		min-height: var(--tap-target);
 		cursor: pointer;
+	}
+
+	/* The way out of the block is a finger wide, like every other way out on the site. */
+	.about-link a {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
 	}
 
 	/* Sixty rows would push everything under them off the screen, so the table scrolls in its own
@@ -363,10 +370,12 @@
 		gap: var(--space-3);
 	}
 
-	/* The odds sit beside the chart once there is room for both, on the same surface. */
+	/* The odds sit beside the chart once there is room for both, on the same surface. Their column
+	   is the width of the widest figure they can reach, so the chart neither moves when a figure
+	   reaches a hundred percent nor leaves a number short of room. */
 	@media (min-width: 64rem) {
 		.reading {
-			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-columns: minmax(0, 1fr) var(--odds-column);
 		}
 
 		.waiting.chart {

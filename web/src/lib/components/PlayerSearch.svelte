@@ -40,6 +40,7 @@
 	let active = $state(-1);
 	let searching = $state(false);
 	let box = $state<HTMLInputElement>();
+	let field = $state<HTMLDivElement>();
 
 	/** Puts the reader in the box. The page is moved by whoever called, not by the focus. */
 	export function focus() {
@@ -135,11 +136,41 @@
 
 			const step = event.key === 'ArrowDown' ? 1 : -1;
 			active = (active + step + options.length) % options.length;
-		} else if (event.key === 'Enter' && open && active >= 0) {
+		} else if (event.key === 'Enter' && open) {
+			// The marked entry, or the first match for a reader who typed the name and carried on.
+			// A roster the box merely opened on was not asked for, so nothing is taken from it.
+			const taken = active >= 0 ? options[active] : searchable ? options[0] : null;
+			if (taken === null) return;
+
 			event.preventDefault();
-			choose(options[active]);
+			choose(taken);
 		}
 	}
+
+	/**
+	 * The list closes when the reader goes somewhere else, and taking an entry is not that.
+	 *
+	 * A tap on an entry takes focus off the box and names nothing that took it, because an option is
+	 * not focusable, so closing on blur alone would pull the list out from under the tap before it
+	 * became a choice. A press outside the field is what closes it in that case.
+	 */
+	function onFocusOut(event: FocusEvent) {
+		const next = event.relatedTarget;
+
+		if (next instanceof Node && !field?.contains(next)) open = false;
+	}
+
+	$effect(() => {
+		if (!open) return;
+
+		const closeOutside = (event: PointerEvent) => {
+			if (!field?.contains(event.target as Node)) open = false;
+		};
+
+		document.addEventListener('pointerdown', closeOutside);
+
+		return () => document.removeEventListener('pointerdown', closeOutside);
+	});
 
 	onDestroy(() => {
 		clearTimeout(timer);
@@ -147,7 +178,7 @@
 	});
 </script>
 
-<div class="field search">
+<div class="field search" bind:this={field} onfocusout={onFocusOut}>
 	<label class="micro" for={id}>{label}</label>
 
 	<input
@@ -165,7 +196,6 @@
 		oninput={onInput}
 		onkeydown={onKeydown}
 		onfocus={() => (open = options.length > 0)}
-		onblur={() => (open = false)}
 	/>
 
 	{#if open}
@@ -184,14 +214,16 @@
 					{/if}
 
 					{#each group.entries as entry (entry.player.id)}
-						<!-- The input keeps focus and owns the keyboard, so the option only handles pointers. -->
+						<!-- The input keeps focus and owns the keyboard, so the option only handles pointers.
+						     A mouse press is refused so the box keeps focus, and a touch press is not,
+						     because a prevented one never becomes a tap. -->
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<li
 							id="{id}-option-{entry.position}"
 							role="option"
 							aria-selected={entry.position === active}
 							class:active={entry.position === active}
-							onpointerdown={(event) => event.preventDefault()}
+							onpointerdown={(event) => event.pointerType === 'mouse' && event.preventDefault()}
 							onclick={() => choose(entry.player)}
 						>
 							{entry.player.name}

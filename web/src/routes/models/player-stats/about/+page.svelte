@@ -9,13 +9,14 @@
 -->
 <script lang="ts">
 	import Notice from '$lib/components/Notice.svelte';
+	import { familyPath } from '$lib/models';
 	import { pageTitle } from '$lib/site';
 
 	let { data } = $props();
 
 	const FAMILY = 'player_stats';
 
-	const published = $derived(data.families.some(({ name }) => name === FAMILY));
+	const family = $derived(data.families.find(({ name }) => name === FAMILY) ?? null);
 
 	// Each carries a stable anchor, so a section can be linked to on its own.
 	const sections = [
@@ -36,9 +37,16 @@
 </svelte:head>
 
 <div class="page">
-	<h1 class="page-title">How this model works</h1>
+	<div class="title">
+		<h1 class="page-title">How this model works</h1>
 
-	{#if !published}
+		<!-- Back to the thing the reader came to decide about. -->
+		{#if family?.published}
+			<a class="small" href={familyPath(family)}>Run a prediction</a>
+		{/if}
+	</div>
+
+	{#if !family?.published}
 		<!-- A family with no published model carries no page of its own either. -->
 		<Notice>No model is published right now.</Notice>
 	{:else}
@@ -63,10 +71,21 @@
 		gap: var(--space-6);
 	}
 
+	.title {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.title a {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
+	}
+
 	section {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
-		scroll-margin-top: var(--space-8);
 	}
 </style>

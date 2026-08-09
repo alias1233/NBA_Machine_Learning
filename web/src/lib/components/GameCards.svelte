@@ -38,7 +38,7 @@
 				aria-current={chosen ? 'true' : undefined}
 				onclick={(event) => choose(event, game)}
 			>
-				<span class="micro muted">{gameWhen(game)}</span>
+				<span class="when micro muted">{gameWhen(game)}</span>
 
 				<span class="matchup type-h2">
 					{game.away_team.abbreviation}
@@ -61,21 +61,29 @@
 
 <style>
 	/* Small enough that the whole slate and the controls under it are one short scroll, and never
-	   wider than --card-max however much room the column has. */
+	   wider than --card-max however much room the column has. A width decides how many fit on a row
+	   and nothing else, because the card sizes itself. */
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, var(--card-max)));
+		grid-template-columns: repeat(3, minmax(0, var(--card-max)));
 		gap: var(--space-4);
 		padding: 0;
 		list-style: none;
 	}
 
-	/* Square, so a card reads as an object rather than as a row. */
+	/* Each card measures its own text, so the cell around it is what the card tokens are read
+	   against. */
+	.cards > li {
+		container-type: inline-size;
+	}
+
+	/* Square, so a card reads as an object rather than as a row. It grows past square only where a
+	   long date needs the room. */
 	.card {
 		display: grid;
 		grid-template-rows: auto 1fr auto;
 		aspect-ratio: var(--card-ratio);
-		padding: var(--space-4);
+		padding: var(--card-padding);
 		text-align: center;
 		transition: transform var(--motion) var(--ease-in);
 	}
@@ -87,11 +95,19 @@
 		transform: scale(var(--card-hover-scale));
 	}
 
+	/* A card carries two type sizes and both are measured against the card. */
 	.matchup {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
+		font-size: var(--card-matchup);
+	}
+
+	.when,
+	.joiner,
+	.tag {
+		font-size: var(--card-label);
 	}
 
 	/* The one word on the card that is not a tricode, so it drops out of the serif line. */
@@ -100,11 +116,15 @@
 		color: var(--block-muted);
 	}
 
+	/* Stacked rather than wrapped, and measured by what it holds. A wrapping row counts as one line
+	   however many tags are in it, so a second tag would hang out of the bottom of the card. One
+	   line is reserved whether or not there is a tag, so nothing moves when one appears. */
 	.tags {
 		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
+		flex-direction: column;
+		align-items: center;
 		gap: var(--space-2);
+		height: max-content;
 		min-height: var(--space-5);
 	}
 
@@ -130,12 +150,6 @@
 	.chosen:hover,
 	.chosen:focus-visible {
 		border-top-color: var(--accent-on);
-	}
-
-	@media (min-width: 40rem) {
-		.cards {
-			grid-template-columns: repeat(3, minmax(0, var(--card-max)));
-		}
 	}
 
 	@media (min-width: 64rem) {

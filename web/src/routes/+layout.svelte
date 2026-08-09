@@ -2,15 +2,19 @@
 	The shell every page sits in: the header, the page itself, and the footer. The wordmark and the
 	tabs are rooted, so they sit in the same place on every page.
 
-	The header is fixed and gets out of the way once the reader scrolls. Three things bring it back
-	and nothing else: the top of the page, a pointer in the top --header-reveal-zone, and focus
-	landing inside it.
+	The header is fixed and gets out of the way once the reader scrolls. Four things bring it back and
+	nothing else: the top of the page, a pointer in the top --header-reveal-zone, the models menu
+	standing open, and focus landing inside it.
+
+	The models menu opens on hover. A touch device has none, so there the first tap on the tab opens
+	it and the second follows the tab.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { onNavigate } from '$app/navigation';
+	import { afterNavigate, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { prefersReducedMotion } from 'svelte/motion';
+	import { MediaQuery } from 'svelte/reactivity';
 
 	import '../app.css';
 
@@ -55,22 +59,44 @@
 		return () => spy.disconnect();
 	});
 
-	// The menu opens on hover and on focus. Escape closes it until the pointer or focus leaves.
-	let dismissed = $state(false);
+	// A device that can hover opens the menu by hovering, which app.css does on its own. One that
+	// cannot has the tab open it, so the menu is reachable without a pointer.
+	const canHover = new MediaQuery('hover: hover', true);
 
-	function onMenuKeydown(event: KeyboardEvent) {
-		if (event.key !== 'Escape') return;
+	let overMenu = $state(false);
+	let revealed = $state(false);
 
-		dismissed = true;
-		(event.currentTarget as HTMLElement).querySelector('a')?.focus();
+	function onMenuPointerLeave() {
+		overMenu = false;
 	}
 
-	// Escape leaves focus on the tab, which is still inside the menu, so only a real exit reopens it.
-	function onMenuFocusOut(event: FocusEvent) {
-		const menu = event.currentTarget as HTMLElement;
+	/** The first tap opens the menu. The second is the tab doing what it says, so the menu is done. */
+	function onModelsTab(event: MouseEvent) {
+		if (canHover.current) return;
 
-		if (!menu.contains(event.relatedTarget as Node | null)) dismissed = false;
+		if (revealed) {
+			revealed = false;
+			return;
+		}
+
+		event.preventDefault();
+		revealed = true;
 	}
+
+	let menuRoot = $state<HTMLElement>();
+
+	// A press anywhere else puts the menu away, the same as a pointer leaving it.
+	$effect(() => {
+		if (!revealed) return;
+
+		const closeOutside = (event: PointerEvent) => {
+			if (!menuRoot?.contains(event.target as Node)) revealed = false;
+		};
+
+		document.addEventListener('pointerdown', closeOutside);
+
+		return () => document.removeEventListener('pointerdown', closeOutside);
+	});
 
 	let scrollY = $state(0);
 	let headerHeight = $state(0);
@@ -79,8 +105,12 @@
 	let revealZone = $state(0);
 
 	// It hides once the page has scrolled past half the header height, so a small scroll does not
-	// take it away, and it returns at the very top rather than on the way back up.
-	const hidden = $derived(scrollY > headerHeight / 2 && !nearTop && !holdingFocus);
+	// take it away, and it returns at the very top rather than on the way back up. The menu hangs
+	// below the reveal zone, so an open one holds the header as well, and so does focus, because a
+	// hidden header cannot be scrolled to.
+	const hidden = $derived(
+		scrollY > headerHeight / 2 && !nearTop && !overMenu && !revealed && !holdingFocus
+	);
 
 	// A touch leaves its last position behind, which would hold the header open after a scroll that
 	// started at the top of the screen. Only a pointer that hovers can reveal.
@@ -105,8 +135,14 @@
 	// Pages cross-fade. A change within one page never does, because the reader did not ask to go
 	// anywhere. Where the browser has no view transitions the navigation is simply instant, and
 	// reduced motion opts out the same way rather than through a shorter animation.
+	//
+	// A link to a section of the page already shown travels to it, which app.css does. Arriving
+	// from another page lands on the section instead, because a scroll running under the cross-fade
+	// would jump the moment the fade ended.
 	onNavigate((navigation) => {
 		const samePage = navigation.from?.url.pathname === navigation.to?.url.pathname;
+
+		document.documentElement.classList.toggle('arriving', !samePage);
 
 		if (samePage || !document.startViewTransition || prefersReducedMotion.current) return;
 
@@ -116,6 +152,13 @@
 				await navigation.complete;
 			});
 		});
+	});
+
+	// The scroll has already been made by the time this runs, so the page travels again from here.
+	// A menu the reader tapped open has been answered by arriving somewhere, so it closes.
+	afterNavigate(() => {
+		document.documentElement.classList.remove('arriving');
+		revealed = false;
 	});
 </script>
 
@@ -140,15 +183,17 @@
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 				<li
 					class="menu"
-					class:dismissed
-					onkeydown={onMenuKeydown}
-					onpointerleave={() => (dismissed = false)}
-					onfocusout={onMenuFocusOut}
+					class:revealed
+					bind:this={menuRoot}
+					onpointerenter={(event) => (overMenu = event.pointerType !== 'touch')}
+					onpointerleave={onMenuPointerLeave}
 				>
 					<a
 						id="models-tab"
 						href={MODELS_PATH}
+						aria-expanded={canHover.current ? undefined : revealed}
 						aria-current={onModels ? 'page' : atModels ? 'location' : undefined}
+						onclick={onModelsTab}
 					>
 						Models
 					</a>
@@ -192,7 +237,9 @@
 </footer>
 
 <style>
-	/* The chrome tone is what separates the header from the page, so it carries no rule. */
+	/* The block tone is what separates the header from the page, so it carries no rule. Everything
+	   drawn on it comes from the block family, the menu below it excepted, which is a panel sitting
+	   on the page. */
 	header {
 		position: fixed;
 		z-index: 30;
@@ -265,12 +312,17 @@
 
 	.tabs > li > a:hover,
 	.tabs > li > a[aria-current] {
-		color: var(--accent);
+		color: var(--accent-block);
 	}
 
 	/* Accent text plus a rule, never colour alone. */
 	.tabs > li > a[aria-current] {
-		border-bottom-color: var(--accent);
+		border-bottom-color: var(--accent-block);
+	}
+
+	.wordmark:focus-visible,
+	.tabs > li > a:focus-visible {
+		outline-color: var(--accent-block);
 	}
 
 	.menu {
@@ -313,17 +365,19 @@
 		color: var(--accent);
 	}
 
-	/* No hover on a touch device, so the tab is the whole control and the menu never opens. */
+	/* Open by hover where there is one, by the first tap on the tab where there is not, and by
+	   keyboard focus either way. Keyboard focus rather than any focus, because a tab that keeps
+	   focus after a tap would leave the menu standing over the page it just went to. */
+	.menu.revealed > ul,
+	.menu:has(:focus-visible) > ul {
+		visibility: visible;
+		opacity: 1;
+	}
+
 	@media (hover: hover) {
-		.menu:hover > ul,
-		.menu:focus-within > ul {
+		.menu:hover > ul {
 			visibility: visible;
 			opacity: 1;
-		}
-
-		.menu.dismissed > ul {
-			visibility: hidden;
-			opacity: 0;
 		}
 	}
 
