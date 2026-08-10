@@ -14,6 +14,7 @@ from nba_ml.entities import Game
 from nba_ml.machine_learning import datasets, serialization, trainer
 from nba_ml.machine_learning.architectures.gru_feed_forward import GRUFeedForward
 from nba_ml.models.errors import PredictionRefused, Refusal
+from nba_ml.models.outputs import Prediction
 from nba_ml.models.player_stats import features as stat_features
 from nba_ml.models.player_stats.specifications import (
     MAX_SEQUENCE_LENGTH,
@@ -86,10 +87,10 @@ def predict(
     added_core_teammate_player_ids: Collection[int] = (),
     target_player_team_id: int | None = None,
     print_debug: bool = True
-    ) -> list[float]:
+    ) -> Prediction:
     """
-    Returns the probability of every whole number outcome of the stat this model predicts, from the
-    lowest class up.
+    Returns a probability for every position of this model's output, in that order, and how many of
+    the player's earlier games the answer was built from.
 
     See features._get_inference_player_game_data for what the roster arguments mean.
 
@@ -129,4 +130,9 @@ def predict(
 
     predicted_probabilities = torch.softmax(predictions, 1)
 
-    return predicted_probabilities.tolist()[0]
+    # The sample reads every game up to the one being predicted, so where it stops is how many the
+    # build found behind it.
+    return Prediction(
+        values=predicted_probabilities.tolist()[0],
+        past_games=int(samples.sequence_end_indices[0])
+    )

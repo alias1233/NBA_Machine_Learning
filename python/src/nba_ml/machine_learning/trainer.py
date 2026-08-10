@@ -180,12 +180,7 @@ def _split_batch(
         batch: list[torch.Tensor],
         device: torch.device
     ) -> tuple[list[torch.Tensor], torch.Tensor]:
-    """
-    A batch holds the model's inputs followed by the target.
-
-    Returns:
-        (model inputs, target)
-    """
+    """A batch holds the model's inputs followed by the target."""
 
     tensors = [tensor.to(device, non_blocking=True) for tensor in batch]
 
@@ -289,9 +284,8 @@ def train(
     metrics: dict[str, MetricFunction] | None = None
     ) -> TrainingRun:
     """
-    Trains a given model with the given configuration.
-    Each dataset must yield the model's inputs followed by the target, and the model is called
-    with those inputs.
+    Each dataset must yield the model's inputs followed by the target, and the model is called with
+    those inputs.
 
     Args:
         metrics are scored on the validation set after every evaluation and reported alongside the loss.

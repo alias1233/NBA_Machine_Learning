@@ -1,9 +1,8 @@
 """
 What every model, in every family, has in common.
 
-Every model here answers with a probability for each whole number outcome, so an answer has the same
-shape whatever is being predicted. That is what lets the service list and serve a family without
-knowing anything about what it predicts.
+A model is named, says what it answers about, and says what shape its answer has. That is all the
+service needs to list it and serve it, so nothing here limits what a model may predict.
 
 A family adds a subclass naming its category and holding whatever only that family needs.
 """
@@ -13,11 +12,12 @@ from pathlib import Path
 from typing import ClassVar
 
 from nba_ml import paths
+from nba_ml.models.outputs import ModelOutput
 
 @dataclass(frozen=True)
 class ModelSpecification():
     """
-    One trained model: the name it is saved under, and the outcomes it answers with.
+    One trained model: the name it is saved under, and the answer it gives.
 
     The name is what `nba-train --model` and `nba-predict --model` take, so two models predicting the
     same thing with different settings are two specifications with different names.
@@ -27,11 +27,8 @@ class ModelSpecification():
     """The family this model belongs to. Set once per family, and it names the folder files sit in."""
 
     name: str
-    minimum_value: int
-    """The outcome the first predicted probability stands for."""
-
-    outcomes: int
-    """How many whole number outcomes the model gives a probability for."""
+    output: ModelOutput
+    """The shape of an answer. See nba_ml/models/outputs.py."""
 
     @property
     def predicts(self) -> tuple[str, ...]:

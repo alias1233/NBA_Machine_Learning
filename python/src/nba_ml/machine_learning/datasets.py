@@ -27,9 +27,9 @@ def summarize_classification_outputs(
     num_classifications: int
     ) -> dict[str, Any]:
     """
-    Describes the labels a classification model will be trained on. Anything above the last class
-    was folded into it, so a large share in the last class means the class count is too low to
-    describe the tail of the stat.
+    Describes the labels a classification model will be trained on. Anything above the last class was
+    folded into it, so for a stat with an order a large share in the last class means the class count
+    is too low to describe its tail.
     """
 
     total = len(outputs)
@@ -206,16 +206,11 @@ def build_classification_datasets(
         StandardScaler | None
     ]:
     """
-    Converts labeled data into datasets for classification with Cross Entropy Loss.
-    The outputs are shifted by min_output_value and clamped by num_classifications.
+    Builds the three splits as classification datasets, with the outputs shifted by min_output_value
+    and clamped to num_classifications.
 
-    The scalers are fit only on games and samples belonging to the training split.
-
-    The returned data is in the form of a tuple consisting of:
-    (
-    training dataset, validation dataset, test dataset,
-    sequence_scaler and static_scaler if standardize_input is True, otherwise None
-    )
+    The scalers are fit only on the games and samples of the training split, and come back None
+    unless standardize_input is set.
     """
 
     all_samples = [training_samples, validation_samples, test_samples]

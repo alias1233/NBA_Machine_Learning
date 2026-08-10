@@ -13,10 +13,13 @@ import {
 	defaultLine,
 	expectedValue,
 	mostLikelyOutcomes,
-	oddsPercentages
+	oddsPercentages,
+	readAnswer,
+	sharePercentages
 } from './odds.ts';
 
 import type { LineOdds } from './odds.ts';
+import type { Prediction } from './types.ts';
 
 function check(what: string, actual: unknown, expected: unknown) {
 	const [got, wanted] = [JSON.stringify(actual), JSON.stringify(expected)];
@@ -107,5 +110,38 @@ const thirds = oddsPercentages({ over: 1 / 3, under: 1 / 3, push: 1 / 3 }, 2);
 const summed = Number(thirds.over) + Number(thirds.under) + Number(thirds.push);
 
 check('a figure that does not divide still sums to a hundred', round(summed), 100);
+
+check('two shares are rounded to a hundred', sharePercentages([0.158, 0.842]), ['15.8', '84.2']);
+
+const sevenths = sharePercentages(Array.from({ length: 7 }, () => 1 / 7));
+const sevenSummed = sevenths.reduce((running, share) => running + Number(share), 0);
+
+check('and so is any other count of them', round(sevenSummed), 100);
+
+// The two shapes the site draws, and one it does not.
+const answered = (output: Prediction['output'], values: number[]): Prediction => ({
+	model: 'test',
+	output,
+	values,
+	past_games: 30
+});
+
+check(
+	'a whole number answer is read as a distribution',
+	readAnswer(answered({ kind: 'integer_distribution', minimum_value: 10, outcomes: 2 }, [0.4, 0.6])),
+	{ kind: 'integer_distribution', distribution: { minimumValue: 10, probabilities: [0.4, 0.6] } }
+);
+
+check(
+	'a named answer keeps the order the model listed',
+	readAnswer(answered({ kind: 'category_distribution', categories: ['yes', 'no'] }, [0.2, 0.8])),
+	{ kind: 'category_distribution', categories: { names: ['yes', 'no'], probabilities: [0.2, 0.8] } }
+);
+
+check(
+	'a shape with no reading is turned away rather than half drawn',
+	readAnswer(answered({ kind: 'values', quantities: ['minutes'] }, [31.4])),
+	null
+);
 
 console.log('\nAll odds checks passed.');

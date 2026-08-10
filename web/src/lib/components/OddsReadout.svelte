@@ -72,7 +72,7 @@
 	}
 
 	.push dd {
-		color: var(--chart-neutral);
+		color: var(--push);
 	}
 
 	/* Beside the chart from here, so the three stack at the top of the column instead of sitting

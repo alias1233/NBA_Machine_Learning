@@ -12,9 +12,10 @@
 	import { browser } from '$app/environment';
 
 	import AdSlot from '$lib/components/AdSlot.svelte';
-	import CollageTile from '$lib/components/CollageTile.svelte';
+	import Artwork from '$lib/components/Artwork.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import { TILES } from '$lib/collage';
+	import { familyGraphic } from '$lib/graphics';
 	import { MODELS_SECTION, familyAboutPath, familyPath } from '$lib/models';
 	import { SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
 
@@ -44,8 +45,16 @@
 	<section class="hero">
 		<div class="backdrop"></div>
 
+		<!-- The grid places each tile and the tile carries its own ground, so one crossing the
+		     backdrop's edge looks the same on both sides of it. -->
 		{#each TILES as image, index (index)}
-			<CollageTile {image} {index} {entering} />
+			<div
+				class="tile"
+				class:entering
+				style="grid-area: t{index + 1}; --arrive-delay: calc({index} * var(--collage-stagger))"
+			>
+				<Artwork src={image && `/collage/${image}`} />
+			</div>
 		{/each}
 
 		<div class="words" class:entering>
@@ -60,42 +69,48 @@
 	</section>
 
 	<section class="page models" id={MODELS_SECTION}>
-		<h2>Models</h2>
+		<!-- A family card holds a square and one line, so the listing takes a column of its own and
+		     the page tone frames it rather than running under half-empty cards. -->
+		<div class="listing">
+			<h2>Models</h2>
 
-		{#if data.families.length === 0}
-			<Notice>No model is published right now.</Notice>
-		{:else}
-			{#each data.families as family (family.name)}
-				<article class="block family">
-					<!-- Reserves what the family graphic will take, so dropping one in shifts nothing. A
-					     nested image area inside a block is a surface. -->
-					<div class="graphic surface" aria-hidden="true"></div>
-
-					<div class="about">
-						<h3>{family.title}</h3>
-						<p class="muted">{family.description}</p>
-
-						<!-- A family with nothing trained behind it has nowhere to lead, so it says so
-						     instead of offering a page that cannot answer. -->
-						<div class="ways">
-							{#if family.published}
-								<a class="button" href={familyPath(family)}>Predict</a>
-								<a class="small" href={familyAboutPath(family)}>How this model works</a>
-							{:else}
-								<span class="tag micro">Not published yet</span>
-							{/if}
+			{#if data.families.length === 0}
+				<Notice>No model is published right now.</Notice>
+			{:else}
+				{#each data.families as family (family.name)}
+					<article class="block family">
+						<!-- Reserves what the family graphic takes, so dropping one in shifts nothing. A
+						     nested image area inside a block is a surface. -->
+						<div class="graphic surface">
+							<Artwork src={familyGraphic(family.name)} />
 						</div>
-					</div>
-				</article>
-			{/each}
 
-			<!-- Not a family and nothing to act on, so it is a panel rather than another block. -->
-			<div class="panel more">
-				<h3>More models</h3>
-				<p class="muted small">Each new family is listed here as it lands.</p>
-				<span class="tag micro">Coming soon</span>
-			</div>
-		{/if}
+						<div class="about">
+							<h3>{family.title}</h3>
+							<p class="muted">{family.description}</p>
+
+							<!-- A family with nothing trained behind it has nowhere to lead, so it says so
+							     instead of offering a page that cannot answer. -->
+							<div class="ways">
+								{#if family.published}
+									<a class="button" href={familyPath(family)}>Predict</a>
+									<a class="small" href={familyAboutPath(family)}>How this model works</a>
+								{:else}
+									<span class="tag micro">Not published yet</span>
+								{/if}
+							</div>
+						</div>
+					</article>
+				{/each}
+
+				<!-- Not a family and nothing to act on, so it is a panel rather than another block. -->
+				<div class="panel more">
+					<h3>More models</h3>
+					<p class="muted small">Each new family is listed here as it lands.</p>
+					<span class="tag micro">Coming soon</span>
+				</div>
+			{/if}
+		</div>
 
 		<AdSlot place="homeModels" />
 	</section>
@@ -131,6 +146,18 @@
 	.backdrop {
 		grid-area: 2 / 2 / 8 / -2;
 		background: var(--block);
+	}
+
+	/* The cell a picture fills. It carries the ground, so a tile reads the same on and off the
+	   backdrop, and it has sharp edges like the backdrop it is placed on. */
+	.tile {
+		min-width: 0;
+		background: var(--block);
+	}
+
+	/* The entrance is the one place a stagger is used, and the delay each tile takes is its own. */
+	.tile.entering {
+		--arrive-duration: var(--motion-entry);
 	}
 
 	.words {
@@ -191,6 +218,17 @@
 		gap: var(--space-5);
 	}
 
+	/* Narrower than the page and centred in it. The ad slot below stays on the page width, because
+	   it is not part of the listing. */
+	.listing {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+		width: 100%;
+		max-width: var(--family-column);
+		margin-inline: auto;
+	}
+
 	/* The graphic is beside the words at every width, and the card is what its size is measured
 	   against. In one column it takes the title beside it and the rest of the words run the full
 	   width underneath, so a narrow card spends its room on the sentence rather than on the square. */
@@ -206,13 +244,13 @@
 		gap: var(--space-4) var(--space-5);
 	}
 
-	/* Square, like a game card, so a family reads in the same language as everything it leads to. It
-	   holds the same placeholder as a collage tile until a graphic lands on it. */
+	/* Square, like a game card, so a family reads in the same language as everything it leads to. The
+	   picture fills it, so the surface is the ground and nothing else. */
 	.graphic {
 		grid-area: graphic;
 		width: var(--card-graphic);
 		aspect-ratio: var(--card-ratio);
-		background: linear-gradient(160deg, var(--accent-block), var(--block-muted));
+		padding: 0;
 	}
 
 	/* The words are the card's own rows until there is room to set them as one column. */

@@ -5,17 +5,15 @@ a name a caller sent into a stored id.
 Every identifier a caller uses is one this project owns and stores: a player id, a team tricode such
 as LAL, a model name, and a season phase. None of them come from a data service, so a change of
 service cannot break a saved link.
-
-A game is named by its date and its two teams rather than by a team, an opponent and a home flag,
-which means a caller cannot describe a game that could not happen.
 """
 
 from datetime import date
 
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from nba_ml.entities import Game
+from nba_ml.models.outputs import DISCRIMINATOR, ModelOutput
 from nba_ml.season import SeasonType
 from nba_ml.stores import teams
 
@@ -31,13 +29,16 @@ class PredictionResponse(BaseModel):
     """
     One answer, whatever family produced it.
 
-    It is a probability for every whole number outcome, counting up from minimum_value. Expected
-    value and the odds for a line are sums over that array, which the caller does on its own.
+    The output says what each value stands for. Anything read off them, such as the expected value or
+    the odds for a line, is arithmetic the caller already holds everything for.
     """
 
     model: str
-    minimum_value: int
-    probabilities: list[float]
+    output: ModelOutput = Field(discriminator=DISCRIMINATOR)
+    values: list[float]
+
+    past_games: int
+    """How many earlier games the answer was built from, so a caller can say it rests on very little."""
 
 class GameRequest(BaseModel):
     date: date

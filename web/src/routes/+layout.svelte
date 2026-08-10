@@ -2,9 +2,9 @@
 	The shell every page sits in: the header, the page itself, and the footer. The wordmark and the
 	tabs are rooted, so they sit in the same place on every page.
 
-	The header is fixed and gets out of the way once the reader scrolls. Four things bring it back and
-	nothing else: the top of the page, a pointer in the top --header-reveal-zone, the models menu
-	standing open, and focus landing inside it.
+	The header is fixed and gets out of the way once the reader scrolls. Five things bring it back and
+	nothing else: the top of the page, a pointer in the top --header-reveal-zone, a scroll back up
+	where there is no pointer, the models menu standing open, and keyboard focus landing inside it.
 
 	The models menu opens on hover. A touch device has none, so there the first tap on the tab opens
 	it and the second follows the tab.
@@ -83,7 +83,11 @@
 		revealed = true;
 	}
 
+	let masthead = $state<HTMLElement>();
 	let menuRoot = $state<HTMLElement>();
+	let menuList = $state<HTMLElement>();
+	let menuNudge = $state(0);
+	let viewportWidth = $state(0);
 
 	// A press anywhere else puts the menu away, the same as a pointer leaving it.
 	$effect(() => {
@@ -98,19 +102,65 @@
 		return () => document.removeEventListener('pointerdown', closeOutside);
 	});
 
+	// Centred on its tab, unless the tab sits close enough to the edge that centring would put the
+	// menu past the page gutter. Then it moves left by exactly what would have been cut off. A
+	// hidden menu is still laid out, so this measures whatever the menu is doing.
+	$effect(() => {
+		// Read so a resize and a new family both re-measure.
+		viewportWidth;
+		predictable.length;
+
+		if (!masthead || !menuRoot || !menuList) return;
+
+		const gutter = parseFloat(getComputedStyle(masthead).paddingRight);
+		const edge = masthead.getBoundingClientRect().right - gutter;
+		const centre = menuRoot.getBoundingClientRect().left + menuRoot.offsetWidth / 2;
+
+		menuNudge = Math.max(centre + menuList.offsetWidth / 2 - edge, 0);
+	});
+
 	let scrollY = $state(0);
 	let headerHeight = $state(0);
 	let nearTop = $state(false);
 	let holdingFocus = $state(false);
+	let scrolledUp = $state(false);
 	let revealZone = $state(0);
 
 	// It hides once the page has scrolled past half the header height, so a small scroll does not
-	// take it away, and it returns at the very top rather than on the way back up. The menu hangs
-	// below the reveal zone, so an open one holds the header as well, and so does focus, because a
-	// hidden header cannot be scrolled to.
+	// take it away. The menu hangs below the reveal zone, so an open one holds the header as well,
+	// and so does keyboard focus, because a hidden header cannot be scrolled to.
 	const hidden = $derived(
-		scrollY > headerHeight / 2 && !nearTop && !overMenu && !revealed && !holdingFocus
+		scrollY > headerHeight / 2 &&
+			!nearTop &&
+			!scrolledUp &&
+			!overMenu &&
+			!revealed &&
+			!holdingFocus
 	);
+
+	/** Below this a move is jitter rather than a direction. */
+	const SCROLL_STEP = 8;
+
+	let lastScroll = 0;
+
+	function onScroll() {
+		const moved = window.scrollY - lastScroll;
+
+		if (Math.abs(moved) < SCROLL_STEP) return;
+
+		lastScroll = window.scrollY;
+
+		// Scrolling on puts the header away whatever was holding it, a tapped menu included.
+		if (moved > 0) {
+			scrolledUp = false;
+			revealed = false;
+			return;
+		}
+
+		// A reader with no pointer has no top strip to reach into, so scrolling back up is the only
+		// way they can ask for the header.
+		scrolledUp = !canHover.current;
+	}
 
 	// A touch leaves its last position behind, which would hold the header open after a scroll that
 	// started at the top of the screen. Only a pointer that hovers can reveal.
@@ -122,6 +172,13 @@
 		if (near !== nearTop) nearTop = near;
 	}
 
+	// A press focuses what it lands on, and a header held open by that would stay down after the
+	// pointer had left it. A keyboard focus draws a ring, so only that has to keep the header
+	// reachable.
+	function onHeaderFocusIn(event: FocusEvent) {
+		holdingFocus = (event.target as Element).matches(':focus-visible');
+	}
+
 	function onHeaderFocusOut(event: FocusEvent & { currentTarget: HTMLElement }) {
 		holdingFocus = event.currentTarget.contains(event.relatedTarget as Node | null);
 	}
@@ -130,6 +187,7 @@
 		const zone = getComputedStyle(document.documentElement).getPropertyValue('--header-reveal-zone');
 
 		revealZone = parseFloat(zone);
+		lastScroll = window.scrollY;
 	});
 
 	// Pages cross-fade. A change within one page never does, because the reader did not ask to go
@@ -155,23 +213,31 @@
 	});
 
 	// The scroll has already been made by the time this runs, so the page travels again from here.
-	// A menu the reader tapped open has been answered by arriving somewhere, so it closes.
+	// A menu the reader tapped open has been answered by arriving somewhere, so it closes, and the
+	// direction starts again from where the new page landed rather than from the last one.
 	afterNavigate(() => {
 		document.documentElement.classList.remove('arriving');
 		revealed = false;
+		scrolledUp = false;
+		lastScroll = window.scrollY;
 	});
 </script>
 
-<svelte:window bind:scrollY onpointermove={onPointerMove} />
+<svelte:window
+	bind:scrollY
+	bind:innerWidth={viewportWidth}
+	onscroll={onScroll}
+	onpointermove={onPointerMove}
+/>
 
 <header
 	class:hidden
 	class:scrolled={scrollY > 0}
 	bind:clientHeight={headerHeight}
-	onfocusin={() => (holdingFocus = true)}
+	onfocusin={onHeaderFocusIn}
 	onfocusout={onHeaderFocusOut}
 >
-	<div class="page masthead">
+	<div class="page masthead" bind:this={masthead}>
 		<a class="wordmark" href="/">{SITE_NAME}</a>
 
 		<nav>
@@ -184,6 +250,7 @@
 				<li
 					class="menu"
 					class:revealed
+					style:--menu-nudge="{menuNudge}px"
 					bind:this={menuRoot}
 					onpointerenter={(event) => (overMenu = event.pointerType !== 'touch')}
 					onpointerleave={onMenuPointerLeave}
@@ -199,7 +266,7 @@
 					</a>
 
 					{#if predictable.length > 0}
-						<ul class="panel" aria-labelledby="models-tab">
+						<ul class="panel" aria-labelledby="models-tab" bind:this={menuList}>
 							{#each predictable as family (family.name)}
 								<li><a href={familyPath(family)}>{family.title}</a></li>
 							{/each}
@@ -286,9 +353,12 @@
 		flex: none;
 	}
 
+	/* A tab carries its own padding, so an open one can be boxed without moving the row. The end of
+	   the row gives that padding back, which keeps the last tab's text on the page gutter. */
 	.tabs {
 		display: flex;
-		gap: var(--space-4);
+		gap: var(--space-2);
+		margin-inline-end: calc(var(--space-2) * -1);
 		padding: 0;
 		list-style: none;
 	}
@@ -301,13 +371,16 @@
 		display: flex;
 		align-items: center;
 		min-height: var(--tap-target);
+		padding-inline: var(--space-2);
 		border-bottom: var(--rule-accent);
 		border-bottom-color: transparent;
 		color: var(--block-muted);
 		font-size: var(--type-small);
 		font-weight: 600;
 		text-decoration: none;
-		transition: color var(--motion-fast) var(--ease-in);
+		transition:
+			background var(--motion-fast) var(--ease-in),
+			color var(--motion-fast) var(--ease-in);
 	}
 
 	.tabs > li > a:hover,
@@ -329,13 +402,21 @@
 		position: relative;
 	}
 
-	/* Centred on the Models tab, not offset from it. A raised panel, so it carries the shadow. */
+	/* A tap opens the menu and the next one follows the tab, which is two jobs and no hover to tell
+	   them apart. The open tab is boxed, so the second tap reads as a different press. */
+	.menu.revealed > a {
+		background: var(--hairline-block);
+		border-radius: var(--radius);
+	}
+
+	/* Centred on the Models tab, and moved left by whatever centring would have hung past the page
+	   gutter. A raised panel, so it carries the shadow. */
 	.menu > ul {
 		position: absolute;
 		z-index: 20;
 		top: 100%;
 		left: 50%;
-		translate: -50% 0;
+		translate: calc(-50% - var(--menu-nudge, 0px)) 0;
 		visibility: hidden;
 		opacity: 0;
 		min-width: max-content;
@@ -421,7 +502,7 @@
 		}
 
 		.tabs {
-			gap: var(--space-5);
+			gap: var(--space-3);
 		}
 	}
 </style>

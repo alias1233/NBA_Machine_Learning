@@ -12,6 +12,8 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 
+	import { appear } from '$lib/motion';
+
 	import type { Player, Roster } from '$lib/types';
 
 	type Props = {
@@ -204,6 +206,7 @@
 			id="{id}-options"
 			role="listbox"
 			aria-label={searchable ? 'Players' : 'This game'}
+			transition:appear
 		>
 			{#if options.length === 0}
 				<li class="empty muted small">{searching ? 'Searching' : 'No player found.'}</li>

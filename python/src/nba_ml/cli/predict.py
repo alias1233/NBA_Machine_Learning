@@ -10,6 +10,7 @@ import argparse
 from nba_ml import season
 from nba_ml.entities import Game
 from nba_ml.models.errors import PredictionRefused
+from nba_ml.models.outputs import ClassDistribution, Prediction
 from nba_ml.models.player_stats import inference, specifications
 from nba_ml.stores import players, teams
 
@@ -33,26 +34,36 @@ def _team_id(abbreviation_or_name: str) -> int:
 
     return team.id
 
-def _print_result(probabilities: list[float], minimum_value: int):
+def _print_result(prediction: Prediction, output: ClassDistribution):
     """
-    A readable summary of the answer, which is a probability per whole number outcome.
+    Sixty probabilities are unreadable printed out, so this prints the summary of them.
 
-    Sixty of those are unreadable printed out, so this prints what they average to and the handful
-    carrying the most weight.
+    The output names every position, so this reads any answer shape. An expected value is only
+    printed for an ordered one, since averaging named categories means nothing.
     """
 
-    outcomes = [(minimum_value + offset, probability) for offset, probability in enumerate(probabilities)]
-    expected_value = sum(value * probability for value, probability in outcomes)
+    outcomes = [
+        (output.label(position), probability)
+        for position, probability in enumerate(prediction.values)
+    ]
 
-    print(f"\nExpected value: {expected_value:.2f}")
+    print(f"\nBuilt from {prediction.past_games} past games.")
+
+    if output.ordered:
+        expected_value = sum(
+            (output.first_value + position) * probability
+            for position, probability in enumerate(prediction.values)
+        )
+        print(f"Expected value: {expected_value:.2f}")
+
     print("Most likely outcomes:")
 
-    for value, probability in sorted(outcomes, key=lambda outcome: -outcome[1])[:MOST_LIKELY_OUTCOMES_SHOWN]:
-        print(f"  {value:>3}  {probability:.4f}")
+    for label, probability in sorted(outcomes, key=lambda outcome: -outcome[1])[:MOST_LIKELY_OUTCOMES_SHOWN]:
+        print(f"  {label:>3}  {probability:.4f}")
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Predicts the probability of every whole number outcome of one player's stat in one game."
+        description="Predicts the chance of every outcome of one player's statistic in one game."
     )
     parser.add_argument("--model", required=True, choices=specifications.MODEL_NAMES, help="Which model to predict with.")
     parser.add_argument("--player", required=True, help="Full player name.")
@@ -91,7 +102,7 @@ def main():
     )
 
     try:
-        probabilities = inference.predict(
+        prediction = inference.predict(
             specification,
             _player_id(arguments.player),
             game,
@@ -103,7 +114,7 @@ def main():
     except PredictionRefused as refusal:
         raise SystemExit(str(refusal))
 
-    _print_result(probabilities, specification.minimum_value)
+    _print_result(prediction, specification.output)
 
 if __name__ == '__main__':
     main()

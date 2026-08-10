@@ -61,9 +61,10 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
 # INPUT OUTPUT STRUCTURE: #
 OUTPUT = "OUTPUT"
 
-# How many games a player must already have played before one of their games can be a sample.
-# Players who never reach it are dropped from the dataset.
-MINIMUM_PAST_GAMES = 20
+# How many games a player must already have played before one of their games can be a sample. One is
+# the floor rather than a choice: the sequence a model reads cannot be empty. A player early in their
+# career is kept and GAMES_PLAYED tells the model how little sits behind the averages beside it.
+MINIMUM_PAST_GAMES = 1
 
 # TARGET STATS: #
 @dataclass(frozen=True)
@@ -167,6 +168,128 @@ class TargetStat(Enum):
         )
     )
 
+    THREE_POINTERS = TargetStatColumns(
+        output_column=player_games.THREE_POINTERS_MADE.category_name + game_columns.PLAYER_SUFFIX,
+        sequence_stats=(
+            player_games.THREE_POINTERS_MADE.category_name + game_columns.PLAYER_SUFFIX,
+            player_games.THREE_POINTERS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
+            player_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
+            team_games.THREE_POINTERS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
+            team_games.THREE_POINTERS_MADE.category_name + game_columns.TEAM_SUFFIX,
+            team_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
+        ),
+        career_stats=(player_games.THREE_POINTERS_MADE.category_name,),
+        opponent_allowed_team_stats=(
+            team_games.THREE_POINTERS_ATTEMPTED.category_name,
+            team_games.THREE_POINTERS_MADE.category_name,
+            team_games.FIELD_GOALS_ATTEMPTED.category_name,
+            game_columns.POINTS,
+        )
+    )
+
+    STEALS = TargetStatColumns(
+        output_column=player_games.STEALS.category_name + game_columns.PLAYER_SUFFIX,
+        sequence_stats=(
+            player_games.STEALS.category_name + game_columns.PLAYER_SUFFIX,
+            player_games.DEFENSIVE_REBOUNDS.category_name + game_columns.PLAYER_SUFFIX,
+            team_games.STEALS.category_name + game_columns.TEAM_SUFFIX,
+            team_games.TURNOVERS.category_name + game_columns.TEAM_SUFFIX,
+        ),
+        career_stats=(player_games.STEALS.category_name,),
+        opponent_allowed_team_stats=(
+            team_games.STEALS.category_name,
+            team_games.TURNOVERS.category_name,
+        )
+    )
+
+    BLOCKS = TargetStatColumns(
+        output_column=player_games.BLOCKS.category_name + game_columns.PLAYER_SUFFIX,
+        sequence_stats=(
+            player_games.BLOCKS.category_name + game_columns.PLAYER_SUFFIX,
+            player_games.DEFENSIVE_REBOUNDS.category_name + game_columns.PLAYER_SUFFIX,
+            team_games.BLOCKS.category_name + game_columns.TEAM_SUFFIX,
+        ),
+        career_stats=(player_games.BLOCKS.category_name,),
+        opponent_allowed_team_stats=(
+            team_games.BLOCKS.category_name,
+            team_games.FIELD_GOALS_ATTEMPTED.category_name,
+        )
+    )
+
+    TURNOVERS = TargetStatColumns(
+        output_column=player_games.TURNOVERS.category_name + game_columns.PLAYER_SUFFIX,
+        sequence_stats=(
+            player_games.TURNOVERS.category_name + game_columns.PLAYER_SUFFIX,
+            player_games.ASSISTS.category_name + game_columns.PLAYER_SUFFIX,
+            player_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
+            team_games.TURNOVERS.category_name + game_columns.TEAM_SUFFIX,
+        ),
+        career_stats=(player_games.TURNOVERS.category_name,),
+        opponent_allowed_team_stats=(
+            team_games.TURNOVERS.category_name,
+            team_games.STEALS.category_name,
+        )
+    )
+
+# COMBINING TARGETED STATS: #
+DOUBLE_FIGURES = 10
+"""What one stat has to reach in a game to count towards a double double."""
+
+MILESTONE_CATEGORIES = ("yes", "no")
+"""
+What a double figure milestone answers with, most notable first, so a caller drawing the answer leads
+with the milestone happening.
+"""
+
+MILESTONE_REACHED, MILESTONE_MISSED = range(len(MILESTONE_CATEGORIES))
+"""Which position of MILESTONE_CATEGORIES each outcome is, which is the label it is fit against."""
+
+@dataclass(frozen=True)
+class StatTotal():
+    """The targeted stats added together, which is what a stat line is."""
+
+    def combine(self, stat_values: pd.DataFrame) -> pd.Series:
+        return stat_values.sum(axis=1)
+
+    def predicts(self, target_stats: Iterable[TargetStat]) -> tuple[str, ...]:
+        return tuple(stat.name.lower().replace("_", " ") for stat in target_stats)
+
+    def describe(self, output_columns: list[str]) -> str:
+        return " + ".join(output_columns)
+
+@dataclass(frozen=True)
+class DoubleFigureMilestone():
+    """
+    Whether enough of the targeted stats reached double figures in the same game, which is what a
+    double double and a triple double are. The answer is a category rather than a count.
+    """
+
+    stats_needed: int
+    predicted: str
+    """What a reader calls it."""
+
+    def combine(self, stat_values: pd.DataFrame) -> pd.Series:
+        reached = (stat_values >= DOUBLE_FIGURES).sum(axis=1) >= self.stats_needed
+
+        return pd.Series(
+            np.where(reached, MILESTONE_REACHED, MILESTONE_MISSED),
+            index=stat_values.index
+        )
+
+    def predicts(self, target_stats: Iterable[TargetStat]) -> tuple[str, ...]:
+        return (self.predicted,)
+
+    def describe(self, output_columns: list[str]) -> str:
+        return f"{self.stats_needed} or more of {', '.join(output_columns)} reaching {DOUBLE_FIGURES}"
+
+StatCombination = StatTotal | DoubleFigureMilestone
+"""
+How the stats a model targets become the one value it is fit against.
+
+Adding a way to combine them is one class here holding these three: the label a finished game gets,
+the words a reader sees, and a line for the training report. Nothing else branches on which it is.
+"""
+
 # Columns every model gets, whatever it is predicting.
 SEQUENCE_STATS_ALWAYS = [
     player_games.MINUTES_PLAYED.category_name + game_columns.PLAYER_SUFFIX,
@@ -235,7 +358,10 @@ class FeatureSet():
     """
 
     output_columns: list[str]
-    """Summed together to form the value being predicted."""
+    """The stats the value being predicted is read off."""
+
+    combination: StatCombination
+    """How those columns become that one value."""
 
     player_rolling_categories: list[RollingCategory]
 
@@ -269,10 +395,16 @@ def _column_name_after_merge(
 
     return player_column
 
-def build_feature_set(target_stats: Iterable[TargetStat]) -> FeatureSet:
+def build_feature_set(
+    target_stats: Iterable[TargetStat],
+    combination: StatCombination = StatTotal()
+    ) -> FeatureSet:
     """
     Resolves the columns a model predicting the given stats needs. Predicting several stats at once
     takes the union of what each one asks for.
+
+    Args:
+        combination is how those stats become the one value the model is fit against.
     """
 
     specifications = [target_stat.value for target_stat in set(target_stats)]
@@ -368,6 +500,7 @@ def build_feature_set(target_stats: Iterable[TargetStat]) -> FeatureSet:
 
     return FeatureSet(
         output_columns=sorted({spec.output_column for spec in specifications}),
+        combination=combination,
         player_rolling_categories=career_categories + player_mean_categories + player_weighted_mean_categories,
         core_teammate_stat_columns=core_teammate_stat_columns,
         team_rolling_categories=team_allowed_mean_categories,
@@ -463,8 +596,12 @@ def _preprocess_player_game_data(
     player_game_data: pd.DataFrame
     ) -> pd.DataFrame:
     """
-    Returns every game played by a player with enough games to model, sorted by player and then by
-    date so that the grouped columns below read each player's games in the order they happened.
+    Returns every game played by a player the databases hold information about, sorted by player and
+    then by date so that the grouped columns below read each player's games in the order they
+    happened.
+
+    Nobody is dropped for having played too few games. A short career still fills out the teammates
+    around the players who have one, and its own games are samples like any other.
     """
 
     player_game_data = player_game_data.drop(columns=PRE_UNUSED_PLAYER_CATEGORIES, errors='ignore')
@@ -500,10 +637,8 @@ def _preprocess_player_game_data(
     )
 
     player_id = player_game_data[player_games.PLAYER_ID.category_name]
-    games_played = player_id.groupby(player_id, sort=False).transform('size')
     player_game_data = player_game_data[
-        (games_played >= MINIMUM_PAST_GAMES)
-        & player_id.isin(player_info[players.PLAYER_ID.category_name])
+        player_id.isin(player_info[players.PLAYER_ID.category_name])
     ]
     player_game_data = player_game_data.sort_values(
         by=[player_games.PLAYER_ID.category_name, player_games.GAME_DATE.category_name]
@@ -728,7 +863,9 @@ def _preprocess_game_data(
         by=[player_games.PLAYER_ID.category_name, team_games.GAME_DATE.category_name]
         ).reset_index(drop=True)
 
-    player_team_game_data[OUTPUT] = player_team_game_data[features.output_columns].sum(axis=1)
+    player_team_game_data[OUTPUT] = features.combination.combine(
+        player_team_game_data[features.output_columns]
+    )
 
     histories = _split_into_player_histories(
         features,
@@ -911,14 +1048,15 @@ def _check_player_can_be_read(
     recorded_games: int
     ):
     """
-    Refuses a player the feature build would drop, before the build runs.
+    Refuses a player the feature build cannot answer for, before the 38 second build runs.
 
-    _preprocess_player_game_data keeps only players who have stored information and MINIMUM_PAST_GAMES
-    games. Left to itself, a dropped player is simply absent at the end, so this says why instead.
+    _preprocess_player_game_data keeps only players the databases hold information about, and a model
+    reads a sequence of their earlier games that cannot be empty. Left to itself a player missing
+    either is simply absent at the end, so this says why instead.
 
     Args:
-        recorded_games is how many games the player has stored. The game being predicted is added as
-        one more row, which is why it counts towards the minimum.
+        recorded_games is how many games the player has stored, all of which came before the game
+        being predicted.
     """
 
     if target_player_id not in player_info[players.PLAYER_ID.category_name].values:
@@ -927,11 +1065,11 @@ def _check_player_can_be_read(
             f"Nothing is stored about player {target_player_id} themselves, which every model reads."
         )
 
-    if recorded_games + 1 < MINIMUM_PAST_GAMES:
+    if recorded_games < MINIMUM_PAST_GAMES:
         raise PredictionRefused(
             Refusal.TOO_FEW_GAMES,
             f"Player {target_player_id} has {recorded_games} recorded games, and a prediction reads "
-            f"{MINIMUM_PAST_GAMES - 1}."
+            f"at least {MINIMUM_PAST_GAMES}."
         )
 
 def _get_inference_player_game_data(
@@ -1091,7 +1229,18 @@ def _get_inference_player_game_data(
     if len(target_indices) != 1:
         raise ValueError(f"Expected exactly one placeholder game for player {target_player_id}, found {len(target_indices)}.")
 
-    return (history, int(target_indices[0]))
+    target_index = int(target_indices[0])
+
+    # A game only survives the build with a team row beside it, so a player whose games all fall
+    # outside the window read above arrives here with nothing in front of the placeholder.
+    if target_index < MINIMUM_PAST_GAMES:
+        raise PredictionRefused(
+            Refusal.TOO_FEW_GAMES,
+            f"The build found {target_index} games for player {target_player_id} before "
+            f"{target_game_date_str}, and a prediction reads at least {MINIMUM_PAST_GAMES}."
+        )
+
+    return (history, target_index)
 
 def get_inference_data(
     features: FeatureSet,

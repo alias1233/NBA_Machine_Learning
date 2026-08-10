@@ -1,7 +1,7 @@
 [project]
 name = "nba-ml"
 version = "0.1.0"
-description = "Collects NBA data, builds features from it, trains models, and predicts player prop outcomes."
+description = "Collects NBA data, builds features from it, trains models, and predicts NBA statistics."
 readme = "../README.md"
 requires-python = ">=3.11,<3.12"
 

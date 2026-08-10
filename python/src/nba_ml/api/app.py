@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from nba_ml import upcoming
 from nba_ml.api import player_stats
@@ -22,12 +22,13 @@ from nba_ml.api.schemas import PlayerResponse, TeamResponse, team_id
 from nba_ml.entities import ScheduledGame
 from nba_ml.models.errors import PredictionRefused
 from nba_ml.models.families import ALL_FAMILIES, ALL_MODEL_NAMES
+from nba_ml.models.outputs import DISCRIMINATOR, ModelOutput
 from nba_ml.season import SeasonType
 from nba_ml.stores import player_games, players, teams
 
 app = FastAPI(
     title="NBA Machine Learning",
-    summary="Predicts the probability of every whole number outcome a model can answer with."
+    summary="Predicts NBA statistics before a game is played."
 )
 
 FAMILY_ROUTERS = [player_stats.router]
@@ -64,10 +65,9 @@ class ModelResponse(BaseModel):
     predicts: list[str]
     """What the model answers about, in the words a reader sees."""
 
-    minimum_value: int
-    """The value the first probability stands for."""
+    output: ModelOutput = Field(discriminator=DISCRIMINATOR)
+    """The shape of an answer, which is what tells a caller how to draw one."""
 
-    outcomes: int
     published: bool
     """Whether a trained file exists, so a caller can offer the model without every request failing."""
 
@@ -184,8 +184,7 @@ def all_models() -> list[ModelResponse]:
             name=specification.name,
             family=family.name,
             predicts=list(specification.predicts),
-            minimum_value=specification.minimum_value,
-            outcomes=specification.outcomes,
+            output=specification.output,
             published=family.is_published(specification)
         )
         for family in ALL_FAMILIES

@@ -19,7 +19,7 @@ npm run dev       # development server
 npm run build     # production build, into build/
 npm start         # serves that build, which is what the container will do
 npm run check     # TypeScript and Svelte checks
-npm test          # checks lib/odds.ts, the only place a line is turned into odds
+npm test          # checks lib/odds.ts, the only place an answer is turned into what a reader reads
 ```
 
 If no game is listed to predict on, the schedule has not been collected. Run `nba-collect schedule`
@@ -34,8 +34,10 @@ src/lib/site.ts                site name and the hero description
 src/lib/types.ts               shapes the service sends
 src/lib/models.ts              model families
 src/lib/collage.ts             hero collage tiles, in the order the hero grid places them
+src/lib/graphics.ts            family graphics, found by filename
+src/lib/assets/model_graphics/ one image per family, named after it
 src/lib/games.ts               writing a scheduled game out for a reader
-src/lib/odds.ts                expected value, line odds, the drawn range, the rounding
+src/lib/odds.ts                expected value, line odds, category shares, the drawn range, the rounding
 src/lib/motion.ts              rolling a figure to its new value
 src/lib/ads.ts                 the two ad slots, and whether ads run at all
 src/lib/server/api.ts          the only place that calls the python service

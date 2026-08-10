@@ -12,10 +12,19 @@ from typing import Callable, ClassVar
 import torch.nn as nn
 
 from nba_ml.machine_learning import trainer
+from nba_ml.models.outputs import CategoryDistribution, ClassDistribution, IntegerDistribution
 from nba_ml.models.specifications import ModelSpecification
 from nba_ml.machine_learning.architectures.feed_forward import LayerParameters
 from nba_ml.machine_learning.losses.gaussian_smoothed_cross_entropy import GaussianSmoothedCrossEntropyLoss
-from nba_ml.models.player_stats.features import FeatureSet, TargetStat, build_feature_set
+from nba_ml.models.player_stats.features import (
+    MILESTONE_CATEGORIES,
+    DoubleFigureMilestone,
+    FeatureSet,
+    StatCombination,
+    StatTotal,
+    TargetStat,
+    build_feature_set
+)
 
 MODEL_CATEGORY = "player_stats"
 """Names the folder every model of this family is saved under."""
@@ -41,7 +50,8 @@ def cross_entropy_loss(num_classifications: int) -> trainer.LossFunction:
 def gaussian_smoothed_cross_entropy_loss(sigma: float) -> LossFunctionFactory:
     """
     Spreads each label over its neighbouring classes, so guessing 21 points when 20 happened costs
-    less than guessing 40.
+    less than guessing 40. Only for a model whose output is ordered, since an unordered category has
+    no neighbours to spread onto.
 
     Args:
         sigma is how far the label spreads, measured in classes.
@@ -63,7 +73,7 @@ DEFAULT_TRAINING_PARAMETERS = TrainingParameters(
     configuration=trainer.TrainingConfiguration(
         epochs=20,
         batch_size=128,
-        patience=8,
+        patience=7,
         min_delta=0,
         max_gradient_norm=1.0,
         device=DEVICE
@@ -72,22 +82,28 @@ DEFAULT_TRAINING_PARAMETERS = TrainingParameters(
         LayerParameters(256, nn.ReLU(), False, 0.20),
         LayerParameters(128, nn.ReLU(), False, 0.15),
     ],
-    learning_rate=0.00001
+    learning_rate=0.00002
 )
 
 @dataclass(frozen=True)
 class PlayerStatModelSpecification(ModelSpecification):
-    """One player game statistics model: which stats it adds together, and how it is fit."""
+    """One player game statistics model: which stats it reads, how they combine, and how it is fit."""
 
     model_category: ClassVar[str] = MODEL_CATEGORY
 
+    output: ClassDistribution
+    """Narrowed, because every model here is fit as a classifier over the positions its output lists."""
+
     target_stats: tuple[TargetStat, ...]
+    combination: StatCombination = StatTotal()
+    """How those stats become the one value the model is fit against."""
+
     training_parameters: TrainingParameters = DEFAULT_TRAINING_PARAMETERS
     """Set this to train with parameters other than the shared defaults."""
 
     @property
     def predicts(self) -> tuple[str, ...]:
-        return tuple(stat.name.lower() for stat in self.target_stats)
+        return self.combination.predicts(self.target_stats)
 
     def get_feature_set(self) -> FeatureSet:
         """
@@ -95,34 +111,105 @@ class PlayerStatModelSpecification(ModelSpecification):
         two models being built at the same time never share column state.
         """
 
-        return build_feature_set(self.target_stats)
+        return build_feature_set(self.target_stats, self.combination)
 
+# Every whole number range below leaves out under 0.02% of the 838,852 collected player games, which
+# is the room a distribution needs at its tails.
 POINTS_MODEL = PlayerStatModelSpecification(
     name="points",
-    minimum_value=0,
-    outcomes=60,
+    output=IntegerDistribution(minimum_value=0, outcomes=60),
     target_stats=(TargetStat.POINTS,)
     )
 
 REBOUNDS_MODEL = PlayerStatModelSpecification(
     name="rebounds",
-    minimum_value=0,
-    outcomes=25,
+    output=IntegerDistribution(minimum_value=0, outcomes=25),
     target_stats=(TargetStat.REBOUNDS,)
     )
 
 ASSISTS_MODEL = PlayerStatModelSpecification(
     name="assists",
-    minimum_value=0,
-    outcomes=20,
+    output=IntegerDistribution(minimum_value=0, outcomes=20),
     target_stats=(TargetStat.ASSISTS,)
+    )
+
+THREE_POINTERS_MODEL = PlayerStatModelSpecification(
+    name="three_pointers",
+    output=IntegerDistribution(minimum_value=0, outcomes=12),
+    target_stats=(TargetStat.THREE_POINTERS,)
+    )
+
+STEALS_MODEL = PlayerStatModelSpecification(
+    name="steals",
+    output=IntegerDistribution(minimum_value=0, outcomes=10),
+    target_stats=(TargetStat.STEALS,)
+    )
+
+BLOCKS_MODEL = PlayerStatModelSpecification(
+    name="blocks",
+    output=IntegerDistribution(minimum_value=0, outcomes=10),
+    target_stats=(TargetStat.BLOCKS,)
+    )
+
+TURNOVERS_MODEL = PlayerStatModelSpecification(
+    name="turnovers",
+    output=IntegerDistribution(minimum_value=0, outcomes=12),
+    target_stats=(TargetStat.TURNOVERS,)
+    )
+
+POINTS_REBOUNDS_MODEL = PlayerStatModelSpecification(
+    name="points_rebounds",
+    output=IntegerDistribution(minimum_value=0, outcomes=70),
+    target_stats=(TargetStat.POINTS, TargetStat.REBOUNDS)
+    )
+
+POINTS_ASSISTS_MODEL = PlayerStatModelSpecification(
+    name="points_assists",
+    output=IntegerDistribution(minimum_value=0, outcomes=70),
+    target_stats=(TargetStat.POINTS, TargetStat.ASSISTS)
+    )
+
+REBOUNDS_ASSISTS_MODEL = PlayerStatModelSpecification(
+    name="rebounds_assists",
+    output=IntegerDistribution(minimum_value=0, outcomes=35),
+    target_stats=(TargetStat.REBOUNDS, TargetStat.ASSISTS)
+    )
+
+STEALS_BLOCKS_MODEL = PlayerStatModelSpecification(
+    name="steals_blocks",
+    output=IntegerDistribution(minimum_value=0, outcomes=12),
+    target_stats=(TargetStat.STEALS, TargetStat.BLOCKS)
     )
 
 POINTS_REBOUNDS_ASSISTS_MODEL = PlayerStatModelSpecification(
     name="points_rebounds_assists",
-    minimum_value=0,
-    outcomes=80,
+    output=IntegerDistribution(minimum_value=0, outcomes=80),
     target_stats=(TargetStat.POINTS, TargetStat.REBOUNDS, TargetStat.ASSISTS)
+    )
+
+MILESTONE_STATS = (
+    TargetStat.POINTS,
+    TargetStat.REBOUNDS,
+    TargetStat.ASSISTS,
+    TargetStat.STEALS,
+    TargetStat.BLOCKS
+)
+"""The five stats a double double and a triple double are counted over."""
+
+MILESTONE_OUTPUT = CategoryDistribution(categories=MILESTONE_CATEGORIES)
+
+DOUBLE_DOUBLE_MODEL = PlayerStatModelSpecification(
+    name="double_double",
+    output=MILESTONE_OUTPUT,
+    target_stats=MILESTONE_STATS,
+    combination=DoubleFigureMilestone(stats_needed=2, predicted="double double")
+    )
+
+TRIPLE_DOUBLE_MODEL = PlayerStatModelSpecification(
+    name="triple_double",
+    output=MILESTONE_OUTPUT,
+    target_stats=MILESTONE_STATS,
+    combination=DoubleFigureMilestone(stats_needed=3, predicted="triple double")
     )
 
 ALL_MODEL_SPECIFICATIONS = {
@@ -131,7 +218,17 @@ ALL_MODEL_SPECIFICATIONS = {
         POINTS_MODEL,
         REBOUNDS_MODEL,
         ASSISTS_MODEL,
-        POINTS_REBOUNDS_ASSISTS_MODEL
+        THREE_POINTERS_MODEL,
+        STEALS_MODEL,
+        BLOCKS_MODEL,
+        TURNOVERS_MODEL,
+        POINTS_REBOUNDS_MODEL,
+        POINTS_ASSISTS_MODEL,
+        REBOUNDS_ASSISTS_MODEL,
+        STEALS_BLOCKS_MODEL,
+        POINTS_REBOUNDS_ASSISTS_MODEL,
+        DOUBLE_DOUBLE_MODEL,
+        TRIPLE_DOUBLE_MODEL
     )
 }
 

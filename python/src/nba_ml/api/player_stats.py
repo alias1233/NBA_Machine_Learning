@@ -40,7 +40,7 @@ def predict_player_stat(model: str, request: PredictionRequest) -> PredictionRes
     if not inference.can_load(specification):
         raise HTTPException(503, f"The {specification.name} model has no published file yet.")
 
-    probabilities = inference.predict(
+    prediction = inference.predict(
         specification,
         request.player_id,
         request.game.to_game(),
@@ -52,6 +52,7 @@ def predict_player_stat(model: str, request: PredictionRequest) -> PredictionRes
 
     return PredictionResponse(
         model=specification.name,
-        minimum_value=specification.minimum_value,
-        probabilities=probabilities
+        output=specification.output,
+        values=prediction.values,
+        past_games=prediction.past_games
     )

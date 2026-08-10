@@ -8,12 +8,13 @@
  * typed it or chose a card. A card writes those four parameters, so there is one way to name a game
  * and no precedence to keep straight.
  *
- * Only published models are returned. A model that has no trained file is not offered at all, so a
- * reader is never shown a stat that cannot answer.
+ * A model is offered only if it has a trained file and answers in a shape this page has a reading
+ * for. A reader is never shown a stat that cannot answer.
  */
 
 import { isHttpError } from '@sveltejs/kit';
 
+import { DRAWN_KINDS } from '$lib/odds';
 import {
 	getModels,
 	getPlayer,
@@ -90,7 +91,7 @@ const readIds = (parameters: URLSearchParams, name: string) =>
  * words a reader sees are written here.
  */
 const REASONS: Record<string, string> = {
-	too_few_games: 'This player has too few recorded games to predict.',
+	too_few_games: 'This player has no earlier game to read.',
 	missing_player_information: 'Too little is known about this player to predict.',
 	unknown_player_team: 'Say which of the two teams this player is on.',
 	no_team_history: 'This team has no earlier game to read.'
@@ -123,7 +124,10 @@ export const load: PageServerLoad = async ({ url }) => {
 			getTeams()
 		]);
 
-		models = allModels.filter((model) => model.family === FAMILY && model.published);
+		models = allModels.filter(
+			(model) =>
+				model.family === FAMILY && model.published && DRAWN_KINDS.includes(model.output.kind)
+		);
 		games = upcoming;
 		teams = allTeams;
 	} catch {

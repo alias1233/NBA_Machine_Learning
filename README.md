@@ -15,8 +15,9 @@ Implemented capabilities:
 
 Working models:
 
-- Player game statistics: predicts the probability distribution of one statistic for a player in a
-  future game. Points, rebounds, assists, and points plus rebounds plus assists.
+- Player game statistics: predicts what a player does in a future game. Points, rebounds, assists,
+  three pointers, steals, blocks and turnovers, the pairs and the trio of them added together, and
+  whether they record a double double or a triple double.
 
 ## Future
 

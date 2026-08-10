@@ -5,6 +5,8 @@
 	made with a changed roster is still a shareable link.
 -->
 <script lang="ts">
+	import { flow } from '$lib/motion';
+
 	import type { Player } from '$lib/types';
 
 	type Props = {
@@ -22,7 +24,7 @@
 {/each}
 
 {#if players.length > 0}
-	<ul>
+	<ul transition:flow>
 		{#each players as player (player.id)}
 			<li class="pill small">
 				<span>{player.name}</span>

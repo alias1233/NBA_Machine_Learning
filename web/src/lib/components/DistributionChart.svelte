@@ -112,6 +112,7 @@
 				class="bar"
 				class:over={bar.value > line}
 				class:under={bar.value < line}
+				class:push={bar.value === line}
 				class:reading={bar.value === reading}
 				style="height: {(bar.probability / tallest) * 100}%"
 			></div>
@@ -160,6 +161,12 @@
 
 	.bar.under {
 		background: var(--under);
+	}
+
+	/* The outcome the line lands on. A colour of its own, because a push is a result rather than the
+	   absence of one. */
+	.bar.push {
+		background: var(--push);
 	}
 
 	.bar.reading {

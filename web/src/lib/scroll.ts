@@ -11,14 +11,23 @@
 import { tick } from 'svelte';
 import { prefersReducedMotion } from 'svelte/motion';
 
-/** The choice that asked for this usually moves the target, so it is measured once it has settled. */
+import { settled } from '$lib/motion';
+
+/**
+ * The choice that asked for this usually moves the target, so it is measured once it has settled.
+ * A choice that set off a longer flow than the usual one says how long to wait for it.
+ */
 export async function scrollIntoViewIfOffScreen(
 	target: HTMLElement | undefined,
-	block: 'start' | 'end'
+	block: 'start' | 'end',
+	flowing?: number
 ): Promise<void> {
 	if (!target) return;
 
+	// The tick puts the choice in the page. The wait is for the flow it set off, because the target
+	// usually rides on one.
 	await tick();
+	await settled(flowing);
 
 	const box = target.getBoundingClientRect();
 

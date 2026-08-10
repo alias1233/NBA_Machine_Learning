@@ -20,6 +20,11 @@ def _expected_value_mae(predictions: torch.Tensor, actuals: torch.Tensor) -> flo
 
     return (expected_values - actuals).abs().mean().item()
 
+def _true_class_probability(predictions: torch.Tensor, actuals: torch.Tensor) -> float:
+    probabilities = torch.softmax(predictions, dim=1)
+
+    return probabilities[torch.arange(len(actuals), device=probabilities.device), actuals].mean().item()
+
 def get_ordinal_classification_metrics() -> dict[str, MetricFunction]:
     """
     The metrics worth watching per epoch for a model that predicts a distribution over ordered
@@ -30,6 +35,19 @@ def get_ordinal_classification_metrics() -> dict[str, MetricFunction]:
     return {
         "acc": _accuracy,
         "mae": _expected_value_mae
+    }
+
+def get_classification_metrics() -> dict[str, MetricFunction]:
+    """
+    The metrics worth watching per epoch for a model choosing between categories that have no order.
+
+    Accuracy says almost nothing about a rare outcome, because always answering no scores well, so
+    the probability the model gave to what actually happened is tracked beside it.
+    """
+
+    return {
+        "acc": _accuracy,
+        "p(true)": _true_class_probability
     }
 
 # Metrics scored after training, on the full set of predictions held as arrays.
@@ -334,11 +352,12 @@ def output_test_evaluation_classification(
     metrics: dict[str, float] = {
         "accuracy": float(np.mean(np.argmax(predicted_probabilities, axis=1) == actuals)),
         "mean probability of correct class": float(np.mean(predicted_probabilities[np.arange(len(actuals)), actuals])),
-        "brier score": calculate_brier_score(predicted_probabilities, actuals),
-        "ranked probability score": calculate_ranked_probability_score(predicted_probabilities, actuals)
+        "brier score": calculate_brier_score(predicted_probabilities, actuals)
     }
 
+    # Both of these read the classes as a line, so neither says anything about named categories.
     if ordinal:
+        metrics["ranked probability score"] = calculate_ranked_probability_score(predicted_probabilities, actuals)
         metrics.update(calculate_classification_ordinal_errors(predicted_probabilities, actuals))
 
     print(f"\n===== SCORES FOR {label.upper()} =====")

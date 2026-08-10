@@ -1,15 +1,60 @@
 /**
- * Reading a predicted distribution: the value it expects, and the odds it gives a line.
+ * Reading a predicted answer: the value it expects, the odds it gives a line, and the share each
+ * named category holds.
  *
- * The only place this arithmetic lives. A prediction is a probability for every whole number
- * outcome, so every question about a line is a sum over an array the page already holds. The service
- * sends the distribution and nothing else, and no request is needed to answer a new line.
+ * The only place this arithmetic lives. Every question about a line is a sum over an array the page
+ * already holds, so no request is needed to answer a new line.
  */
+
+import type { ModelOutput, Prediction } from '$lib/types';
 
 export type Outcome = {
 	value: number;
 	probability: number;
 };
+
+/** A probability per whole number outcome, counting up from `minimumValue`. */
+export type Distribution = {
+	minimumValue: number;
+	probabilities: number[];
+};
+
+/** A probability per named category, most notable first, with no order and no line to read against. */
+export type CategoryAnswer = {
+	names: string[];
+	probabilities: number[];
+};
+
+/**
+ * An answer in a shape the site can draw. Adding a shape is a member here and a reading beside the
+ * two already built.
+ */
+export type Answer =
+	| { kind: 'integer_distribution'; distribution: Distribution }
+	| { kind: 'category_distribution'; categories: CategoryAnswer };
+
+export type AnswerKind = Answer['kind'];
+
+export const DRAWN_KINDS: ModelOutput['kind'][] = ['integer_distribution', 'category_distribution'];
+/** The shapes a reading exists for. A model answering any other way is never offered. */
+
+/** What an answer holds, or null when the model does not answer in a shape the site draws. */
+export function readAnswer(prediction: Prediction): Answer | null {
+	const { output, values } = prediction;
+
+	if (output.kind === 'integer_distribution') {
+		return {
+			kind: output.kind,
+			distribution: { minimumValue: output.minimum_value, probabilities: values }
+		};
+	}
+
+	if (output.kind === 'category_distribution') {
+		return { kind: output.kind, categories: { names: output.categories, probabilities: values } };
+	}
+
+	return null;
+}
 
 /** The three ways a line can settle. They add up to one. */
 export type LineOdds = {
@@ -105,19 +150,20 @@ const hasPush = (line: number) => Number.isInteger(line);
 export type OddsText = Record<keyof LineOdds, string>;
 
 /**
- * The three odds as percentages to one decimal, rounded so that the ones shown still read as a
- * hundred.
+ * Parts of one whole as percentages to one decimal, rounded so that the figures shown still read as
+ * a hundred.
  *
  * Rounding each on its own leaves 99.9 or 100.1 on the page. Whatever the rounding down left over is
  * handed to the figures it cut by the most.
  */
-export function oddsPercentages(odds: LineOdds, line: number): OddsText {
-	const push = hasPush(line) ? odds.push : 0;
-	const total = odds.over + odds.under + push;
-	const exact = [odds.over, odds.under, push].map((part) => (total > 0 ? part / total : 0) * 1000);
+export function sharePercentages(parts: number[]): string[] {
+	const total = parts.reduce((running, part) => running + part, 0);
+	const exact = parts.map((part) => (total > 0 ? part / total : 0) * 1000);
 	const tenths = exact.map(Math.floor);
 
-	const byRemainder = [0, 1, 2].sort((a, b) => exact[b] - tenths[b] - (exact[a] - tenths[a]));
+	const byRemainder = parts
+		.map((_, index) => index)
+		.sort((a, b) => exact[b] - tenths[b] - (exact[a] - tenths[a]));
 	let spare = 1000 - tenths.reduce((running, part) => running + part, 0);
 
 	for (const index of byRemainder) {
@@ -127,7 +173,16 @@ export function oddsPercentages(odds: LineOdds, line: number): OddsText {
 		spare -= 1;
 	}
 
-	const written = (value: number) => (value / 10).toFixed(1);
+	return tenths.map((value) => (value / 10).toFixed(1));
+}
 
-	return { over: written(tenths[0]), under: written(tenths[1]), push: written(tenths[2]) };
+/** The three odds as percentages to one decimal, summing to a hundred as shown. */
+export function oddsPercentages(odds: LineOdds, line: number): OddsText {
+	const [over, under, push] = sharePercentages([
+		odds.over,
+		odds.under,
+		hasPush(line) ? odds.push : 0
+	]);
+
+	return { over, under, push };
 }

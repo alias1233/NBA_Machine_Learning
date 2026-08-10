@@ -23,15 +23,27 @@ export type Roster = {
 	players: Player[];
 };
 
+/**
+ * What a model answers with: an ordered list of numbers, and what each position means.
+ *
+ * A model does not have to answer with a distribution, so `kind` is what says how to read the
+ * values. A shape the site cannot draw is a shape it does not offer.
+ *
+ * A category distribution lists its categories most notable first, so a reading leads with the
+ * first one. For a yes or no answer that is the chance of yes.
+ */
+export type ModelOutput =
+	| { kind: 'integer_distribution'; minimum_value: number; outcomes: number }
+	| { kind: 'category_distribution'; categories: string[] }
+	| { kind: 'values'; quantities: string[] };
+
 export type Model = {
 	name: string;
 	/** The group of models this belongs to, which is the page it is predicted on. */
 	family: string;
 	/** What the model answers about, in the words a reader sees. */
 	predicts: string[];
-	/** The outcome the first probability stands for. */
-	minimum_value: number;
-	outcomes: number;
+	output: ModelOutput;
 	/** Whether a trained file exists for it. A model without one is listed but cannot be asked. */
 	published: boolean;
 };
@@ -56,15 +68,16 @@ export type Health = {
 };
 
 /**
- * One answer: a probability for every whole number outcome, counting up from `minimum_value`.
+ * One answer: a number per position of its `output`.
  *
- * Expected value and the odds for a line are sums over that array, so `src/lib/odds.ts` works them
- * out here rather than asking the service again.
+ * Everything a reader reads off it is worked out in `src/lib/odds.ts` rather than asked for again.
  */
 export type Prediction = {
 	model: string;
-	minimum_value: number;
-	probabilities: number[];
+	output: ModelOutput;
+	values: number[];
+	/** How many earlier games the answer was built from. A few of them means it rests on very little. */
+	past_games: number;
 };
 
 export type GameRequest = {

@@ -15,6 +15,7 @@
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { prefersReducedMotion } from 'svelte/motion';
+	import { MediaQuery } from 'svelte/reactivity';
 
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import AnswerBlock from '$lib/components/AnswerBlock.svelte';
@@ -24,11 +25,12 @@
 	import PlayerSearch from '$lib/components/PlayerSearch.svelte';
 	import { longGameDay } from '$lib/games';
 	import { predictsPhrase, sentenceCase } from '$lib/models';
-	import { MOTION } from '$lib/motion';
-	import { expectedValue } from '$lib/odds';
+	import { MOTION_REVEAL, MOTION_SLOW, appear, flow, flowingHeight } from '$lib/motion';
+	import { expectedValue, readAnswer, sharePercentages } from '$lib/odds';
 	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
 	import { pageTitle } from '$lib/site';
 
+	import type { Answer } from '$lib/odds';
 	import type { Player, Roster, ScheduledGame } from '$lib/types';
 
 	let { data } = $props();
@@ -76,6 +78,10 @@
 
 	let opened = $state(answered);
 	let widened = $state(answered);
+
+	// The width two columns need, which app.css sets the layout at. Above it the answer opens
+	// sideways, below it there is nowhere to the side and its own height is what opens.
+	const sideways = new MediaQuery('min-width: 64rem', false);
 
 	// Bookkeeping, not state: which game the roster list on the page belongs to.
 	// svelte-ignore state_referenced_locally
@@ -125,9 +131,9 @@
 	});
 
 	/**
-	 * A teammate of the last game is not a teammate of this one, so changing the game drops both 
-	 * roster controls. The player search is dropped aswell, as changing games usually warrants
-	 * changing the predicted player. 
+	 * A teammate of the last game is not a teammate of this one, so changing the game drops both
+	 * roster controls. The chosen player goes with them, because a new game usually means a new
+	 * player.
 	 */
 	function clearRoster() {
 		form.out = [];
@@ -225,18 +231,39 @@
 				: { stat: '', heading: missing, subheading: '' }
 	);
 
+	// The loader only offers models the site has a reading for, so this is null while loading and
+	// never because an answer arrived in a shape the block cannot draw.
+	const answer = $derived(data.prediction ? readAnswer(data.prediction) : null);
+
+	// Which reading the block draws. It comes from the chosen model rather than the answer, so the
+	// space an answer will take is reserved before it lands.
+	const asked = $derived(
+		data.models.find(({ name }) => name === (predicting ? form.model : data.model)) ?? null
+	);
+	const answerKind = $derived(
+		asked?.output.kind === 'category_distribution' ? asked.output.kind : 'integer_distribution'
+	);
+
 	const customRoster = $derived(data.out.length > 0 || data.joined.length > 0);
 
 	// A new game, player or stat is a new answer, so the block starts from its own line.
 	const answerKey = $derived(JSON.stringify([data.choice, data.player?.id, data.model]));
 
+	/** The one sentence an answer is announced with, which is whatever its block leads with. */
+	function spoken(reached: Answer, stat: string): string {
+		if (reached.kind === 'integer_distribution') {
+			const { probabilities, minimumValue } = reached.distribution;
+
+			return `Expected ${expectedValue(probabilities, minimumValue).toFixed(1)} ${stat}.`;
+		}
+
+		const { names, probabilities } = reached.categories;
+
+		return `${sentenceCase(stat)}, ${names[0]} ${sharePercentages(probabilities)[0]} percent.`;
+	}
+
 	const announcement = $derived(
-		data.prediction && data.player
-			? `${data.player.name}. Expected ${expectedValue(
-					data.prediction.probabilities,
-					data.prediction.minimum_value
-				).toFixed(1)} ${reached.stat}.`
-			: ''
+		answer && data.player ? `${data.player.name}. ${spoken(answer, reached.stat)}` : ''
 	);
 
 	/** What the card falls back to where scripting is off: the same request with its game filled in. */
@@ -259,14 +286,11 @@
 	function chooseGame(game: ScheduledGame) {
 		scrollIntoViewIfOffScreen(submitButton, 'end');
 
-		// If the chosen game is the same game as the previously chosen one, then no action needs to be taken
-		// except focusing the player selection.
 		if (game === selectedGame) {
 			playerPicker?.focus();
 			return;
 		}
 
-		// Changing games usually warrants changing the predicted player, so clear the current player search.
 		playerPicker?.clear();
 
 		form.date = game.date;
@@ -311,18 +335,21 @@
 	}
 
 	/**
-	 * Opens the answer column, once, for a reader who pressed the button.
+	 * Opens the answer column, once, for a reader who pressed the button, and says how long the
+	 * reveal it started takes to land.
 	 *
 	 * The line grows first and then widens into the column, so the press gets an answer of its own
 	 * straight away rather than waiting on the service.
 	 */
-	function openAnswerColumn() {
-		if (opened) return;
+	function openAnswerColumn(): number {
+		if (opened) return 0;
 
 		opened = true;
 
 		if (prefersReducedMotion.current) widened = true;
-		else setTimeout(() => (widened = true), MOTION);
+		else setTimeout(() => (widened = true), MOTION_SLOW);
+
+		return MOTION_REVEAL;
 	}
 
 	/**
@@ -340,12 +367,13 @@
 			if (value !== '') query.append(key, String(value));
 		}
 
-		openAnswerColumn();
+		const revealing = openAnswerColumn();
+
 		goto(`?${query}`, { noScroll: true, keepFocus: true, invalidateAll: true });
 
 		// The column is created by the line above, so it has to exist before it can be scrolled to.
 		await tick();
-		scrollIntoViewIfOffScreen(answerColumn, 'start');
+		scrollIntoViewIfOffScreen(answerColumn, 'start', revealing);
 	}
 
 	afterNavigate(({}) => {
@@ -452,7 +480,7 @@
 							<input type="hidden" name="player" value={form.player?.id ?? ''} />
 
 							{#if !knownTeam && sides.length === 2}
-								<div class="field">
+								<div class="field" transition:flow>
 									<label class="micro" for="player-team">Team</label>
 									<select id="player-team" name="team" bind:value={form.team}>
 										<option value="">Pick a team</option>
@@ -484,9 +512,9 @@
 							<p class="micro muted" id="roster-group">Roster</p>
 
 							{#if form.player === null}
-								<p class="small muted">Pick a player first.</p>
+								<p class="small muted" transition:flow>Pick a player first.</p>
 							{:else}
-								<div class="fields">
+								<div class="fields" transition:flow>
 									<div class="field">
 										<label class="micro" for="out">Out</label>
 										<select id="out" onchange={addOut}>
@@ -526,7 +554,7 @@
 								</div>
 
 								{#if form.out.length === 0 && form.joined.length === 0}
-									<p class="small muted">No change from the last game.</p>
+									<p class="small muted" transition:flow>No change from the last game.</p>
 								{/if}
 							{/if}
 						</div>
@@ -537,38 +565,51 @@
 							</button>
 
 							{#if missing && !predicting}
-								<p class="small muted">{missing}</p>
+								<p class="small muted" transition:flow>{missing}</p>
 							{/if}
 						</div>
 					</form>
 				</div>
 
 				{#if opened}
-					<!-- The line that grows out of the column's future left edge, phase one of the reveal. -->
+					<!-- The line that grows out of the column's future left edge, phase one of the reveal.
+					     It fades as the column takes its width, because the edge it marks moves off it. -->
 					{#if !widened}
-						<div class="opening-line" aria-hidden="true"></div>
+						<div class="opening-line" out:appear aria-hidden="true"></div>
 					{/if}
 
-					<div class="answer" class:narrow={!widened} bind:this={answerColumn}>
+					<!-- Two columns open sideways. One column has nowhere to the side, so the answer
+					     arrives at the bottom and opens by its own height instead. -->
+					<div
+						class="answer"
+						class:narrow={!widened}
+						in:flow={{ duration: sideways.current ? 0 : MOTION_REVEAL }}
+						bind:this={answerColumn}
+					>
 						<!-- One box for the skeleton, the answer and a failure alike, so the page never jumps
-						     once the column is open. -->
-						<div class="answer-body">
-							{#if data.error && !predicting}
-								<Notice tone="error">{data.error}</Notice>
-							{:else}
-								{#key answerKey}
-									<AnswerBlock
-										prediction={data.prediction}
-										loading={predicting}
-										stat={shown.stat}
-										heading={shown.heading}
-										subheading={shown.subheading}
-										openOn={data.line}
-										aboutHref={ABOUT}
-										{customRoster}
-									/>
-								{/key}
-							{/if}
+						     once the column is open. It holds the height of whichever is in it, so the
+						     skeleton flows into the answer rather than being replaced by it. -->
+						<div class="answer-body" use:flowingHeight>
+							<div>
+								{#if data.error && !predicting}
+									<Notice tone="error">{data.error}</Notice>
+								{:else}
+									{#key answerKey}
+										<AnswerBlock
+											{answer}
+											kind={answerKind}
+											loading={predicting}
+											stat={shown.stat}
+											heading={shown.heading}
+											subheading={shown.subheading}
+											openOn={data.line}
+											aboutHref={ABOUT}
+											{customRoster}
+											pastGames={data.prediction?.past_games ?? null}
+										/>
+									{/key}
+								{/if}
+							</div>
 						</div>
 					</div>
 				{/if}
@@ -584,7 +625,14 @@
 <style>
 	/* The page takes its wide cap as the column widens, which is the second half of the reveal. */
 	.page {
-		transition: max-width var(--motion-slow) var(--ease-in);
+		transition: max-width var(--motion-reveal) var(--ease-in-out);
+	}
+
+	/* Whatever is in the column decides its height, and the swap from the skeleton to the answer
+	   flows between the two rather than landing in one frame. */
+	.answer-body {
+		overflow: clip;
+		transition: height var(--motion) var(--ease-in);
 	}
 
 	/* One narrow column, centred, until an answer opens beside it. The width is explicit because an
@@ -652,7 +700,7 @@
 	@media (min-width: 64rem) {
 		/* The controls are moved by the reveal, never squeezed, so they hold this width throughout. */
 		.work {
-			transition: max-width var(--motion-slow) var(--ease-in);
+			transition: max-width var(--motion-reveal) var(--ease-in-out);
 		}
 
 		.work.wide {
@@ -681,7 +729,7 @@
 			flex: 0 0 var(--answer-column);
 			min-width: 0;
 			overflow: clip;
-			transition: flex-basis var(--motion-slow) var(--ease-in);
+			transition: flex-basis var(--motion-reveal) var(--ease-in-out);
 		}
 
 		.answer.narrow {
@@ -690,7 +738,6 @@
 
 		.answer-body {
 			width: var(--answer-column);
-			min-height: calc(var(--space-8) * 8);
 		}
 
 		/* Phase one, at the column's future left edge, which is the right edge of the row while the
@@ -701,7 +748,7 @@
 			inset: 0 0 0 auto;
 			width: 2px;
 			background: var(--accent);
-			animation: line-grow var(--motion) var(--ease-in);
+			animation: line-grow var(--motion-slow) var(--ease-in);
 		}
 	}
 

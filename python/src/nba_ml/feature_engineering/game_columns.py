@@ -1,3 +1,11 @@
+"""
+One builder per named column, grouped by what each group describes: the schedule, the player, the
+team, and the season.
+
+Every builder takes column names rather than assuming them, so the same code builds a player frame
+and a team frame. None of them decides which columns a model wants.
+"""
+
 import numpy as np
 import pandas as pd
 from typing import Any

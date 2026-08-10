@@ -16,10 +16,10 @@ export default defineConfig({
 		})
 	],
 
-	// Allowing cloudflare tunnel hosting
 	server: {
 		allowedHosts: [
-			'pride-cow-attached-seattle.trycloudflare.com'
-		]
+			// Allowing cloudflare tunnel hosting
+			'.trycloudflare.com'
+    	]
 	}
 });

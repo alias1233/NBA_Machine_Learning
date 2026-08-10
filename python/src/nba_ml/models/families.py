@@ -44,3 +44,13 @@ ALL_FAMILIES = (
 )
 
 ALL_MODEL_NAMES = sorted(name for family in ALL_FAMILIES for name in family.specifications)
+
+def find_model(name: str) -> tuple[ModelFamily, ModelSpecification] | None:
+    """The family a model belongs to and its specification, or None when no family names it."""
+
+    for family in ALL_FAMILIES:
+        specification = family.specifications.get(name)
+        if specification is not None:
+            return (family, specification)
+
+    return None

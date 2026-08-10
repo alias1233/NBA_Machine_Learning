@@ -1,23 +1,37 @@
 """
-Training one player game statistics model.
+Training one model, of any family.
 
-Which model to fit is an argument, so adding a model to specifications.py is the only thing needed
-to train it.
+Which model to fit is an argument and the family it belongs to decides how, so adding a model to a
+family's specifications is all it takes to train it.
+
+The trainers are listed here rather than in models/families.py because a trainer pulls in the whole
+training loop and matplotlib, and the service reads that list.
 """
 
 import argparse
+from typing import Any, Callable
 
-from nba_ml.models.player_stats import specifications, training
+from nba_ml.models import families
+from nba_ml.models.player_stats import specifications as player_stat_specifications
+from nba_ml.models.player_stats import training as player_stat_training
+
+TRAINERS: dict[str, Callable[..., Any]] = {
+    player_stat_specifications.MODEL_CATEGORY: player_stat_training.train
+}
+"""
+What fits a model of each family, keyed by model category.
+
+A trainer takes a specification and the keyword arguments below. A family missing from here has no
+training module yet.
+"""
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Trains one player game statistics model and saves it with a report of the run."
-    )
+    parser = argparse.ArgumentParser(description="Trains one model and saves it with a report of the run.")
     parser.add_argument(
         "--model",
         required=True,
-        choices=specifications.MODEL_NAMES,
-        help="Which model to train, named as it is in specifications.py."
+        choices=families.ALL_MODEL_NAMES,
+        help="Which model to train, named as it is in its family's specifications.py."
     )
     parser.add_argument(
         "--skip-evaluations",
@@ -37,8 +51,17 @@ def main():
     parser.add_argument("--quiet", action="store_true", help="Only print what the training loop reports.")
     arguments = parser.parse_args()
 
-    training.train(
-        specifications.ALL_MODEL_SPECIFICATIONS[arguments.model],
+    found = families.find_model(arguments.model)
+    if found is None:
+        raise SystemExit(f"No family holds a model named {arguments.model}.")
+
+    _, specification = found
+    train = TRAINERS.get(specification.model_category)
+    if train is None:
+        raise SystemExit(f"The {specification.model_category} family has no training module yet.")
+
+    train(
+        specification,
         output_evaluations=not arguments.skip_evaluations,
         use_cached_build=not (arguments.rebuild_cache or arguments.no_cache),
         save_cached_build=not arguments.no_cache,

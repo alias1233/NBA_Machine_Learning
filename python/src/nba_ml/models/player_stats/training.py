@@ -27,7 +27,7 @@ from nba_ml.models.player_stats.specifications import (
 )
 
 CACHED_DATASETS = 'datasets'
-CACHED_COLUMNS = 'columns'
+CACHED_BUILD = 'build'
 
 RANDOM_SEED = 12156666
 
@@ -48,6 +48,27 @@ to pick its stopping epoch. Turn this off before publishing an accuracy anywhere
 HELD_OUT_LABEL = "Test set"
 VALIDATION_LABEL = "Validation set, not held out"
 
+def _describe_build(
+    model_specs: PlayerStatModelSpecification,
+    feature_set: FeatureSet
+    ) -> tuple:
+    """
+    Everything that decides what a build holds, written as plain data so it can be saved beside one.
+
+    A saved build is reused only while this still matches, so changing a column, the value being
+    predicted, the class range or how much history a sample needs rebuilds rather than silently
+    training on the last one.
+    """
+
+    return (
+        feature_set.sequence_columns,
+        feature_set.static_columns,
+        feature_set.combination.describe(feature_set.output_columns),
+        stat_features.MINIMUM_PAST_GAMES,
+        model_specs.output.first_value,
+        model_specs.output.length
+    )
+
 def _build_datasets(
         model_specs: PlayerStatModelSpecification,
         feature_set: FeatureSet,
@@ -58,15 +79,12 @@ def _build_datasets(
     """
     Builds the three splits and the scalers fitted on the training one.
 
-    A cached build is only reused when it was made from the columns the model asks for today, so a
-    feature set change rebuilds instead of silently training on the previous one.
-
     Returns:
         (training, validation, test, scaler name to fitted scaler)
     """
 
     file_path = model_specs.training_cache_file()
-    columns = (feature_set.sequence_columns, feature_set.static_columns)
+    description = _describe_build(model_specs, feature_set)
     cached = None
 
     if use_cached_build and file_path.exists():
@@ -75,12 +93,12 @@ def _build_datasets(
 
         saved = serialization.load_data_from_file(file_path)
 
-        # A build saved before this check existed holds no column list, so it counts as a mismatch.
-        if isinstance(saved, dict) and saved.get(CACHED_COLUMNS) == columns:
+        # A build saved before this check existed carries no description, so it counts as a mismatch.
+        if isinstance(saved, dict) and saved.get(CACHED_BUILD) == description:
             cached = saved[CACHED_DATASETS]
 
         elif print_debug:
-            print("The saved data was built from different columns, so it is being rebuilt...")
+            print("The saved data was built differently, so it is being rebuilt...")
 
     if cached is None:
         labeled_data = stat_features.get_all_labeled_data(
@@ -94,8 +112,8 @@ def _build_datasets(
         cached = datasets.build_classification_datasets(
             *labeled_data,
             max_sequence_length=MAX_SEQUENCE_LENGTH,
-            min_output_value=model_specs.minimum_value,
-            num_classifications=model_specs.outcomes,
+            min_output_value=model_specs.output.first_value,
+            num_classifications=model_specs.output.length,
             standardize_input=True
         )
 
@@ -103,7 +121,7 @@ def _build_datasets(
             if print_debug:
                 print("Saving preprocessed data...")
 
-            serialization.save_data_to_file(file_path, {CACHED_DATASETS: cached, CACHED_COLUMNS: columns})
+            serialization.save_data_to_file(file_path, {CACHED_DATASETS: cached, CACHED_BUILD: description})
 
     training_dataset, validation_dataset, test_dataset, sequence_scaler, static_scaler = cached
 
@@ -120,7 +138,7 @@ def _build_datasets(
 
 def _describe_features(feature_set: FeatureSet) -> dict:
     return {
-        "predicted value": " + ".join(feature_set.output_columns),
+        "predicted value": feature_set.combination.describe(feature_set.output_columns),
         "past games read": MAX_SEQUENCE_LENGTH if MAX_SEQUENCE_LENGTH is not None else "every game",
         "past games required": stat_features.MINIMUM_PAST_GAMES,
         "columns per past game": len(feature_set.sequence_columns),
@@ -206,7 +224,7 @@ def _evaluate_saved_model(
         predictions.numpy(),
         outputs.numpy(),
         label=model_specs.name,
-        ordinal=True,
+        ordinal=model_specs.output.ordered,
         output_size=20,
         save_graph_directory_path=graphs_directory
     ))
@@ -252,7 +270,7 @@ def train(
     model = GRUFeedForward(
         training_dataset.sequence_input_dim,
         training_dataset.static_input_dim,
-        model_specs.outcomes,
+        model_specs.output.length,
         parameters.hidden_layers,
         GRU_HIDDEN_DIM,
         GRU_LAYERS,
@@ -264,14 +282,14 @@ def train(
         lr=parameters.learning_rate,
         weight_decay=parameters.weight_decay
     )
-    loss_function = parameters.build_loss_function(model_specs.outcomes)
+    loss_function = parameters.build_loss_function(model_specs.output.length)
 
     model_description = report.describe_model(model)
     feature_description = _describe_features(feature_set)
     data_description = _describe_data(training_dataset, validation_dataset, test_dataset)
     label_description = datasets.summarize_classification_outputs(
         training_dataset.outputs,
-        model_specs.outcomes
+        model_specs.output.length
     )
     hyperparameters = {
         "optimizer": type(optimizer).__name__,
@@ -313,7 +331,10 @@ def train(
         loss_function,
         parameters.configuration,
         collate_fn=datasets.collate_sequence_batch,
-        metrics=evaluation.get_ordinal_classification_metrics()
+        metrics=(
+            evaluation.get_ordinal_classification_metrics() if model_specs.output.ordered
+            else evaluation.get_classification_metrics()
+        )
     )
 
     training_report.add("Result", _describe_run(training_run))

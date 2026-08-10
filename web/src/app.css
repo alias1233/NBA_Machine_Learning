@@ -55,6 +55,9 @@
 	--accent-block: light-dark(#e9a177, #a83c1e);
 	--over: light-dark(#0b6845, #4bcf9a);
 	--under: light-dark(#b01d57, #f072b0);
+	/* An outcome landing exactly on the line. A third data colour rather than the neutral tone,
+	   because a push is a result and not the absence of one. */
+	--push: light-dark(#8c6d10, #e8bf5c);
 	--warn-wash: light-dark(#f8edd6, #2a2211);
 	--warn-border: light-dark(#dfc79b, #5c4a1d);
 	--chart-neutral: light-dark(#8a8375, #807969);
@@ -129,10 +132,15 @@
 	--motion-fast: 120ms;
 	--motion: 200ms;
 	--motion-slow: 320ms;
+	/* The answer column widening. Longer than slow because the reader is waiting on the service
+	   anyway, so the reveal has the room to be worth watching. */
+	--motion-reveal: 700ms;
 	--motion-entry: 900ms;
+	--loading-pulse: 333ms;
 	--collage-stagger: 120ms;
 	--ease-in: cubic-bezier(0.2, 0, 0, 1);
 	--ease-out: cubic-bezier(0.4, 0, 1, 1);
+	--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
 	/*
 	 * The hero. The backdrop is inset from the page edges, so the page tone frames it and a tile can
@@ -142,19 +150,23 @@
 	 * space the page opens with, and a strip of page tone at the fold. That strip is never wider
 	 * than the gap `.sections` leaves, so the Models section starts at the fold or below it at every
 	 * screen size, and a short viewport takes the floor instead and pushes it further down.
-	 *
-	 * The collage filter is what makes a set of unrelated pictures read as one piece of art rather
-	 * than as a mood board, and it is the one place to dial that back.
 	 */
 	--hero-inset: var(--space-5);
 	--hero-height: max(28rem, calc(100svh - var(--header-height) - var(--space-5) - var(--space-6)));
-	--collage-opacity: 0.7;
-	--collage-filter: saturate(0.8);
 	--collage-gap: var(--space-3);
+
+	/* Every picture on the site, the collage tiles and the family graphics alike, is drawn at this
+	   opacity and this filter. That shared treatment is what makes a set of unrelated pictures read
+	   as one piece of art rather than as a mood board, and it is the one place to dial it back. */
+	--art-opacity: 0.7;
+	--art-filter: saturate(0.8);
 
 	/* Layout */
 	--content-width: 64rem;
 	--content-width-wide: 76rem;
+	/* The Models section, centred in the page. A family card holds a square and one line, so the
+	   full content width would leave most of it empty. */
+	--family-column: 44rem;
 	--control-column: 40rem;
 	--answer-column: 30rem;
 	/* The widest figure the odds can reach, so a hundred percent never moves the chart beside it. */
@@ -178,7 +190,7 @@ html {
 	-webkit-text-size-adjust: 100%;
 	/* The header is fixed, so an anchor stops below it rather than under it, with a little of the
 	   page tone above whatever was linked to. Nothing sets its own top margin for this. */
-	scroll-padding-top: calc(var(--header-height) + var(--space-6));
+	scroll-padding-top: calc(var(--header-height) + var(--space-2));
 	/* Held on every page, so the header and the page under it sit in the same place whether or not
 	   that page is long enough to scroll. */
 	scrollbar-gutter: stable;
@@ -256,6 +268,14 @@ a {
 	text-underline-offset: 2px;
 }
 
+/* A control in that role drops the chrome the platform gives it, so it reads as the words alone. */
+button.link {
+	padding: 0;
+	background: none;
+	border: none;
+	cursor: pointer;
+}
+
 :focus-visible {
 	outline: var(--rule-accent);
 	outline-offset: 2px;
@@ -265,6 +285,11 @@ a {
    block is drawn on the page, so it keeps the page accent. */
 .block :focus-visible {
 	outline-color: var(--accent-block);
+}
+
+/* A surface hands the page-side colours back, so a ring inside one inverts back with them. */
+.block .surface :focus-visible {
+	outline-color: var(--accent);
 }
 
 /* The interface face, not the serif, so the small mark never competes with the name at display

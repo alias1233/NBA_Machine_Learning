@@ -1,0 +1,8 @@
+Model graphic credits
+
+One image per model family, named after the family: player_stats.jpg, team_game_stats.png, and so
+on.
+
+Every shipped image needs a row below naming the file, the source, the licence and the author.
+
+Will fill out later once site images are finalized. Currently, all collage images are placeholders.
