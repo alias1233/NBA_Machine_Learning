@@ -12,7 +12,7 @@ nba_ml/stores/                   where it is held. One module per table, owning 
 nba_ml/data_collection/          fills the stores from a source. No prompts, so a scheduled job can run it.
 nba_ml/feature_engineering/      turns raw box scores into model inputs
 nba_ml/machine_learning/         the training loop, evaluation, and model architectures. No NBA in it.
-nba_ml/models/                   one folder per model family, plus the list of them in families.py
+nba_ml/models/                   one folder per model family, what they share, and families.py
 nba_ml/api/                      the FastAPI service. One router per family, over shared endpoints.
 nba_ml/cli/                      the commands
 nba_ml/paths.py                  where data and models live

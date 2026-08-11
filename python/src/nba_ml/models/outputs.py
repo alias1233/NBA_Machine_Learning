@@ -26,12 +26,18 @@ class IntegerDistribution():
     """
     A probability for each whole number, counting up from minimum_value.
 
+    A position may stand for a run of whole numbers rather than one. bucket_width says how many, and
+    at one the answer is a probability per whole number. Wider buckets are for a model with too few
+    samples to fill a class per outcome: the same data spread over fewer classes is a steadier answer.
+
     Odds for a line are the sums either side of it, so a caller holding the answer can read any line
-    without asking again.
+    without asking again. A line falling inside a bucket splits it, and the bucket is read as spread
+    evenly over the whole numbers it holds, because that is all the model claims to know.
     """
 
     minimum_value: int
     outcomes: int
+    bucket_width: int = 1
     kind: Literal[OutputKind.INTEGER_DISTRIBUTION] = OutputKind.INTEGER_DISTRIBUTION
 
     ordered: ClassVar[bool] = True
@@ -45,8 +51,30 @@ class IntegerDistribution():
     def first_value(self) -> int:
         return self.minimum_value
 
+    @property
+    def value_step(self) -> int:
+        """How far apart the values two neighbouring positions stand for are."""
+
+        return self.bucket_width
+
+    def bounds(self, position: int) -> tuple[int, int]:
+        """The lowest and highest whole number a position stands for, both included."""
+
+        lowest = self.minimum_value + position * self.bucket_width
+
+        return (lowest, lowest + self.bucket_width - 1)
+
+    def value_of(self, position: int) -> float:
+        """The middle of what a position stands for, which is the value it is read as."""
+
+        lowest, highest = self.bounds(position)
+
+        return (lowest + highest) / 2
+
     def label(self, position: int) -> str:
-        return str(self.minimum_value + position)
+        lowest, highest = self.bounds(position)
+
+        return str(lowest) if lowest == highest else f"{lowest} to {highest}"
 
 @dataclass(frozen=True)
 class CategoryDistribution():
@@ -72,6 +100,12 @@ class CategoryDistribution():
 
         return 0
 
+    @property
+    def value_step(self) -> int:
+        """One category per position, which is what the shared fit reads them as."""
+
+        return 1
+
     def label(self, position: int) -> str:
         return self.categories[position]
 
@@ -95,8 +129,8 @@ ClassDistribution = IntegerDistribution | CategoryDistribution
 """
 The shapes that give a probability per class, which is what a classifier answers with.
 
-Both number their positions from zero and say what value the first one stands for, so one training
-run fits either and nothing in it has to know which it is fitting.
+Both number their positions from zero and say what value the first one stands for and how far apart
+two of them are, so one training run fits either and nothing in it has to know which it is fitting.
 """
 
 DISCRIMINATOR = "kind"

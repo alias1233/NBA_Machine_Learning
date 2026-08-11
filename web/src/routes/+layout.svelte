@@ -312,6 +312,8 @@
 		z-index: 30;
 		inset: 0 0 auto;
 		background: var(--block);
+		--plane-accent: var(--accent-block);
+		--plane-accent-on: var(--block);
 		transition:
 			translate var(--motion) var(--ease-in),
 			box-shadow var(--motion-fast) var(--ease-in);
@@ -385,17 +387,12 @@
 
 	.tabs > li > a:hover,
 	.tabs > li > a[aria-current] {
-		color: var(--accent-block);
+		color: var(--plane-accent);
 	}
 
 	/* Accent text plus a rule, never colour alone. */
 	.tabs > li > a[aria-current] {
-		border-bottom-color: var(--accent-block);
-	}
-
-	.wordmark:focus-visible,
-	.tabs > li > a:focus-visible {
-		outline-color: var(--accent-block);
+		border-bottom-color: var(--plane-accent);
 	}
 
 	.menu {

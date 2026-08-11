@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from nba_ml import upcoming
-from nba_ml.api import player_stats
+from nba_ml.api import game_stats, player_stats, team_stats
 from nba_ml.api.schemas import PlayerResponse, TeamResponse, team_id
 from nba_ml.entities import ScheduledGame
 from nba_ml.models.errors import PredictionRefused
@@ -31,7 +31,7 @@ app = FastAPI(
     summary="Predicts NBA statistics before a game is played."
 )
 
-FAMILY_ROUTERS = [player_stats.router]
+FAMILY_ROUTERS = [player_stats.router, team_stats.router, game_stats.router]
 
 for family_router in FAMILY_ROUTERS:
     app.include_router(family_router)
@@ -60,7 +60,11 @@ class ModelResponse(BaseModel):
     """What to pass as the model in a prediction request."""
 
     family: str
-    """Which group of models this belongs to, which is the page it is predicted on."""
+    """
+    Which group of models this belongs to, which is the page it is predicted on.
+
+    A family is named after what a request has to name to get an answer: a player, a team, or a game.
+    """
 
     predicts: list[str]
     """What the model answers about, in the words a reader sees."""

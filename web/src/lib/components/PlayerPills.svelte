@@ -5,7 +5,7 @@
 	made with a changed roster is still a shareable link.
 -->
 <script lang="ts">
-	import { flow } from '$lib/motion';
+	import { flowingHeight } from '$lib/motion';
 
 	import type { Player } from '$lib/types';
 
@@ -23,8 +23,10 @@
 	<input type="hidden" {name} value={player.id} />
 {/each}
 
-{#if players.length > 0}
-	<ul transition:flow>
+<!-- Held at the height of the list, so a pill added to one already open flows the same way the first
+     one arriving does. Empty it takes no height at all. -->
+<div class="pills" use:flowingHeight>
+	<ul>
 		{#each players as player (player.id)}
 			<li class="pill small">
 				<span>{player.name}</span>
@@ -37,9 +39,13 @@
 			</li>
 		{/each}
 	</ul>
-{/if}
+</div>
 
 <style>
+	.pills {
+		overflow: clip;
+	}
+
 	ul {
 		display: flex;
 		flex-wrap: wrap;

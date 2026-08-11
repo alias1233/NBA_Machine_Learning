@@ -4,9 +4,8 @@
  * The whole request lives in the URL, so a prediction renders on the server and a link to one is
  * shareable. A half-filled URL is a valid page: it renders the parameters and no result.
  *
- * A game is described by its date, its two teams and the part of the season, whether the reader
- * typed it or chose a card. A card writes those four parameters, so there is one way to name a game
- * and no precedence to keep straight.
+ * A request names a game and the player it is about, plus the roster changes the reader made and,
+ * where no roster names that player, which of the two sides they are on.
  *
  * A model is offered only if it has a trained file and answers in a shape this page has a reading
  * for. A reader is never shown a stat that cannot answer.
@@ -16,6 +15,14 @@ import { isHttpError } from '@sveltejs/kit';
 
 import { DRAWN_KINDS } from '$lib/odds';
 import {
+	SAME_TEAM,
+	isGame,
+	namesBothTeams,
+	readGameChoice,
+	readLine,
+	reasonFor
+} from '$lib/predictions';
+import {
 	getModels,
 	getPlayer,
 	getRosters,
@@ -24,52 +31,10 @@ import {
 	predictPlayerStat
 } from '$lib/server/api';
 
-import type { HttpError } from '@sveltejs/kit';
-import type { Model, Player, Prediction, ScheduledGame, SeasonType, Team } from '$lib/types';
+import type { Model, Player, Prediction, ScheduledGame, Team } from '$lib/types';
 import type { PageServerLoad } from './$types';
 
 const FAMILY = 'player_stats';
-
-const SEASON_TYPES: SeasonType[] = ['REGULAR_SEASON', 'PLAYOFFS', 'PLAY_IN', 'PRESEASON'];
-
-const UNREACHABLE = 'The prediction service is not reachable. Try again shortly.';
-const SAME_TEAM = 'A game needs two different teams.';
-const REFUSED = 'The prediction could not be made. Try again shortly.';
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-/** The game being asked about, however the reader described it. */
-export type GameChoice = {
-	date: string;
-	homeTeam: string;
-	awayTeam: string;
-	seasonType: SeasonType;
-};
-
-const EMPTY: GameChoice = {
-	date: today(),
-	homeTeam: '',
-	awayTeam: '',
-	seasonType: SEASON_TYPES[0]
-};
-
-function readChoice(parameters: URLSearchParams): GameChoice {
-	const seasonType = parameters.get('type') as SeasonType;
-
-	return {
-		date: parameters.get('date') || EMPTY.date,
-		homeTeam: parameters.get('home') || EMPTY.homeTeam,
-		awayTeam: parameters.get('away') || EMPTY.awayTeam,
-		seasonType: SEASON_TYPES.includes(seasonType) ? seasonType : EMPTY.seasonType
-	};
-}
-
-/** Whether the described game is one of the upcoming ones, which is what confines the player list. */
-const isGame = (game: ScheduledGame, choice: GameChoice) =>
-	game.date === choice.date &&
-	game.home_team.abbreviation === choice.homeTeam &&
-	game.away_team.abbreviation === choice.awayTeam &&
-	game.season_type === choice.seasonType;
 
 /** Names the players a roster parameter holds ids for, so a shared link opens with its pills. */
 async function namePlayers(ids: number[]): Promise<Player[]> {
@@ -83,32 +48,6 @@ const readIds = (parameters: URLSearchParams, name: string) =>
 		.getAll(name)
 		.map(Number)
 		.filter((id) => Number.isInteger(id) && id > 0);
-
-/**
- * What each refusal the service names means to a reader.
- *
- * The service's own message states ids and is for a log. Only the reason crosses over, and the
- * words a reader sees are written here.
- */
-const REASONS: Record<string, string> = {
-	too_few_games: 'This player has no earlier game to read.',
-	missing_player_information: 'Too little is known about this player to predict.',
-	unknown_player_team: 'Say which of the two teams this player is on.',
-	no_team_history: 'This team has no earlier game to read.'
-};
-
-function reasonFor(thrown: HttpError): string {
-	if (thrown.status === 503) return UNREACHABLE;
-
-	return REASONS[thrown.body.reason ?? ''] ?? REFUSED;
-}
-
-/** A line the reader shared. Anything that is not a number is dropped rather than argued with. */
-function readLine(parameters: URLSearchParams): number | null {
-	const line = Number(parameters.get('line'));
-
-	return parameters.has('line') && Number.isFinite(line) ? line : null;
-}
 
 export const load: PageServerLoad = async ({ url }) => {
 	const parameters = url.searchParams;
@@ -138,7 +77,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const asked = models.find(({ name }) => name === parameters.get('model'));
 	const model = asked ?? models[0] ?? null;
 
-	const choice = readChoice(parameters);
+	const choice = readGameChoice(parameters);
 	const selectedGame = games.find((game) => isGame(game, choice)) ?? null;
 
 	// Which side a player who has just moved is on. Nothing stored says it, so the reader names it,
@@ -164,7 +103,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	let prediction: Prediction | null = null;
 	let error: string | null = null;
 
-	const bothTeams = choice.homeTeam !== '' && choice.awayTeam !== '';
+	const bothTeams = namesBothTeams(choice);
 
 	if (models.length === 0) {
 		// The empty state says this, so there is nothing to add.

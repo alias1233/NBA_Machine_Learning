@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 from scipy import special
@@ -8,33 +10,60 @@ from pathlib import Path
 
 from .trainer import MetricFunction
 
+@dataclass(frozen=True)
+class ValueScale():
+    """
+    The number line a set of classes sits on, which is what turns a class back into a statistic.
+
+    A class need not be one value. Where it covers a run of them, class_values holds the middle of
+    that run, so every figure below is read in the units a reader knows however wide a class is.
+    """
+
+    class_values: np.ndarray
+    """What each position stands for, shaped (classes,)."""
+
+    actual_values: np.ndarray
+    """What actually happened, as recorded, shaped (samples,)."""
+
+    first_value: float
+    """The lowest value the first class covers."""
+
+    value_step: int
+    """How many whole numbers one class covers."""
+
 # Metrics scored during training, on batches of logits still held as tensors.
 
 def _accuracy(predictions: torch.Tensor, actuals: torch.Tensor) -> float:
     return (predictions.argmax(dim=1) == actuals).float().mean().item()
-
-def _expected_value_mae(predictions: torch.Tensor, actuals: torch.Tensor) -> float:
-    probabilities = torch.softmax(predictions, dim=1)
-    class_indices = torch.arange(predictions.shape[1], device=predictions.device, dtype=probabilities.dtype)
-    expected_values = (probabilities * class_indices).sum(dim=1)
-
-    return (expected_values - actuals).abs().mean().item()
 
 def _true_class_probability(predictions: torch.Tensor, actuals: torch.Tensor) -> float:
     probabilities = torch.softmax(predictions, dim=1)
 
     return probabilities[torch.arange(len(actuals), device=probabilities.device), actuals].mean().item()
 
-def get_ordinal_classification_metrics() -> dict[str, MetricFunction]:
+def get_ordinal_classification_metrics(class_values: np.ndarray) -> dict[str, MetricFunction]:
     """
     The metrics worth watching per epoch for a model that predicts a distribution over ordered
-    whole numbers. Accuracy alone hides how far off a wrong prediction was, so the mean absolute
-    error of the distribution's expected value is tracked beside it.
+    values. Accuracy alone hides how far off a wrong prediction was, so the mean absolute error of
+    the distribution's expected value is tracked beside it.
+
+    Args:
+        class_values is what each position stands for, so the error reads in the statistic's own
+        units rather than in classes. What happened is read as the middle of the class it fell in,
+        which is all the labels carry. The finished model is scored against the recorded value.
     """
+
+    values = torch.as_tensor(class_values, dtype=torch.float32)
+
+    def expected_value_mae(predictions: torch.Tensor, actuals: torch.Tensor) -> float:
+        scale = values.to(device=predictions.device, dtype=predictions.dtype)
+        expected_values = (torch.softmax(predictions, dim=1) * scale).sum(dim=1)
+
+        return (expected_values - scale[actuals]).abs().mean().item()
 
     return {
         "acc": _accuracy,
-        "mae": _expected_value_mae
+        "mae": expected_value_mae
     }
 
 def get_classification_metrics() -> dict[str, MetricFunction]:
@@ -83,9 +112,10 @@ def calculate_ranked_probability_score(
     """
     The Brier score's ordered cousin, scored on running totals instead of single classes, so
     putting probability one class away from the outcome costs less than putting it ten away.
-    This is the metric that matches what an over/under line asks of the model.
 
-    Normalized by the number of classes so that models with different class counts compare.
+    Counted in classes, and normalized by how many there are. That makes it a fair reading of how
+    well a model orders its own classes, and not a way to compare two models whose classes cover
+    different amounts of ground. Use the line score for that.
     """
 
     n_classes = predicted_probabilities.shape[1]
@@ -94,6 +124,31 @@ def calculate_ranked_probability_score(
     actual_cumulative = (np.arange(n_classes) >= actuals[:, None]).astype(np.float64)
 
     return float(np.mean(np.sum((predicted_cumulative - actual_cumulative) ** 2, axis=1)) / max(n_classes - 1, 1))
+
+def calculate_line_ranked_probability_score(
+    predicted_probabilities: np.ndarray,
+    values: ValueScale
+    ) -> float:
+    """
+    How wrong the chance of going over is, added up over every whole number line the range holds.
+
+    This is the one figure that compares two models whose classes cover different amounts of ground.
+    A class covering three points is read as spread evenly over those three, which is how the site
+    reads one, so both models are asked the same question at every line: what are the odds here.
+
+    Added up rather than averaged, because a line out in the tail scores almost nothing either way.
+    Averaging would hand a quiet reward to whichever model was given the wider range, since the extra
+    lines are the easy ones. Lower is better.
+    """
+
+    per_value = np.repeat(predicted_probabilities, values.value_step, axis=1) / values.value_step
+    lines = values.first_value + np.arange(per_value.shape[1])
+
+    # The chance of landing at or below each line, against whether it actually did.
+    predicted_cumulative = np.cumsum(per_value, axis=1)
+    happened = (values.actual_values[:, None] <= lines).astype(np.float64)
+
+    return float(np.mean(np.sum((predicted_cumulative - happened) ** 2, axis=1)))
 
 def calculate_binary_ece(
     confidences: np.ndarray,
@@ -157,42 +212,59 @@ def expected_calibration_error_classwise(
 
     return total_ece / n_classes
 
+OCCURRENCES_PER_BIN = 5
+"""
+How often an outcome has to have happened, per bin, before a reliability diagram of it means
+anything.
+
+An outcome at the far end of a range happens a handful of times or never. Its curve is then drawn
+from almost no events, on an axis scaled to the noise floor, and reads as wild miscalibration when
+the model is doing nothing wrong. Those outcomes are left out rather than drawn.
+"""
+
 def plot_calibration(
         predicted_probabilities: np.ndarray,
         actuals: np.ndarray,
         label: str,
+        class_labels: list[str],
         n_bins: int = 7,
         rows_columns: int = 3,
         save_graph_directory_path: Path | None = None
         ):
     """
-    Plots one reliability diagram per class, which shows whether a predicted probability happens as
+    Plots one reliability diagram per outcome, which shows whether a predicted probability happens as
     often as it claims.
 
     Args:
         predicted_probabilities is shaped (samples, classes) and actuals holds one class per sample.
+        class_labels names what each position stands for, so a graph is titled with the outcome
+        rather than with its position, which are not the same wherever a range does not start at zero.
         rows_columns is how many graphs fit across and down one page.
     """
 
-    n_classes = predicted_probabilities.shape[1]
-    n_cols = rows_columns
-    n_rows = rows_columns
+    occurrences = np.bincount(actuals, minlength=predicted_probabilities.shape[1])
+    drawn = [
+        position for position, count in enumerate(occurrences)
+        if count >= n_bins * OCCURRENCES_PER_BIN
+    ]
+
+    if not drawn:
+        print(f"No outcome of {label} happened often enough to plot a reliability diagram of.")
+        return
+
     classes_per_page = rows_columns * rows_columns
-    n_pages = math.ceil(n_classes / classes_per_page)
+    n_pages = math.ceil(len(drawn) / classes_per_page)
 
     if save_graph_directory_path is not None:
         save_graph_directory_path.mkdir(parents=True, exist_ok=True)
 
     for page in range(n_pages):
-        start = page * classes_per_page
-        end = min(start + classes_per_page, n_classes)
-        page_classes = list(range(start, end))
-        n_on_page = len(page_classes)
+        page_classes = drawn[page * classes_per_page : (page + 1) * classes_per_page]
 
         figure, axes = plt.subplots(
-            n_rows,
-            n_cols,
-            figsize=(5 * n_cols, 4 * n_rows),
+            rows_columns,
+            rows_columns,
+            figsize=(5 * rows_columns, 4 * rows_columns),
             squeeze=False
         )
         axes = axes.flatten()
@@ -208,10 +280,8 @@ def plot_calibration(
             axes[i].plot(prob_pred, prob_true, marker='o', label='Model')
 
             pad = 0.25
-            x_min, x_max = prob_pred.min(), prob_pred.max()
-            y_min, y_max = prob_true.min(), prob_true.max()
-            combined_min = min(x_min, y_min)
-            combined_max = max(x_max, y_max)
+            combined_min = min(prob_pred.min(), prob_true.min())
+            combined_max = max(prob_pred.max(), prob_true.max())
             margin = (combined_max - combined_min) * pad or pad
 
             lo = max(-0.05, combined_min - margin)
@@ -222,15 +292,19 @@ def plot_calibration(
             axes[i].set_xlim(lo, hi)
             axes[i].set_ylim(lo, hi)
 
-            axes[i].set_title(f'Class {class_idx}')
+            axes[i].set_title(f'{class_labels[class_idx]} ({occurrences[class_idx]:,} times)')
             axes[i].set_xlabel('Predicted Probability')
             axes[i].set_ylabel('Actual Frequency')
             axes[i].legend()
 
-        for i in range(n_on_page, len(axes)):
+        for i in range(len(page_classes), len(axes)):
             axes[i].set_visible(False)
 
-        plt.suptitle(f'Calibration Curves — Page {page + 1} of {n_pages} (Classes {start}–{end - 1})')
+        plt.suptitle(
+            f'{label} calibration, page {page + 1} of {n_pages} '
+            f'({class_labels[page_classes[0]]} to {class_labels[page_classes[-1]]}). '
+            f'{len(drawn)} of {len(occurrences)} outcomes happened often enough to draw.'
+        )
         plt.tight_layout(rect=(0, 0, 1, 0.96))
 
         if save_graph_directory_path is not None:
@@ -243,24 +317,26 @@ def plot_calibration(
 
 def calculate_classification_ordinal_errors(
         predicted_probabilities: np.ndarray,
-        actuals: np.ndarray
+        actuals: np.ndarray,
+        values: ValueScale
     ) -> dict[str, float]:
     """
     Scores the predicted distributions two ways: by the single class each one favours, and by the
     average value each one implies. The second is the fairer measure of a distribution.
+
+    Both are measured in the statistic's own units, against what was recorded rather than against
+    the class it fell in, so a model whose classes are buckets pays for the ground a bucket covers.
     """
 
-    highest_probability_predictions = np.argmax(predicted_probabilities, axis=1)
     highest_probability_mae, highest_probability_rmse = calculate_mae_and_rmse_error(
-        highest_probability_predictions,
-        actuals
+        values.class_values[np.argmax(predicted_probabilities, axis=1)],
+        values.actual_values
     )
 
-    class_indices = np.arange(predicted_probabilities.shape[1])
-    expected_values = np.sum(predicted_probabilities * class_indices, axis=1)
+    expected_values = np.sum(predicted_probabilities * values.class_values, axis=1)
     expected_value_mae, expected_value_rmse = calculate_mae_and_rmse_error(
         expected_values,
-        actuals
+        values.actual_values
     )
 
     return {
@@ -276,44 +352,67 @@ def _plot_predicted_distributions(
         predicted_probabilities: np.ndarray,
         actuals: np.ndarray,
         label: str,
+        class_labels: list[str],
+        values: ValueScale | None,
         output_size: int,
         save_graph_directory_path: Path | None
     ):
+    """
+    Draws a handful of finished distributions, each against the outcomes it is over.
+
+    Args:
+        values is the number line the classes sit on, or None when the positions are named
+        categories. A category set has no number line, so nothing is averaged across one and no
+        expected value is marked.
+    """
 
     sample_size = min(output_size, len(predicted_probabilities))
     indices = np.random.choice(len(predicted_probabilities), size=sample_size, replace=False)
-    class_indices = np.arange(predicted_probabilities.shape[1])
+
+    # Bars sit at the value they stand for, so a range that does not start at zero, or whose classes
+    # are wider than one, is drawn as the values a reader knows rather than as positions in an array.
+    positions = (
+        np.arange(predicted_probabilities.shape[1]) if values is None else values.class_values
+    )
+    bar_width = 0.8 if values is None else 0.8 * values.value_step
 
     if save_graph_directory_path is not None:
         save_graph_directory_path.mkdir(parents=True, exist_ok=True)
 
     for loop_count, idx in enumerate(indices):
         probabilities = predicted_probabilities[idx]
-        actual_value = actuals[idx].item()
-        expected_value = np.sum(probabilities * class_indices).item()
+        actual_position = int(actuals[idx])
 
         figure = plt.figure(figsize=(10, 4))
-        plt.bar(
-            range(len(probabilities)),
-            probabilities,
-            color='black'
+        plt.bar(positions, probabilities, width=bar_width, color='black')
+
+        if values is None:
+            plt.axvline(
+                x=positions[actual_position],
+                color='red',
+                linestyle='-',
+                linewidth=2,
+                label=f'Actual: {class_labels[actual_position]}'
+            )
+            plt.xticks(positions, class_labels)
+        else:
+            actual_value = float(values.actual_values[idx])
+            plt.axvline(
+                x=actual_value,
+                color='red',
+                linestyle='-',
+                linewidth=2,
+                label=f'Actual: {actual_value:g}'
             )
 
-        plt.axvline(
-            x=actual_value,
-            color='red',
-            linestyle='-',
-            linewidth=2,
-            label=f'Actual: {actual_value}'
-        )
-
-        plt.axvline(
-            x=expected_value,
-            color='green',
-            linestyle='-',
-            linewidth=2,
-            label=f'Expected Value: {expected_value}'
-        )
+            expected_value = float(np.sum(probabilities * positions))
+            plt.axvline(
+                x=expected_value,
+                color='green',
+                linestyle='-',
+                linewidth=2,
+                label=f'Expected value: {expected_value:.2f}'
+            )
 
         plt.legend()
         plt.xlabel(label)
@@ -332,15 +431,24 @@ def output_test_evaluation_classification(
         predictions: np.ndarray,
         actuals: np.ndarray,
         label: str,
-        ordinal: bool = False,
+        class_labels: list[str],
+        values: ValueScale | None = None,
         output_size: int = 5,
         save_graph_directory_path: Path | None = None
     ) -> dict[str, float]:
     """
     Scores a finished model's predictions and graphs them.
 
+    The figures that need no number line are worked out over positions in the array, which is where
+    the model answers. Everything else is read in the statistic's own units, because a report is read
+    by somebody who knows the statistic and not the array. The graphs are drawn the same way.
+
     Args:
         predictions are the model's logits, and actuals the class that happened.
+        class_labels names what each position stands for.
+        values is the number line the classes sit on, or None when the positions are named
+        categories rather than a run of values. Several of the metrics read the positions as a line,
+        so they are only scored when there is one.
         save_graph_directory_path saves the graphs there instead of showing them.
 
     Returns:
@@ -355,10 +463,13 @@ def output_test_evaluation_classification(
         "brier score": calculate_brier_score(predicted_probabilities, actuals)
     }
 
-    # Both of these read the classes as a line, so neither says anything about named categories.
-    if ordinal:
+    # These read the classes as a line, so none of them says anything about named categories.
+    if values is not None:
         metrics["ranked probability score"] = calculate_ranked_probability_score(predicted_probabilities, actuals)
-        metrics.update(calculate_classification_ordinal_errors(predicted_probabilities, actuals))
+        metrics["ranked probability score over lines"] = calculate_line_ranked_probability_score(
+            predicted_probabilities, values
+        )
+        metrics.update(calculate_classification_ordinal_errors(predicted_probabilities, actuals, values))
 
     print(f"\n===== SCORES FOR {label.upper()} =====")
     for name, value in metrics.items():
@@ -368,6 +479,8 @@ def output_test_evaluation_classification(
         predicted_probabilities,
         actuals,
         label,
+        class_labels,
+        values,
         output_size,
         save_graph_directory_path
     )
@@ -376,6 +489,7 @@ def output_test_evaluation_classification(
         predicted_probabilities,
         actuals,
         label,
+        class_labels,
         save_graph_directory_path=save_graph_directory_path
         )
 

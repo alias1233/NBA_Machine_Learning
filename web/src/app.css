@@ -53,6 +53,11 @@
 	--accent: light-dark(#a83c1e, #e28b5c);
 	--accent-on: light-dark(#ffffff, #141311);
 	--accent-block: light-dark(#e9a177, #a83c1e);
+	/* The accent of the plane a thing sits on, and what reads on top of it filled. A block sets this
+	   pair to its own and a surface sets it back, so a link, a button and a focus ring each take the
+	   right accent from where they sit rather than from a rule per plane. */
+	--plane-accent: var(--accent);
+	--plane-accent-on: var(--accent-on);
 	--over: light-dark(#0b6845, #4bcf9a);
 	--under: light-dark(#b01d57, #f072b0);
 	/* An outcome landing exactly on the line. A third data colour rather than the neutral tone,
@@ -61,6 +66,9 @@
 	--warn-wash: light-dark(#f8edd6, #2a2211);
 	--warn-border: light-dark(#dfc79b, #5c4a1d);
 	--chart-neutral: light-dark(#8a8375, #807969);
+	/* What the model expects, marked on the chart. Ink rather than a hue of its own, so it is the
+	   opposite of the paper in either theme and is never mistaken for over, under or push. */
+	--chart-expected: var(--ink);
 
 	/* Type. One family per job: the serif holds the name and the large headings, the interface face
 	   holds every sentence, and the mono face holds every figure and every micro label. */
@@ -76,6 +84,8 @@
 	--type-small: 0.875rem;
 	--type-micro: 0.75rem;
 	--type-figure: 1.25rem;
+	/* A figure given room to be read from further away, which is the odds in the detailed view. */
+	--type-figure-large: 1.75rem;
 	--type-figure-lead: clamp(2.5rem, 6vw, 3.5rem);
 
 	/* Space */
@@ -117,6 +127,14 @@
 	--card-label: clamp(0.625rem, 8cqi, var(--type-micro));
 	/* The square graphic beside a family's words, against the width of the card holding it. */
 	--card-graphic: min(28cqi, var(--card-max));
+
+	/* The chart. It is drawn --chart-height tall inside an answer and fills the room it is given in
+	   the detailed view. --chart-axis is the gutter the probability axis is written in, which has to
+	   be given a width because a mark is placed by its value rather than laid out in the flow. How
+	   dense a run has to get before its figures and marks thin out is measured in the chart itself,
+	   against the bars, so it is not a token. */
+	--chart-height: calc(var(--space-8) * 2);
+	--chart-axis: 3.5rem;
 
 	/* Elevation. Flat is the plane tint and nothing else. Raised adds --shadow, and only a thing
 	   that floats above the page is raised. */
@@ -169,8 +187,11 @@
 	--family-column: 44rem;
 	--control-column: 40rem;
 	--answer-column: 30rem;
-	/* The widest figure the odds can reach, so a hundred percent never moves the chart beside it. */
-	--odds-column: 5rem;
+	/* The widest a data figure can reach, so a readout that changes value moves nothing around it.
+	   Every odds figure and the detailed view's expected figure each sit in one of these, and the
+	   larger box holds a figure set at --type-figure-large. */
+	--figure-column: 5.5rem;
+	--figure-column-large: 7rem;
 
 	/* Ads. A slot holds this height whenever ads are on, so nothing shifts when one arrives. */
 	--ad-height: 250px;
@@ -255,41 +276,20 @@ figure {
 	margin: 0;
 }
 
+/* Accent and underlined, which is what marks a link to somewhere else. Anything acting on the page
+   the reader is already on is a button instead. */
 a {
-	color: var(--accent);
+	color: var(--plane-accent);
 	text-decoration-thickness: 1px;
 	text-underline-offset: 2px;
 }
 
-/* Something the copy calls a link that is not one, such as a disclosure. */
-.link {
-	color: var(--accent);
-	text-decoration: underline;
-	text-underline-offset: 2px;
-}
-
-/* A control in that role drops the chrome the platform gives it, so it reads as the words alone. */
-button.link {
-	padding: 0;
-	background: none;
-	border: none;
-	cursor: pointer;
-}
-
+/* The ring takes the accent of whatever it is drawn on, so it inverts with a block and back with a
+   surface nested in one. */
 :focus-visible {
 	outline: var(--rule-accent);
+	outline-color: var(--plane-accent);
 	outline-offset: 2px;
-}
-
-/* A block inverts the theme, so a ring drawn inside one inverts with it. A ring around a whole
-   block is drawn on the page, so it keeps the page accent. */
-.block :focus-visible {
-	outline-color: var(--accent-block);
-}
-
-/* A surface hands the page-side colours back, so a ring inside one inverts back with them. */
-.block .surface :focus-visible {
-	outline-color: var(--accent);
 }
 
 /* The interface face, not the serif, so the small mark never competes with the name at display
@@ -406,38 +406,37 @@ button.link {
 	border-radius: var(--radius-lg);
 }
 
+/* A panel is always on the page plane, the header's menu included, so it sets the page-side accent
+   back whatever it is floating over. */
 .panel {
 	background: var(--panel);
+	--plane-accent: var(--accent);
+	--plane-accent-on: var(--accent-on);
 }
 
-/* A block is the opposite theme's paper, so everything on it comes from the block family. */
+/* A block is the opposite theme's paper, so everything on it comes from the block family. Its accent
+   comes with it, because the page-side one has no edge against block paper, and what reads on top of
+   that accent filled is the block's own paper. */
 .block {
 	background: var(--block);
 	color: var(--block-ink);
+	--plane-accent: var(--accent-block);
+	--plane-accent-on: var(--block);
 }
 
 .block .muted {
 	color: var(--block-muted);
 }
 
-/* Style only links which are not buttons. */
-.block a:not(.button) {
-	color: var(--accent-block);
-}
-
-/* A filled accent control on a block takes the block-side accent, because the page-side one has no
-   edge against block paper. Its own text is then the block's paper. */
-.block .button {
-	background: var(--accent-block);
-	color: var(--block);
-}
-
-/* A nested data or image area inside a block. The page-side tokens apply again here. */
+/* A nested data or image area inside a block. The page-side tokens apply again here, so a link or a
+   button on one takes the page's accent back off the block it sits inside. */
 .surface {
 	padding: var(--space-4);
 	background: var(--surface);
 	color: var(--ink);
 	border-radius: var(--radius);
+	--plane-accent: var(--accent);
+	--plane-accent-on: var(--accent-on);
 }
 
 .surface .muted {
@@ -459,13 +458,10 @@ a.panel {
 }
 
 a.panel:hover,
-a.panel:focus-visible {
-	border-top-color: var(--accent);
-}
-
+a.panel:focus-visible,
 a.block:hover,
 a.block:focus-visible {
-	border-top-color: var(--accent-block);
+	border-top-color: var(--plane-accent);
 }
 
 /* A tag takes its colour from what it sits on, so one shape serves a block, an accent card and a
@@ -538,14 +534,17 @@ select:disabled {
 	gap: var(--space-2);
 	min-height: var(--tap-target);
 	padding: var(--control-padding-y) var(--space-4);
-	background: var(--accent);
-	color: var(--accent-on);
+	background: var(--plane-accent);
+	color: var(--plane-accent-on);
 	border: none;
 	border-radius: var(--radius);
 	font-weight: 600;
 	text-decoration: none;
 	cursor: pointer;
-	transition: filter var(--motion-fast) var(--ease-in);
+	transition:
+		background var(--motion-fast) var(--ease-in),
+		color var(--motion-fast) var(--ease-in),
+		filter var(--motion-fast) var(--ease-in);
 }
 
 .button:hover:not(:disabled) {
@@ -561,6 +560,22 @@ select:disabled {
 .button--lead {
 	padding-inline: var(--space-5);
 	font-size: var(--type-h3);
+}
+
+/* The accent in outline rather than filled, for a control that acts on the page but is not what the
+   page is for. One filled button leads a view and every other button in it is one of these, so the
+   filled one is always the primary. It fills on hover, which is the accent arriving rather than a
+   second tone to name. */
+.button--quiet {
+	background: none;
+	color: var(--plane-accent);
+	border: var(--rule-current);
+	font-size: var(--type-small);
+}
+
+.button--quiet:hover:not(:disabled) {
+	background: var(--plane-accent);
+	color: var(--plane-accent-on);
 }
 
 /*
@@ -610,6 +625,10 @@ select:disabled {
 }
 
 @media (min-width: 64rem) {
+	:root {
+		--chart-height: calc(var(--space-8) * 3);
+	}
+
 	.page {
 		padding-inline: var(--space-5);
 	}

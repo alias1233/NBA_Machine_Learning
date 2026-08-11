@@ -11,11 +11,17 @@ HIDDEN_LAYERS = 'hidden_layers'
 GRU_HIDDEN_DIM = 'gru_hidden_dim'
 GRU_LAYERS = 'gru_layers'
 GRU_DROPOUT_RATE = 'gru_dropout_rate'
+SEQUENCE_COUNT = 'sequence_count'
 
 class GRUFeedForward(SavableModule):
     """
-    Reads a sequence of past games with a GRU, then feeds its final hidden state and the
-    static data of the predicted game into a feed forward network.
+    Reads one or more sequences of past games with a GRU, then feeds their final hidden states and
+    the static data of the predicted game into a feed forward network.
+
+    A sample reads one sequence per subject it is about: a player's own games, or the games of both
+    teams in a game nobody named a side of. Every sequence holds the same columns and is read by the
+    same GRU, because they describe the same kind of thing, and their memories are joined in a fixed
+    order so the network can still tell one from another.
     """
 
     SAVED_ARGUMENT_NAMES = (
@@ -25,7 +31,8 @@ class GRUFeedForward(SavableModule):
         HIDDEN_LAYERS,
         GRU_HIDDEN_DIM,
         GRU_LAYERS,
-        GRU_DROPOUT_RATE
+        GRU_DROPOUT_RATE,
+        SEQUENCE_COUNT
     )
     SAVED_ARGUMENT_CODECS = LAYER_PARAMETERS_CODEC
 
@@ -37,12 +44,14 @@ class GRUFeedForward(SavableModule):
             hidden_layers: list[LayerParameters],
             gru_hidden_dim: int,
             gru_layers: int = 1,
-            gru_dropout_rate: float = 0
+            gru_dropout_rate: float = 0,
+            sequence_count: int = 1
             ) -> None:
         """
         Args:
             hidden_layers: holds the parameters for each hidden layer of the feed forward network.
             gru_dropout_rate: only applies between GRU layers, so it is ignored when gru_layers is 1.
+            sequence_count: how many game histories one sample reads.
         """
         super().__init__()
 
@@ -53,6 +62,7 @@ class GRUFeedForward(SavableModule):
         self.gru_hidden_dim = gru_hidden_dim
         self.gru_layers = gru_layers
         self.gru_dropout_rate = gru_dropout_rate
+        self.sequence_count = sequence_count
 
         self.gru = nn.GRU(
             input_size=sequence_input_dim,
@@ -63,7 +73,7 @@ class GRUFeedForward(SavableModule):
         )
 
         self.network = FeedForward(
-            gru_hidden_dim + static_input_dim,
+            gru_hidden_dim * sequence_count + static_input_dim,
             output_dim,
             hidden_layers
         )
@@ -76,7 +86,9 @@ class GRUFeedForward(SavableModule):
             ) -> torch.Tensor:
         """
         Args:
-            sequences: padded game sequences of shape (batch, longest sequence, sequence features).
+            sequences: padded game sequences of shape
+                (batch * sequence_count, longest sequence, sequence features), with one sample's
+                sequences next to each other and in the order that sample lists them.
             sequence_lengths: the unpadded length of each sequence, so padding is never read.
         """
 
@@ -88,6 +100,9 @@ class GRUFeedForward(SavableModule):
         )
 
         _, hidden_states = self.gru(packed_sequences)
-        final_hidden_state = hidden_states[-1]
 
-        return self.network(torch.cat((final_hidden_state, static_input), dim=1))
+        # Back to one row per sample, holding every sequence that sample reads. One sequence leaves
+        # this exactly as the GRU produced it.
+        memory = hidden_states[-1].reshape(len(static_input), -1)
+
+        return self.network(torch.cat((memory, static_input), dim=1))

@@ -36,6 +36,17 @@ class ModelSpecification():
 
         raise NotImplementedError
 
+    @property
+    def sequences_read(self) -> int:
+        """
+        How many game histories one sample of this model reads.
+
+        One unless the family says otherwise. A model asked about a whole game reads both teams, and
+        a saved file fit on a different number of them cannot answer.
+        """
+
+        return 1
+
     def model_file(self) -> Path:
         return paths.model_file(self.model_category, self.name)
 

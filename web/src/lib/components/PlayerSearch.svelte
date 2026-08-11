@@ -8,11 +8,18 @@
 	The prediction service is not reachable from a browser, so the lookup goes through this site's own
 	/api/players route. What happens to a chosen player is the caller's business: the main picker
 	keeps the name in the box, and a picker taking several players empties it and adds a pill.
+
+	The list opens the moment it is asked for, whether or not it has anybody to show yet. While a
+	roster or a search is on its way it holds pulsing rows of the size the names will take.
+
+	A box holding words carries a Clear control at its right edge, so changing who is predicted is one
+	press rather than a held backspace. It takes the words and nothing else, because the picker was
+	answered by an entry and that answer stands until another entry replaces it.
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 
-	import { appear } from '$lib/motion';
+	import { appear, flowingHeight } from '$lib/motion';
 
 	import type { Player, Roster } from '$lib/types';
 
@@ -24,15 +31,28 @@
 		initial?: Player | null;
 		/** Offered before anything is typed. Empty means the box opens only on a search. */
 		rosters?: Roster[];
+		/** True while the rosters above are still coming, which is what the list waits on. */
+		loadingRosters?: boolean;
 		/** Empties the box after a choice, which is what a picker taking several players wants. */
 		clearOnChoose?: boolean;
 		onchoose: (player: Player) => void;
 	};
 
-	let { id, label, initial = null, rosters = [], clearOnChoose = false, onchoose }: Props = $props();
+	let {
+		id,
+		label,
+		initial = null,
+		rosters = [],
+		loadingRosters = false,
+		clearOnChoose = false,
+		onchoose
+	}: Props = $props();
 
 	const TYPING_DELAY = 200;
 	const SHORTEST_SEARCH = 2;
+
+	/** How many names the list stands in for while it waits for them. */
+	const RESERVED_ROWS = 5;
 
 	// Deliberately the initial value only. Once the box is on screen the reader owns it.
 	// svelte-ignore state_referenced_locally
@@ -44,6 +64,9 @@
 	let box = $state<HTMLInputElement>();
 	let field = $state<HTMLDivElement>();
 
+	/** Measured rather than reserved, so the words never run under the Clear control beside them. */
+	let clearWidth = $state(0);
+
 	/** Puts the reader in the box. The page is moved by whoever called, not by the focus. */
 	export function focus() {
 		box?.focus({ preventScroll: true });
@@ -51,6 +74,26 @@
 
 	export function clear() {
 		text = '';
+	}
+
+	/**
+	 * Empties the box and leaves the reader in it with the list open.
+	 *
+	 * A search already on its way is dropped, because its answers are to words that are no longer
+	 * there. Opening is set here rather than left to the focus, since a box that already had focus
+	 * fires no focus event.
+	 */
+	function clearAndFocus() {
+		clearTimeout(timer);
+		inFlight?.abort();
+
+		text = '';
+		results = [];
+		active = -1;
+		searching = false;
+		open = rosters.length > 0 || loadingRosters;
+
+		box?.focus();
 	}
 
 	let timer: ReturnType<typeof setTimeout>;
@@ -74,6 +117,9 @@
 
 	const options = $derived(shown.flatMap((group) => group.entries.map(({ player }) => player)));
 
+	/** Whether the names the list is going to hold are still on their way. */
+	const waiting = $derived(searchable ? searching : loadingRosters);
+
 	async function search(term: string) {
 		inFlight?.abort();
 
@@ -81,7 +127,7 @@
 		if (term.trim().length < SHORTEST_SEARCH) {
 			results = [];
 			active = -1;
-			open = rosters.length > 0;
+			open = rosters.length > 0 || loadingRosters;
 			return;
 		}
 
@@ -195,46 +241,64 @@
 		autocomplete="off"
 		placeholder="Search players"
 		value={text}
+		style:padding-right={text === '' ? null : `calc(${clearWidth}px + var(--space-2))`}
 		oninput={onInput}
 		onkeydown={onKeydown}
-		onfocus={() => (open = options.length > 0)}
+		onfocus={() => (open = options.length > 0 || waiting)}
 	/>
 
-	{#if open}
-		<ul
-			class="panel"
-			id="{id}-options"
-			role="listbox"
-			aria-label={searchable ? 'Players' : 'This game'}
-			transition:appear
-		>
-			{#if options.length === 0}
-				<li class="empty muted small">{searching ? 'Searching' : 'No player found.'}</li>
-			{:else}
-				{#each shown as group (group.label)}
-					{#if group.label}
-						<li class="group micro muted" role="presentation">{group.label}</li>
-					{/if}
+	<!-- Inside the box it empties, and only while there is something to empty. -->
+	{#if text !== ''}
+		<button type="button" class="clear small" bind:clientWidth={clearWidth} onclick={clearAndFocus}>
+			<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+				<path d="M4 4 12 12M12 4 4 12" />
+			</svg>
+			<span>Clear</span>
+		</button>
+	{/if}
 
-					{#each group.entries as entry (entry.player.id)}
-						<!-- The input keeps focus and owns the keyboard, so the option only handles pointers.
-						     A mouse press is refused so the box keeps focus, and a touch press is not,
-						     because a prevented one never becomes a tap. -->
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<li
-							id="{id}-option-{entry.position}"
-							role="option"
-							aria-selected={entry.position === active}
-							class:active={entry.position === active}
-							onpointerdown={(event) => event.pointerType === 'mouse' && event.preventDefault()}
-							onclick={() => choose(entry.player)}
-						>
-							{entry.player.name}
-						</li>
+	{#if open}
+		<!-- It floats, so it fades where it stands. Its height flows, so names arriving under a
+		     reader who is already looking at the list do not throw it open in one frame. -->
+		<div class="floating panel" transition:appear use:flowingHeight>
+			<ul
+				id="{id}-options"
+				role="listbox"
+				aria-label={searchable ? 'Players' : 'This game'}
+				aria-busy={waiting || undefined}
+			>
+				{#if waiting && options.length === 0}
+					{#each Array(RESERVED_ROWS) as _, row (row)}
+						<li class="reserved" role="presentation"><span class="waiting"></span></li>
 					{/each}
-				{/each}
-			{/if}
-		</ul>
+				{:else if options.length === 0}
+					<li class="empty muted small">No player found.</li>
+				{:else}
+					{#each shown as group (group.label)}
+						{#if group.label}
+							<li class="group micro muted" role="presentation">{group.label}</li>
+						{/if}
+
+						{#each group.entries as entry (entry.player.id)}
+							<!-- The input keeps focus and owns the keyboard, so the option only handles pointers.
+							     A mouse press is refused so the box keeps focus, and a touch press is not,
+							     because a prevented one never becomes a tap. -->
+							<!-- svelte-ignore a11y_click_events_have_key_events -->
+							<li
+								id="{id}-option-{entry.position}"
+								role="option"
+								aria-selected={entry.position === active}
+								class:active={entry.position === active}
+								onpointerdown={(event) => event.pointerType === 'mouse' && event.preventDefault()}
+								onclick={() => choose(entry.player)}
+							>
+								{entry.player.name}
+							</li>
+						{/each}
+					{/each}
+				{/if}
+			</ul>
+		</div>
 	{/if}
 </div>
 
@@ -243,8 +307,33 @@
 		position: relative;
 	}
 
+	/* Inside the box, against its right edge and the full height of it, so it is a finger wide in
+	   both directions without taking a row of its own. It reads as part of the field rather than as
+	   something to act on, so it takes the muted ink and none of the platform's own chrome. */
+	.clear {
+		position: absolute;
+		right: var(--space-2);
+		bottom: 0;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		height: var(--tap-target);
+		padding-block: 0;
+		padding-inline: var(--space-2);
+		background: none;
+		border: none;
+		color: var(--ink-muted);
+		cursor: pointer;
+	}
+
+	/* Current colour, a stroke and no fill, at the size of the word beside it. */
+	.clear svg {
+		width: 1em;
+		height: 1em;
+	}
+
 	/* Floats above the page, so it is the one other thing besides the models menu that is raised. */
-	ul {
+	.floating {
 		position: absolute;
 		z-index: 10;
 		top: 100%;
@@ -252,10 +341,18 @@
 		right: 0;
 		margin-top: var(--space-1);
 		padding: var(--space-2);
+		overflow: clip;
+		box-shadow: var(--shadow);
+	}
+
+	/* The list is what runs out of room, so it is what scrolls. The panel around it flows to
+	   whatever height that settles at. */
+	ul {
+		margin: 0;
+		padding: 0;
 		list-style: none;
 		max-height: calc(var(--space-8) * 2.5);
 		overflow-y: auto;
-		box-shadow: var(--shadow);
 	}
 
 	li {
@@ -268,8 +365,26 @@
 	}
 
 	li.empty,
-	li.group {
+	li.group,
+	li.reserved {
 		cursor: default;
+	}
+
+	/* Reserved space in a panel, drawn as the sunken plane and pulsing so the list reads as loading
+	   rather than as one with nobody in it. */
+	.waiting {
+		width: 100%;
+		max-width: calc(var(--space-8) * 2);
+		height: var(--type-body);
+		background: var(--surface-sunken);
+		border-radius: var(--radius);
+		animation: pulse var(--loading-pulse) var(--ease-in-out) infinite alternate;
+	}
+
+	@keyframes pulse {
+		to {
+			opacity: 0.4;
+		}
 	}
 
 	/* Names which side of the game a run of players is, so the two rosters read as two lists. */

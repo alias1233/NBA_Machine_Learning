@@ -18,7 +18,14 @@ from nba_ml import season
 from nba_ml.entities import Game
 from nba_ml.feature_engineering import game_columns, rolling
 from nba_ml.feature_engineering.rolling import RollingCategory
-from nba_ml.machine_learning.datasets import PlayerGameSequences, SequenceInputSamples
+from nba_ml.feature_engineering.samples import (
+    OUTPUT,
+    GameHistory,
+    build_inference_sample,
+    build_split_samples,
+    split_into_histories
+)
+from nba_ml.machine_learning.datasets import GameSequences, SequenceInputSamples
 from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.stores import player_games, players, team_games
 
@@ -57,9 +64,6 @@ POST_UNUSED_TRAINING_DATA_COLUMNS_STATIC = [
     players.TO_YEAR.category_name,
     players.BIRTHDATE.category_name
 ]
-
-# INPUT OUTPUT STRUCTURE: #
-OUTPUT = "OUTPUT"
 
 # How many games a player must already have played before one of their games can be a sample. One is
 # the floor rather than a choice: the sequence a model reads cannot be empty. A player early in their
@@ -233,9 +237,9 @@ class TargetStat(Enum):
 
 # COMBINING TARGETED STATS: #
 DOUBLE_FIGURES = 10
-"""What one stat has to reach in a game to count towards a double double."""
+"""What one stat has to reach in a game to count towards a triple double or double double."""
 
-MILESTONE_CATEGORIES = ("yes", "no")
+MILESTONE_CATEGORIES = ("stat line reached", "not reached")
 """
 What a double figure milestone answers with, most notable first, so a caller drawing the answer leads
 with the milestone happening.
@@ -516,38 +520,6 @@ def build_feature_set(
     )
 
 # PREPROCESSED DATA: #
-@dataclass(frozen=True)
-class PlayerGameHistory():
-    """
-    One player's games, already reduced to the numbers a model reads, oldest game first.
-
-    Everything is a plain array rather than a dataframe, so building a sample is a slice instead of
-    hundreds of thousands of small pandas objects.
-    """
-
-    static_player_info: np.ndarray
-    """The player's own unchanging information, shaped (player info features,)."""
-
-    game_ids: np.ndarray
-    game_dates: np.ndarray
-    sequence_values: np.ndarray
-    """Shaped (games, sequence features)."""
-
-    static_values: np.ndarray
-    """Shaped (games, static features)."""
-
-    opponent_team_ids: np.ndarray
-    outputs: np.ndarray
-
-    @property
-    def game_count(self) -> int:
-        return len(self.game_dates)
-
-    def static_input(self, index: int) -> np.ndarray:
-        """The static half of one sample's input, read off the game being predicted."""
-
-        return np.concatenate((self.static_player_info, self.static_values[index]))
-
 def _build_player_info_features(
     player_info: pd.DataFrame
     ) -> dict[int, np.ndarray]:
@@ -750,55 +722,13 @@ def _preprocess_team_game_data(
         group_by_column=opponent_team_id_column
     )
 
-def _split_into_player_histories(
-    features: FeatureSet,
-    player_info_features: dict[int, np.ndarray],
-    player_team_game_data: pd.DataFrame
-    ) -> dict[int, PlayerGameHistory]:
-    """
-    Cuts the finished feature frame into one history per player.
-
-    The columns are pulled out as whole arrays once and then sliced, since every player's games sit
-    together in the frame.
-    """
-
-    player_id_column = player_games.PLAYER_ID.category_name
-    opponent_team_id_column = game_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name
-
-    game_ids = player_team_game_data[team_games.GAME_ID.category_name].to_numpy()
-    game_dates = player_team_game_data[team_games.GAME_DATE.category_name].to_numpy()
-    sequence_values = player_team_game_data[features.sequence_columns].to_numpy(dtype=np.float32)
-    static_values = player_team_game_data[features.static_columns].to_numpy(dtype=np.float32)
-    opponent_team_ids = player_team_game_data[opponent_team_id_column].to_numpy(dtype=np.int64)
-    outputs = player_team_game_data[OUTPUT].to_numpy(dtype=np.float64)
-
-    histories: dict[int, PlayerGameHistory] = {}
-    for player_id, positions in player_team_game_data.groupby(by=player_id_column, sort=False).indices.items():
-        player_id = int(player_id)
-        start, stop = int(positions[0]), int(positions[-1]) + 1
-
-        if stop - start != len(positions):
-            raise ValueError("Every player's games must sit together, so the frame has to be sorted by player first.")
-
-        histories[player_id] = PlayerGameHistory(
-            static_player_info=player_info_features[player_id],
-            game_ids=game_ids[start:stop],
-            game_dates=game_dates[start:stop],
-            sequence_values=sequence_values[start:stop],
-            static_values=static_values[start:stop],
-            opponent_team_ids=opponent_team_ids[start:stop],
-            outputs=outputs[start:stop]
-        )
-
-    return histories
-
 def _preprocess_game_data(
         features: FeatureSet,
         player_info: pd.DataFrame,
         player_game_data: pd.DataFrame,
         team_game_data: pd.DataFrame,
         print_debug: bool = False
-        ) -> dict[int, PlayerGameHistory]:
+        ) -> dict[int, GameHistory]:
     """
     Turns the raw tables into one finished history per player.
 
@@ -867,10 +797,15 @@ def _preprocess_game_data(
         player_team_game_data[features.output_columns]
     )
 
-    histories = _split_into_player_histories(
-        features,
-        _build_player_info_features(player_info),
-        player_team_game_data
+    histories = split_into_histories(
+        player_team_game_data,
+        player_games.PLAYER_ID.category_name,
+        team_games.GAME_ID.category_name,
+        team_games.GAME_DATE.category_name,
+        game_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name,
+        features.sequence_columns,
+        features.static_columns,
+        _build_player_info_features(player_info)
     )
 
     if print_debug:
@@ -881,7 +816,7 @@ def _preprocess_game_data(
 def _get_all_preprocessed_game_data(
         features: FeatureSet,
         print_debug: bool = False
-    ) -> dict[int, PlayerGameHistory]:
+    ) -> dict[int, GameHistory]:
 
     if print_debug:
         print("Querying data from databases...")
@@ -897,71 +832,7 @@ def _get_all_preprocessed_game_data(
 
     return _preprocess_game_data(features, all_player_info, all_player_game_data, all_team_game_data, print_debug)
 
-# SPLITTING INTO TRAINING, VALIDATION, AND TEST: #
-TRAINING_SPLIT = 0
-VALIDATION_SPLIT = 1
-TEST_SPLIT = 2
-
-def _get_split_start_dates(
-    validation_split_start_date: datetime,
-    test_split_start_date: datetime
-    ) -> np.ndarray:
-    return np.array([validation_split_start_date, test_split_start_date], dtype='datetime64[ns]')
-
-def _get_split_of_every_game(
-    history: PlayerGameHistory,
-    split_start_dates: np.ndarray
-    ) -> np.ndarray:
-    """
-    Which split each game belongs to. A game on a split's start date stays in the earlier split, so
-    that a model is only ever tested on games played after the ones it learned from.
-    """
-
-    return np.searchsorted(split_start_dates, history.game_dates, side='left')
-
-def _print_progress(count: int):
-    if count % 25000 == 0:
-        print(f"\r\033[KData Chunks Processed: {count}", end="", flush=True)
-
 # TRAINING DATA: #
-def _get_player_info_width(histories: dict[int, PlayerGameHistory]) -> int:
-    """How many columns a player's own information takes up, which is the same for every player."""
-
-    return next((len(history.static_player_info) for history in histories.values()), 0)
-
-class _SampleAccumulator():
-    """Collects the samples of one split before they are packed into arrays."""
-
-    def __init__(self):
-        self.player_indices: list[int] = []
-        self.sequence_end_indices: list[int] = []
-        self.opponent_team_ids: list[int] = []
-        self.static_inputs: list[np.ndarray] = []
-        self.outputs: list[float] = []
-
-    def add(
-        self,
-        player_index: int,
-        sequence_end_index: int,
-        opponent_team_id: int,
-        static_input: np.ndarray,
-        output: float
-        ):
-        self.player_indices.append(player_index)
-        self.sequence_end_indices.append(sequence_end_index)
-        self.opponent_team_ids.append(opponent_team_id)
-        self.static_inputs.append(static_input)
-        self.outputs.append(output)
-
-    def to_samples(self, static_input_dim: int) -> SequenceInputSamples:
-        return SequenceInputSamples(
-            np.array(self.player_indices, dtype=np.int64),
-            np.array(self.sequence_end_indices, dtype=np.int64),
-            np.array(self.opponent_team_ids, dtype=np.int64),
-            np.stack(self.static_inputs) if self.static_inputs else np.empty((0, static_input_dim), dtype=np.float32),
-            np.array(self.outputs, dtype=np.float64)
-        )
-
 def get_all_labeled_data(
         features: FeatureSet,
         validation_split_start_date: datetime,
@@ -969,19 +840,13 @@ def get_all_labeled_data(
         chunk_step_size: int = 1,
         print_debug: bool = False
         ) -> tuple[
-            PlayerGameSequences,
+            GameSequences,
             SequenceInputSamples,
             SequenceInputSamples,
             SequenceInputSamples
             ]:
     """
     Builds every labeled sample the league holds, split into training, validation and test by date.
-
-    Each player's games are kept once and the samples only hold where in them to read, so that a
-    sample can look back over a long history without storing its own copy of it.
-
-    Games played against the predicted game's opponent are marked inside the sequence itself, so a
-    sample is kept even when the player has rarely faced them.
 
     Returns:
         (games of every player, training samples, validation samples, test samples)
@@ -992,54 +857,18 @@ def get_all_labeled_data(
     if print_debug:
         print("Arranging data into training chunks...")
 
-    split_start_dates = _get_split_start_dates(validation_split_start_date, test_split_start_date)
-    static_input_dim = _get_player_info_width(histories) + len(features.static_columns)
-
-    player_sequences: list[np.ndarray] = []
-    player_opponent_team_ids: list[np.ndarray] = []
-    training_game_counts: list[int] = []
-    all_samples = [_SampleAccumulator() for _ in range(len(split_start_dates) + 1)]
-
-    count: int = 0
-    for player_index, history in enumerate(histories.values()):
-        player_sequences.append(history.sequence_values)
-        player_opponent_team_ids.append(history.opponent_team_ids)
-
-        splits = _get_split_of_every_game(history, split_start_dates)
-
-        # Only the oldest games are visible to the training split, so the scalers can be fit without
-        # seeing validation or test games.
-        training_game_counts.append(int((splits == TRAINING_SPLIT).sum()))
-
-        for index in range(MINIMUM_PAST_GAMES, history.game_count, chunk_step_size):
-            if print_debug:
-                _print_progress(count)
-                count += 1
-
-            all_samples[splits[index]].add(
-                player_index,
-                index,
-                int(history.opponent_team_ids[index]),
-                history.static_input(index),
-                history.outputs[index]
-            )
+    player_game_sequences, (training, validation, test) = build_split_samples(
+        histories,
+        (validation_split_start_date, test_split_start_date),
+        MINIMUM_PAST_GAMES,
+        chunk_step_size,
+        print_debug
+    )
 
     if print_debug:
-        print("")
         print("Finished data processing.")
 
-    player_game_sequences = PlayerGameSequences(
-        player_sequences,
-        player_opponent_team_ids,
-        np.array(training_game_counts, dtype=np.int64)
-    )
-
-    return (
-        player_game_sequences,
-        all_samples[TRAINING_SPLIT].to_samples(static_input_dim),
-        all_samples[VALIDATION_SPLIT].to_samples(static_input_dim),
-        all_samples[TEST_SPLIT].to_samples(static_input_dim)
-    )
+    return (player_game_sequences, training, validation, test)
 
 # INFERENCE: #
 def _check_player_can_be_read(
@@ -1080,7 +909,7 @@ def _get_inference_player_game_data(
     removed_core_teammate_player_ids: Collection[int],
     added_core_teammate_player_ids: Collection[int],
     print_debug: bool = False
-    ) -> tuple[PlayerGameHistory, int]:
+    ) -> tuple[GameHistory, int]:
     """
     Builds every game played by the target player, ending with a placeholder row holding what is
     already known about the game being predicted.
@@ -1250,7 +1079,7 @@ def get_inference_data(
     removed_core_teammate_player_ids: Collection[int],
     added_core_teammate_player_ids: Collection[int],
     print_debug: bool = False
-    ) -> tuple[PlayerGameSequences, SequenceInputSamples]:
+    ) -> tuple[GameSequences, SequenceInputSamples]:
     """
     Builds the input for one prediction: the target player's games and the single sample reading
     them. See _get_inference_player_game_data for what the target game arguments mean.
@@ -1269,24 +1098,9 @@ def get_inference_data(
     if print_debug:
         print("Creating input chunk...")
 
-    static_input = history.static_input(target_index)
-
-    # One sample reading the only player given, and no games belong to a training split.
-    samples = SequenceInputSamples(
-        np.zeros(1, dtype=np.int64),
-        np.array([target_index], dtype=np.int64),
-        history.opponent_team_ids[target_index : target_index + 1],
-        static_input.reshape(1, -1),
-        np.zeros(1, dtype=np.float64)
-    )
-
-    player_game_sequences = PlayerGameSequences(
-        [history.sequence_values],
-        [history.opponent_team_ids],
-        np.zeros(1, dtype=np.int64)
-    )
+    input_data = build_inference_sample([(history, target_index)])
 
     if print_debug:
         print("Completed input data creation...")
 
-    return (player_game_sequences, samples)
+    return input_data

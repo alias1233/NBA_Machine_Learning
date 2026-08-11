@@ -5,11 +5,14 @@
 	category is drawn, which makes this the whole answer rather than a view of one, so nothing sits
 	behind it either.
 
-	Bars are neutral, the same as a chart with no line set, because nothing here splits them.
+	A category's name and its chance share a line above a bar of the full width, so the bars are the
+	same size whatever the figures over them are. Bars are neutral, the same as a chart with no line
+	set, because nothing here splits them.
 -->
 <script lang="ts">
 	import { sentenceCase } from '$lib/models';
-	import { sharePercentages } from '$lib/odds';
+	import { flowingHeight } from '$lib/motion';
+	import { CATEGORY_DECIMALS, sharePercentages } from '$lib/odds';
 
 	import type { CategoryAnswer } from '$lib/odds';
 
@@ -27,7 +30,7 @@
 	const rows = $derived.by(() => {
 		if (!categories) return [];
 
-		const shares = sharePercentages(categories.probabilities);
+		const shares = sharePercentages(categories.probabilities, CATEGORY_DECIMALS);
 
 		return categories.names.map((name, index) => ({
 			name,
@@ -37,49 +40,60 @@
 	});
 </script>
 
-<div class="surface reading">
-	{#if categories && !loading}
-		<dl>
-			{#each rows as row (row.name)}
-				<div class="row">
-					<dt class="small">{sentenceCase(row.name)}</dt>
-					<div class="track" aria-hidden="true"><div class="bar" style:width={row.width}></div></div>
-					<dd class="figure">{row.share}%</dd>
-				</div>
-			{/each}
-		</dl>
-	{:else}
-		<dl aria-hidden="true">
-			{#each Array(RESERVED_ROWS) as _, row (row)}
-				<div class="row"><div class="waiting"></div></div>
-			{/each}
-		</dl>
-	{/if}
+<div class="surface reading" use:flowingHeight>
+	<div>
+		{#if categories && !loading}
+			<dl>
+				{#each rows as row (row.name)}
+					<div class="row">
+						<dt class="small">{sentenceCase(row.name)}</dt>
+						<dd class="figure">{row.share}%</dd>
+						<div class="track" aria-hidden="true">
+							<div class="bar" style:width={row.width}></div>
+						</div>
+					</div>
+				{/each}
+			</dl>
+		{:else}
+			<dl aria-hidden="true">
+				{#each Array(RESERVED_ROWS) as _, row (row)}
+					<div class="row">
+						<div class="waiting name"></div>
+						<div class="waiting track"></div>
+					</div>
+				{/each}
+			</dl>
+		{/if}
+	</div>
 </div>
 
 <style>
+	/* It holds the height of whatever is in it, so the skeleton flows into the answer. */
+	.reading {
+		overflow: clip;
+	}
+
 	dl {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-4);
+		gap: var(--space-5);
 	}
 
-	/* The name and the figure take what they need and the bar takes the rest, so two rows line up
-	   however long a category is named. */
+	/* The name takes what it needs and the figure sits at the far end of the same line, so the bar
+	   under them is the full width in every row however long a figure runs. */
 	.row {
 		display: grid;
-		grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
-		align-items: center;
-		gap: var(--space-3);
-		min-height: var(--tap-target);
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-3);
 	}
 
 	dd {
 		margin: 0;
-		text-align: right;
 	}
 
 	.track {
+		grid-column: 1 / -1;
 		height: var(--space-4);
 		background: var(--surface-sunken);
 	}
@@ -93,11 +107,16 @@
 
 	/* Reserved space, drawn as the sunken plane and pulsing so the box reads as loading. */
 	.waiting {
-		grid-column: 1 / -1;
-		height: var(--space-4);
 		background: var(--surface-sunken);
 		border-radius: var(--radius);
 		animation: pulse var(--loading-pulse) var(--ease-in-out) infinite alternate;
+	}
+
+	.waiting.name {
+		grid-column: 1 / -1;
+		width: calc(var(--space-8) * 1.5);
+		max-width: 60%;
+		height: var(--type-figure);
 	}
 
 	@keyframes pulse {

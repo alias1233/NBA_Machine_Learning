@@ -14,6 +14,11 @@ class SavableModule(nn.Module):
     An argument that is not a plain value needs an entry in SAVED_ARGUMENT_CODECS. Python saves a
     custom class by writing down where its module lives, so a saved model that holds one stops
     loading the moment that module moves. Codecs turn those arguments into plain data first.
+
+    An argument the saved file does not carry is left to its default, because a file written before
+    that argument existed was built with exactly that default. Adding an optional argument therefore
+    does not orphan every model already trained. Adding a required one does, and says so by failing
+    to load.
     """
 
     SAVED_ARGUMENT_NAMES: tuple[str, ...] = ()
@@ -24,9 +29,11 @@ class SavableModule(nn.Module):
     def load_from_saved_parameters_dict(cls, parameters_dict: dict[str, Any]) -> Self:
         arguments = {}
         for name in cls.SAVED_ARGUMENT_NAMES:
-            value = parameters_dict[name]
+            if name not in parameters_dict:
+                continue
+
             decode = cls.SAVED_ARGUMENT_CODECS.get(name)
-            arguments[name] = decode[1](value) if decode else value
+            arguments[name] = decode[1](parameters_dict[name]) if decode else parameters_dict[name]
 
         instance = cls(**arguments)
         instance.load_state_dict(parameters_dict[MODEL_STATE])

@@ -1,6 +1,9 @@
 /**
  * The model families the site knows about.
  *
+ * A family is named after what a reader has to choose before it can answer: a player, a team, or a
+ * game. That is what makes each family a page of its own, because it is what the page asks for.
+ *
  * The service says which family each model belongs to and whether it is published. This adds the
  * part only the site knows: the route the family is predicted on, and how it is described to a
  * reader. A family is described here and nowhere else, so the header menu, the home page and the
@@ -29,10 +32,16 @@ export const MODEL_FAMILIES: ModelFamily[] = [
 		description: 'Points, rebounds and assists for one player in one game.'
 	},
 	{
-		name: 'team_game_stats',
-		slug: 'team-game-stats',
-		title: 'Team game statistics',
-		description: 'How much a team wins by, how much it scores, and the game total.'
+		name: 'team_stats',
+		slug: 'team-stats',
+		title: 'Team statistics',
+		description: 'How many points one team scores in a game.'
+	},
+	{
+		name: 'game_stats',
+		slug: 'game-stats',
+		title: 'Game statistics',
+		description: 'The winning margin and the total points of one game.'
 	}
 ];
 

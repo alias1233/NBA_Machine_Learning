@@ -160,6 +160,8 @@
 		--arrive-duration: var(--motion-entry);
 	}
 
+	/* The words sit on the backdrop, so everything in them comes from the block family, the accent
+	   included. */
 	.words {
 		grid-area: w;
 		display: flex;
@@ -170,20 +172,8 @@
 		padding: var(--space-3);
 		color: var(--block-ink);
 		text-align: center;
-	}
-
-	/* The words sit on the backdrop, so everything in them comes from the block family. */
-	.words a:not(.button) {
-		color: var(--accent-block);
-	}
-
-	.words .button {
-		background: var(--accent-block);
-		color: var(--block);
-	}
-
-	.words :focus-visible {
-		outline-color: var(--accent-block);
+		--plane-accent: var(--accent-block);
+		--plane-accent-on: var(--block);
 	}
 
 	.actions {

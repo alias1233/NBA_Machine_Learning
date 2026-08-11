@@ -14,14 +14,16 @@ import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
 
 import type {
+	GamePredictionRequest,
 	Health,
 	Model,
 	Player,
+	PlayerPredictionRequest,
 	Prediction,
-	PredictionRequest,
 	Roster,
 	ScheduledGame,
-	Team
+	Team,
+	TeamPredictionRequest
 } from '$lib/types';
 
 const DEFAULT_URL = 'http://127.0.0.1:8000';
@@ -100,10 +102,20 @@ export function searchPlayers(search: string, limit = 10) {
 	return request<Player[]>(`/players?${query}`);
 }
 
-export function predictPlayerStat(model: string, body: PredictionRequest) {
-	return request<Prediction>(`/predictions/player-stats/${encodeURIComponent(model)}`, {
+/** One prediction endpoint per family, because what a request has to name is what a family is. */
+function predict(family: string, model: string, body: unknown) {
+	return request<Prediction>(`/predictions/${family}/${encodeURIComponent(model)}`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(body)
 	});
 }
+
+export const predictPlayerStat = (model: string, body: PlayerPredictionRequest) =>
+	predict('player-stats', model, body);
+
+export const predictTeamStat = (model: string, body: TeamPredictionRequest) =>
+	predict('team-stats', model, body);
+
+export const predictGameStat = (model: string, body: GamePredictionRequest) =>
+	predict('game-stats', model, body);

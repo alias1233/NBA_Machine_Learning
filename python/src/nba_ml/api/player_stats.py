@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from nba_ml.api.schemas import GameRequest, PredictionResponse, team_id
+from nba_ml.models import loading
 from nba_ml.models.player_stats import inference, specifications
 from nba_ml.stores import players
 
@@ -37,7 +38,7 @@ def predict_player_stat(model: str, request: PredictionRequest) -> PredictionRes
     if players.get_player(request.player_id) is None:
         raise HTTPException(404, f"No stored player has the id {request.player_id}.")
 
-    if not inference.can_load(specification):
+    if not loading.can_load(specification):
         raise HTTPException(503, f"The {specification.name} model has no published file yet.")
 
     prediction = inference.predict(

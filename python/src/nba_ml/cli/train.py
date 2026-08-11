@@ -12,11 +12,17 @@ import argparse
 from typing import Any, Callable
 
 from nba_ml.models import families
+from nba_ml.models.game_stats import specifications as game_stat_specifications
+from nba_ml.models.game_stats import training as game_stat_training
 from nba_ml.models.player_stats import specifications as player_stat_specifications
 from nba_ml.models.player_stats import training as player_stat_training
+from nba_ml.models.team_stats import specifications as team_stat_specifications
+from nba_ml.models.team_stats import training as team_stat_training
 
 TRAINERS: dict[str, Callable[..., Any]] = {
-    player_stat_specifications.MODEL_CATEGORY: player_stat_training.train
+    player_stat_specifications.MODEL_CATEGORY: player_stat_training.train,
+    team_stat_specifications.MODEL_CATEGORY: team_stat_training.train,
+    game_stat_specifications.MODEL_CATEGORY: game_stat_training.train
 }
 """
 What fits a model of each family, keyed by model category.

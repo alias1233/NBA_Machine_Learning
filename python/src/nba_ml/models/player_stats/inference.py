@@ -4,52 +4,21 @@ Running a saved player game statistics model against an upcoming game.
 This is the half that deploys. It never imports the trainer or the evaluation graphs.
 """
 
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, Collection
+from typing import Collection
 
 import torch
 
 from nba_ml.entities import Game
-from nba_ml.machine_learning import datasets, serialization, trainer
-from nba_ml.machine_learning.architectures.gru_feed_forward import GRUFeedForward
+from nba_ml.machine_learning import datasets, trainer
+from nba_ml.models import loading
 from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.models.outputs import Prediction
 from nba_ml.models.player_stats import features as stat_features
 from nba_ml.models.player_stats.specifications import (
     MAX_SEQUENCE_LENGTH,
-    SEQUENCE_SCALER,
-    STATIC_SCALER,
     PlayerStatModelSpecification
 )
 from nba_ml.stores import player_games
-
-@lru_cache(maxsize=None)
-def _load(model_file: Path) -> tuple[GRUFeedForward, dict[str, Any]]:
-    """
-    Reads a model and its scalers off disk once and keeps them, so a service answering many requests
-    pays for the read once. Predicting never writes to either.
-    """
-
-    parameters_dict = serialization.load_data_from_file(model_file)
-
-    return (GRUFeedForward.load_from_saved_parameters_dict(parameters_dict), parameters_dict)
-
-def can_load(specification: PlayerStatModelSpecification) -> bool:
-    """
-    Whether this model has a file that can actually be read.
-
-    A specification can name a model that was never trained, or one saved by code old enough that the
-    file no longer loads. A caller serving requests checks here rather than failing part way through
-    a prediction. The load is cached, so a model that works costs nothing to check.
-    """
-
-    try:
-        _load(specification.model_file())
-    except Exception:
-        return False
-
-    return True
 
 def team_of(player_id: int, game: Game) -> int:
     """
@@ -102,7 +71,7 @@ def predict(
     if target_player_team_id is None:
         target_player_team_id = team_of(target_player_id, target_game)
 
-    model, parameters_dict = _load(model_specs.model_file())
+    model, parameters_dict = loading.load(model_specs.model_file())
 
     player_game_sequences, samples = stat_features.get_inference_data(
         model_specs.get_feature_set(),
@@ -118,8 +87,8 @@ def predict(
         player_game_sequences,
         samples,
         MAX_SEQUENCE_LENGTH,
-        parameters_dict[SEQUENCE_SCALER],
-        parameters_dict[STATIC_SCALER]
+        parameters_dict[loading.SEQUENCE_SCALER],
+        parameters_dict[loading.STATIC_SCALER]
     )
 
     predictions = trainer.predict(
@@ -134,5 +103,5 @@ def predict(
     # build found behind it.
     return Prediction(
         values=predicted_probabilities.tolist()[0],
-        past_games=int(samples.sequence_end_indices[0])
+        past_games=int(samples.sequence_end_indices[0, 0])
     )

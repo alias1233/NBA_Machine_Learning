@@ -41,24 +41,56 @@ export function flow(node: Element, { duration = MOTION } = {}): TransitionConfi
 }
 
 /**
- * Holds a container at the height of its contents, so a swap inside it flows rather than changing
- * size in one frame. The first child is measured, because the container is what the height is
- * written to, and the container carries the height transition in its own stylesheet.
+ * Holds a container at the height of its only child, so a swap inside it flows rather than changing
+ * size in one frame. It owns the motion of everything under it, so nothing inside one carries a
+ * height transition of its own. The caller says what its overflow does and nothing else.
+ *
+ * One of these inside another follows the inner one frame by frame rather than chasing it, because
+ * a transition of its own would trail the growth and clip whatever sits below.
  */
 export function flowingHeight(node: HTMLElement) {
 	const content = node.firstElementChild;
 
 	if (!content) return;
 
-	// The first write is `auto` to a length, which does not interpolate, so the opening size lands
-	// rather than flowing out of nothing.
+	node.style.transitionProperty = 'height';
+	node.style.transitionDuration = 'var(--motion)';
+	node.style.transitionTimingFunction = 'var(--ease-in)';
+
+	// The child is measured rather than the container, because the container is what the height is
+	// written to. The first write is `auto` to a length, which does not interpolate, so the opening
+	// size lands rather than flowing out of nothing.
 	const observer = new ResizeObserver(([entry]) => {
-		node.style.height = `${entry.borderBoxSize[0].blockSize}px`;
+		const { paddingTop, paddingBottom } = getComputedStyle(node);
+		const padding = parseFloat(paddingTop) + parseFloat(paddingBottom);
+
+		node.style.height = `${entry.borderBoxSize[0].blockSize + padding}px`;
 	});
 
 	observer.observe(content);
 
-	return { destroy: () => observer.disconnect() };
+	let following: ReturnType<typeof setTimeout>;
+
+	// A timer rather than a matching end event, because a container removed part way through its
+	// flow never reports one and this one would stay instant for good.
+	function follow(event: TransitionEvent) {
+		if (event.target === node || event.propertyName !== 'height') return;
+
+		node.style.transitionDuration = '0s';
+
+		clearTimeout(following);
+		following = setTimeout(() => (node.style.transitionDuration = 'var(--motion)'), MOTION);
+	}
+
+	node.addEventListener('transitionrun', follow);
+
+	return {
+		destroy: () => {
+			observer.disconnect();
+			clearTimeout(following);
+			node.removeEventListener('transitionrun', follow);
+		}
+	};
 }
 
 /** A floating panel arriving. It changes nothing under it, so it fades where it stands. */

@@ -29,11 +29,20 @@ export type Roster = {
  * A model does not have to answer with a distribution, so `kind` is what says how to read the
  * values. A shape the site cannot draw is a shape it does not offer.
  *
+ * An integer distribution counts up from `minimum_value` in steps of `bucket_width`. At a width of
+ * one each value gets its own chance. Above one a position covers that many whole numbers, which is
+ * what a model with too few games to fill a class per outcome answers with.
+ *
  * A category distribution lists its categories most notable first, so a reading leads with the
  * first one. For a yes or no answer that is the chance of yes.
  */
 export type ModelOutput =
-	| { kind: 'integer_distribution'; minimum_value: number; outcomes: number }
+	| {
+			kind: 'integer_distribution';
+			minimum_value: number;
+			outcomes: number;
+			bucket_width: number;
+	  }
 	| { kind: 'category_distribution'; categories: string[] }
 	| { kind: 'values'; quantities: string[] };
 
@@ -98,10 +107,25 @@ export type Scenario = {
 	returning: number[];
 };
 
-export type PredictionRequest = {
+export type PlayerPredictionRequest = {
 	player_id: number;
 	game: GameRequest;
 	/** The player's team. Only needed when they have just moved and no game records it yet. */
 	player_team?: string;
 	scenario?: Scenario;
+};
+
+/** A team statistic belongs to one side of the game, so a request names which side. */
+export type TeamPredictionRequest = {
+	/** A tricode such as LAL, or a full team name. */
+	team: string;
+	game: GameRequest;
+};
+
+/**
+ * A game statistic names no team. Anything with a direction is the home team's, so a positive point
+ * differential is the home team's margin.
+ */
+export type GamePredictionRequest = {
+	game: GameRequest;
 };
