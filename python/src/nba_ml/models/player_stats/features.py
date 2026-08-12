@@ -3,10 +3,16 @@ Turning the stored box scores into the inputs a player game statistics model rea
 
 The same feature build runs for training and for a prediction, so a predicted game is fed through it
 as one more row rather than assembled by hand.
+
+A prediction reads that build in two pieces, because only one of them depends on the request. The
+games behind the predicted one are the whole league's and the same for every request, so a job builds
+them once and every request shares them. See feature_engineering/feature_store.py. The predicted
+game's own row is assembled per request, out of the state the player, their team mates and both teams
+leave behind, and out of the roster the request named.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from enum import Enum
 from typing import Any, Collection, Iterable
@@ -16,11 +22,14 @@ import numpy as np
 
 from nba_ml import season
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import game_columns, rolling
+from nba_ml.feature_engineering import feature_store, game_columns, rolling, situations
+from nba_ml.feature_engineering.feature_store import FeatureBuild, SubjectSequences
 from nba_ml.feature_engineering.rolling import RollingCategory
+from nba_ml.feature_engineering.situations import SituationalStat
 from nba_ml.feature_engineering.samples import (
     OUTPUT,
     GameHistory,
+    SequenceToRead,
     build_inference_sample,
     build_split_samples,
     split_into_histories
@@ -37,6 +46,19 @@ RECENT_FORM_HALFLIFE = 1
 
 # How much history a prediction reads out of the databases.
 HISTORICAL_WINDOW_LENGTH_YEARS = 5
+
+BUILD_NAME = "player_stats"
+"""Names the directory this family's published whole-league builds are kept under."""
+
+ROSTER_GAMES_READ = game_columns.CORE_ROTATION_WINDOW
+"""
+How many of the team's last games a prediction reads the whole roster of.
+
+The absent core teammate columns measure the roster of the predicted game against what the team
+usually had available over its last CORE_ROTATION_WINDOW games. Every player who appeared in one of
+them therefore has to be built alongside the player being predicted, or those columns would total a
+thinner team than the one the model was trained on.
+"""
 
 # How far back the long window player columns read. A fixed number of games rather than a whole
 # career, so a prediction reading only HISTORICAL_WINDOW_LENGTH_YEARS builds what training built.
@@ -93,6 +115,13 @@ class TargetStatColumns():
     Only derived stats need listing here, since a raw box score column is always covered.
     """
 
+    situational_stats: tuple[str, ...] = ()
+    """
+    Player stats to read in games like the one being predicted, on top of the always on ones. See
+    feature_engineering/situations.py. Each one is given a recent average whether it asked for one or
+    not, since that is what a situational reading is measured against.
+    """
+
     opponent_allowed_team_stats: tuple[str, ...] = ()
     """Team stats to measure against the team's own recent average, then average per opponent."""
 
@@ -113,6 +142,7 @@ class TargetStat(Enum):
         ),
         career_stats=(game_columns.POINTS,),
         player_recent_mean_stats=(game_columns.POINTS,),
+        situational_stats=(game_columns.POINTS,),
         opponent_allowed_team_stats=(
             game_columns.POINTS,
             team_games.TURNOVERS.category_name,
@@ -141,6 +171,7 @@ class TargetStat(Enum):
             player_games.DEFENSIVE_REBOUNDS.category_name,
         ),
         player_recent_mean_stats=(game_columns.REBOUNDS,),
+        situational_stats=(game_columns.REBOUNDS,),
         opponent_allowed_team_stats=(
             team_games.OFFENSIVE_REBOUNDS.category_name,
             team_games.DEFENSIVE_REBOUNDS.category_name,
@@ -162,6 +193,7 @@ class TargetStat(Enum):
             player_games.THREE_POINTERS_MADE.category_name + game_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.ASSISTS.category_name,),
+        situational_stats=(player_games.ASSISTS.category_name,),
         opponent_allowed_team_stats=(
             team_games.ASSISTS.category_name,
             team_games.TURNOVERS.category_name,
@@ -183,6 +215,7 @@ class TargetStat(Enum):
             team_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.THREE_POINTERS_MADE.category_name,),
+        situational_stats=(player_games.THREE_POINTERS_MADE.category_name,),
         opponent_allowed_team_stats=(
             team_games.THREE_POINTERS_ATTEMPTED.category_name,
             team_games.THREE_POINTERS_MADE.category_name,
@@ -200,6 +233,7 @@ class TargetStat(Enum):
             team_games.TURNOVERS.category_name + game_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.STEALS.category_name,),
+        situational_stats=(player_games.STEALS.category_name,),
         opponent_allowed_team_stats=(
             team_games.STEALS.category_name,
             team_games.TURNOVERS.category_name,
@@ -214,6 +248,7 @@ class TargetStat(Enum):
             team_games.BLOCKS.category_name + game_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.BLOCKS.category_name,),
+        situational_stats=(player_games.BLOCKS.category_name,),
         opponent_allowed_team_stats=(
             team_games.BLOCKS.category_name,
             team_games.FIELD_GOALS_ATTEMPTED.category_name,
@@ -229,6 +264,7 @@ class TargetStat(Enum):
             team_games.TURNOVERS.category_name + game_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.TURNOVERS.category_name,),
+        situational_stats=(player_games.TURNOVERS.category_name,),
         opponent_allowed_team_stats=(
             team_games.TURNOVERS.category_name,
             team_games.STEALS.category_name,
@@ -333,6 +369,29 @@ OPPONENT_ALLOWED_TEAM_STATS_ALWAYS = [
 ]
 CAREER_STATS_ALWAYS: list[str] = []
 
+# Minutes are read in every situation, whatever the model predicts, because a player who plays less
+# against one team or in one phase of the season does less of everything.
+SITUATIONAL_STATS_ALWAYS = [player_games.MINUTES_PLAYED.category_name]
+
+SITUATIONS = list(situations.ALL_SITUATIONS)
+"""
+Which kinds of game a player's own form is read in. See feature_engineering/situations.py.
+
+All three, unlike the team build, which measured nothing in a team's form against the side it faces.
+A player facing one defence again is a likelier thing to matter than a roster facing another roster.
+It is still the weakest of the three here, so it is the first to cut if this build is ever trimmed.
+"""
+
+TEAM_FRAME_COLUMNS = {
+    category.category_name for category in team_games.ALL_CATEGORIES.get_categories()
+} | {game_columns.POINTS, game_columns.REBOUNDS, game_columns.POSSESSIONS}
+"""
+The columns the team frame holds under a name the player frame also uses.
+
+Merging the two suffixes every one of them, so a player column named here is only reachable under
+the player suffix afterwards.
+"""
+
 # The whole box score, averaged over the player's recent games. This is also what the core teammate
 # columns total, so a stat here says what the player brings and what the players around them bring.
 PLAYER_RECENT_MEAN_STATS_ALWAYS = [
@@ -368,6 +427,9 @@ class FeatureSet():
     """How those columns become that one value."""
 
     player_rolling_categories: list[RollingCategory]
+
+    situational_stats: list[SituationalStat]
+    """What a player's form in games like this one is read over. See feature_engineering/situations.py."""
 
     core_teammate_stat_columns: list[str]
     """Recent player averages to total over the core teammates a team gained, lost and is missing."""
@@ -419,8 +481,14 @@ def build_feature_set(
         return sorted(set(always).union(*selected))
 
     career_stats = gather(CAREER_STATS_ALWAYS, [spec.career_stats for spec in specifications])
+    situational_stat_names = gather(
+        SITUATIONAL_STATS_ALWAYS,
+        [spec.situational_stats for spec in specifications]
+    )
+    # A situational reading is measured against a recent average, so anything read in a situation
+    # gets one whether it asked for one or not.
     player_recent_mean_stats = gather(
-        PLAYER_RECENT_MEAN_STATS_ALWAYS,
+        PLAYER_RECENT_MEAN_STATS_ALWAYS + situational_stat_names,
         [spec.player_recent_mean_stats for spec in specifications]
     )
     opponent_allowed_team_stats = gather(
@@ -477,21 +545,37 @@ def build_feature_set(
     core_teammate_stat_columns = [category.column_name for category in player_mean_categories]
     core_teammate_columns = game_columns.get_core_teammate_columns(core_teammate_stat_columns)
 
+    # How much the opponent lets teams beat their own averages is read off the game being predicted
+    # and not off each past game. Measured on 2026-08-11: shuffling those ten columns away inside the
+    # sequence made the model very slightly better, and leaving them out of it cost nothing.
     sequence_columns = sorted(set(
         SEQUENCE_STATS_ALWAYS
         + [stat for spec in specifications for stat in spec.sequence_stats]
-        + [category.column_name for category in opponent_allowed_team_categories]
         + [opponent_record_column]
         + core_teammate_columns
     ))
 
     # The player's own recent average of each targeted stat. Recent form is the strongest single
     # predictor here, and without this the model would have to rebuild it from the raw past games.
-    team_rolling_column_names = {category.column_name for category in team_allowed_mean_categories}
+    merged_team_columns = (
+        {category.column_name for category in team_allowed_mean_categories} | TEAM_FRAME_COLUMNS
+    )
     recent_form_columns = [
-        _column_name_after_merge(category.column_name, team_rolling_column_names)
+        _column_name_after_merge(category.column_name, merged_team_columns)
         for category in player_mean_categories + player_weighted_mean_categories
     ]
+
+    # Read off the merged frame, because the player's own games are only reachable there once the
+    # team's row is beside them.
+    situational_stats = [
+        SituationalStat(
+            stat,
+            _column_name_after_merge(stat, merged_team_columns),
+            _column_name_after_merge(PAST_MEAN_PREFIX + stat, merged_team_columns)
+        )
+        for stat in situational_stat_names
+    ]
+    situational_columns = situations.all_columns(SITUATIONS, situational_stats)
 
     static_columns = sorted(set(
         STATIC_STATS_ALWAYS
@@ -499,6 +583,7 @@ def build_feature_set(
         + [category.column_name for category in opponent_allowed_team_categories]
         + [opponent_record_column]
         + recent_form_columns
+        + situational_columns
         + core_teammate_columns
     ))
 
@@ -506,6 +591,7 @@ def build_feature_set(
         output_columns=sorted({spec.output_column for spec in specifications}),
         combination=combination,
         player_rolling_categories=career_categories + player_mean_categories + player_weighted_mean_categories,
+        situational_stats=situational_stats,
         core_teammate_stat_columns=core_teammate_stat_columns,
         team_rolling_categories=team_allowed_mean_categories,
         team_difference_columns=team_difference_columns,
@@ -722,7 +808,7 @@ def _preprocess_team_game_data(
         group_by_column=opponent_team_id_column
     )
 
-def _preprocess_game_data(
+def build_histories(
         features: FeatureSet,
         player_info: pd.DataFrame,
         player_game_data: pd.DataFrame,
@@ -731,6 +817,9 @@ def _preprocess_game_data(
         ) -> dict[int, GameHistory]:
     """
     Turns the raw tables into one finished history per player.
+
+    Every column is either read off the row itself or off the rows in front of it, so a placeholder
+    row standing for a game not yet played comes out of this filled the same way a played game does.
 
     The given frames are not modified, so this can be called more than once on the same data.
     """
@@ -793,6 +882,14 @@ def _preprocess_game_data(
         by=[player_games.PLAYER_ID.category_name, team_games.GAME_DATE.category_name]
         ).reset_index(drop=True)
 
+    # After the merge, because what makes a game the same kind of game is on the team's row.
+    player_team_game_data = situations.add_columns(
+        player_team_game_data,
+        player_games.PLAYER_ID.category_name,
+        SITUATIONS,
+        features.situational_stats
+    )
+
     player_team_game_data[OUTPUT] = features.combination.combine(
         player_team_game_data[features.output_columns]
     )
@@ -813,24 +910,65 @@ def _preprocess_game_data(
 
     return histories
 
-def _get_all_preprocessed_game_data(
+def _read_player_info() -> pd.DataFrame:
+    """
+    What is stored about every player, which every build reads all of.
+
+    Nobody is left out. Unknown heights and weights are filled with the league's own average, so a
+    shorter list would move that average, and a player missing here is dropped from the game data
+    entirely, which would leave the core teammate columns totalling a thinner roster. The name is
+    dropped because it is held for search and display, and a player without one must not fall out.
+    """
+
+    player_info: pd.DataFrame = players.get_all_players_info().drop(
+        columns=[players.PLAYER_NAME.category_name]
+    )
+
+    return player_info.dropna()
+
+def _read_team_games(window_start_date: date | None) -> pd.DataFrame:
+    """Every team game inside the window, or every one stored where there is no window."""
+
+    team_game_data: pd.DataFrame = (
+        team_games.get_all_team_game_data() if window_start_date is None
+        else team_games.get_game_data_after_date(window_start_date)
+    )
+
+    return team_game_data.dropna()
+
+# THE WHOLE LEAGUE: #
+def build_league_histories(
         features: FeatureSet,
+        window_start_date: date | None = None,
         print_debug: bool = False
     ) -> dict[int, GameHistory]:
+    """
+    Builds one finished history per player out of everything stored, or out of a window of it.
+
+    This is the expensive half of a prediction and comes out the same for every request, so a job
+    runs it once and the service reads what it produced.
+
+    Args:
+        window_start_date drops every game played before it. A build over everything stored peaks
+        above what the server has, and every window these columns read fits inside a few seasons, so
+        the server builds the window it serves and only training reads the whole archive.
+    """
 
     if print_debug:
         print("Querying data from databases...")
 
-    all_player_info: pd.DataFrame = players.get_all_players_info().drop(columns=[players.PLAYER_NAME.category_name])
-    all_player_info = all_player_info.dropna()
+    all_player_game_data: pd.DataFrame = (
+        player_games.get_all_player_game_data() if window_start_date is None
+        else player_games.get_game_data_after_date(window_start_date)
+    )
 
-    all_player_game_data: pd.DataFrame = player_games.get_all_player_game_data()
-    all_player_game_data = all_player_game_data.dropna()
-
-    all_team_game_data: pd.DataFrame = team_games.get_all_team_game_data()
-    all_team_game_data = all_team_game_data.dropna()
-
-    return _preprocess_game_data(features, all_player_info, all_player_game_data, all_team_game_data, print_debug)
+    return build_histories(
+        features,
+        _read_player_info(),
+        all_player_game_data.dropna(),
+        _read_team_games(window_start_date),
+        print_debug
+    )
 
 # TRAINING DATA: #
 def get_all_labeled_data(
@@ -852,7 +990,7 @@ def get_all_labeled_data(
         (games of every player, training samples, validation samples, test samples)
     """
 
-    histories = _get_all_preprocessed_game_data(features, print_debug)
+    histories = build_league_histories(features, print_debug=print_debug)
 
     if print_debug:
         print("Arranging data into training chunks...")
@@ -862,7 +1000,7 @@ def get_all_labeled_data(
         (validation_split_start_date, test_split_start_date),
         MINIMUM_PAST_GAMES,
         chunk_step_size,
-        print_debug
+        print_debug=print_debug
     )
 
     if print_debug:
@@ -870,23 +1008,158 @@ def get_all_labeled_data(
 
     return (player_game_sequences, training, validation, test)
 
-# INFERENCE: #
-def _check_player_can_be_read(
-    target_player_id: int,
-    player_info: pd.DataFrame,
-    recorded_games: int
-    ):
-    """
-    Refuses a player the feature build cannot answer for, before the 38 second build runs.
+# THE GAME BEING PREDICTED: #
+@dataclass(frozen=True)
+class TargetGameRow():
+    """The row standing for the game being predicted, built from the state behind it."""
 
-    _preprocess_player_game_data keeps only players the databases hold information about, and a model
-    reads a sequence of their earlier games that cannot be empty. Left to itself a player missing
-    either is simply absent at the end, so this says why instead.
+    static_input: np.ndarray
+    """Everything read off the game being predicted, plus the player's own information."""
+
+    opponent_team_id: int
+    """Who the player faces, which is what marks those games inside the sequence beside this row."""
+
+def _window_start_date(build: FeatureBuild | None, target_game: Game) -> date | None:
+    """
+    How far back a prediction reads, and None where it reads everything stored.
+
+    A published build decides it, so the games behind the predicted one and the predicted game's own
+    row describe the same stretch of history. Without one, the request reads the years behind the
+    game it is about.
+    """
+
+    if build is not None:
+        return build.window_start_date
+
+    return target_game.date - relativedelta(years=HISTORICAL_WINDOW_LENGTH_YEARS)
+
+def _placeholder_game_id(target_game: Game) -> str:
+    """
+    What the game being predicted is filed under, which no played game can collide with.
+
+    A real game id is ten digits and this is the one character naming the season phase, which is how
+    every other game in the data says which phase it belongs to.
+    """
+
+    return game_columns.SEASON_ENCODINGS[target_game.season_type.value]
+
+def _matchup(target_game: Game, team_id: int) -> str:
+    """How the raw data writes which side of a game a row belongs to."""
+
+    return (
+        game_columns.HOME_OR_AWAY_ENCODING[game_columns.HOME]
+        if target_game.is_home(team_id)
+        else game_columns.HOME_OR_AWAY_ENCODING[game_columns.AWAY]
+    )
+
+def _placeholder_player_rows(
+    playing_player_ids: Collection[int],
+    returning_player_ids: Collection[int],
+    team_id: int,
+    target_game: Game
+    ) -> pd.DataFrame:
+    """
+    One row per player expected to play, holding only what is known before the game.
+
+    Minutes stand in for being on the floor at all. A player named as returning is given more than
+    the core cutoff, so the roster columns count them as core in a game nobody has played yet.
+    """
+
+    known = {
+        player_games.TEAM_ID.category_name: team_id,
+        player_games.GAME_DATE.category_name: season.to_date_string(target_game.date),
+        player_games.GAME_ID.category_name: _placeholder_game_id(target_game),
+        player_games.MATCHUP.category_name: _matchup(target_game, team_id)
+    }
+    returning = set(returning_player_ids)
+
+    return pd.DataFrame([
+        {
+            **known,
+            player_games.PLAYER_ID.category_name: player_id,
+            player_games.MINUTES_PLAYED.category_name: (
+                game_columns.CORE_PLAYER_MINUTES_CUTOFF + 1 if player_id in returning else 1
+            )
+        }
+        for player_id in playing_player_ids
+    ])
+
+def _placeholder_team_rows(target_game: Game, team_ids: Iterable[int]) -> pd.DataFrame:
+    """One row per side of the game being predicted, holding only what is known before it."""
+
+    def row(team_id: int) -> dict[str, Any]:
+        return {
+            team_games.TEAM_ID.category_name: team_id,
+            team_games.GAME_DATE.category_name: season.to_date_string(target_game.date),
+            team_games.GAME_ID.category_name: _placeholder_game_id(target_game),
+            team_games.MATCHUP.category_name: _matchup(target_game, team_id)
+        }
+
+    return pd.DataFrame([row(team_id) for team_id in team_ids])
+
+def _recent_team_games(
+    team_game_data: pd.DataFrame,
+    team_id: int,
+    before: date
+    ) -> pd.DataFrame:
+    """
+    The team's games before the one being predicted, oldest first.
+
+    Games after it are left out rather than the team's latest game being taken outright, so that a
+    game inside recorded history is never built from a roster that only existed later. That reads as
+    roster changes that never happened.
+    """
+
+    played = team_game_data[
+        (team_game_data[team_games.TEAM_ID.category_name] == team_id)
+        & (team_game_data[team_games.GAME_DATE.category_name] < season.to_date_string(before))
+    ]
+
+    return played.sort_values(by=team_games.GAME_DATE.category_name)
+
+def build_target_game_row(
+    features: FeatureSet,
+    target_player_id: int,
+    target_player_team_id: int,
+    target_game: Game,
+    removed_core_teammate_player_ids: Collection[int],
+    added_core_teammate_player_ids: Collection[int],
+    window_start_date: date | None,
+    print_debug: bool = False
+    ) -> TargetGameRow:
+    """
+    Builds the one row standing for the game being predicted.
+
+    The row is fed through the same build every played game goes through, so rest, break length and
+    every average on it come from the games in front of it rather than from anything assembled by
+    hand. That is only the player's real rest while the databases are current, so collect before
+    predicting.
+
+    Only what that row reads is built: the player, the team mates whose recent form its roster
+    columns total, and both teams. The rest of the league leaves this row untouched, which is what
+    makes it the small half of a prediction. The games behind it are the other half, and they are the
+    whole league's, so they come from a build every request shares.
 
     Args:
-        recorded_games is how many games the player has stored, all of which came before the game
-        being predicted.
+        removed_core_teammate_player_ids are core players from the team's last game who are out for
+        this one. added_core_teammate_player_ids are the reverse, players expected back in. Core
+        means the minutes cutoff in game_columns.
+        window_start_date is how far back to read, and None reads everything stored. It comes from
+        the build the games behind this row came from, so both halves describe the same history.
+
+    Raises:
+        PredictionRefused where nothing is stored about the player, or where the team has no earlier
+        recorded game to read a roster and a form off.
     """
+
+    if print_debug:
+        print("Querying data from databases...")
+
+    # Read now, so a team that is not playing in this game is refused here rather than part way
+    # through a build.
+    opponent_team_id = target_game.opponent_of(target_player_team_id)
+
+    player_info = _read_player_info()
 
     if target_player_id not in player_info[players.PLAYER_ID.category_name].values:
         raise PredictionRefused(
@@ -894,54 +1167,30 @@ def _check_player_can_be_read(
             f"Nothing is stored about player {target_player_id} themselves, which every model reads."
         )
 
-    if recorded_games < MINIMUM_PAST_GAMES:
+    team_game_data = _read_team_games(window_start_date)
+    recent_team_games = _recent_team_games(team_game_data, target_player_team_id, target_game.date)
+
+    if recent_team_games.empty:
         raise PredictionRefused(
-            Refusal.TOO_FEW_GAMES,
-            f"Player {target_player_id} has {recorded_games} recorded games, and a prediction reads "
-            f"at least {MINIMUM_PAST_GAMES}."
+            Refusal.NO_TEAM_HISTORY,
+            f"Team {target_player_team_id} has no recorded game before {season.to_date_string(target_game.date)}."
         )
 
-def _get_inference_player_game_data(
-    features: FeatureSet,
-    target_player_id: int,
-    target_player_team_id: int,
-    target_game: Game,
-    removed_core_teammate_player_ids: Collection[int],
-    added_core_teammate_player_ids: Collection[int],
-    print_debug: bool = False
-    ) -> tuple[GameHistory, int]:
-    """
-    Builds every game played by the target player, ending with a placeholder row holding what is
-    already known about the game being predicted.
-
-    The placeholder is fed through the same feature build as every other game, so rest and long
-    break come from the gap between the target game's date and the player's last recorded game. That
-    is only the player's real rest while the databases are current, so collect before predicting.
-
-    Args:
-        removed_core_teammate_player_ids are core players from the team's last game who are out for
-        this one. added_core_teammate_player_ids are the reverse, players expected back in. Core
-        means the minutes cutoff in game_columns.
-
-    Returns:
-        (the target player's history, the position of the predicted game within it)
-    """
-
     if print_debug:
-        print("Querying data from databases...")
+        print("Reading the roster around the player...")
 
-    target_player_opponent_team_id = target_game.opponent_of(target_player_team_id)
-    historical_window_start_date = target_game.date - relativedelta(years=HISTORICAL_WINDOW_LENGTH_YEARS)
+    recent_game_ids = recent_team_games[team_games.GAME_ID.category_name]
+    roster_player_ids = player_games.player_ids_in_games(
+        target_player_team_id,
+        recent_game_ids.tail(ROSTER_GAMES_READ).tolist()
+    )
+    roster_player_ids |= set(added_core_teammate_player_ids)
+    roster_player_ids.add(target_player_id)
 
-    # Every player is read, not just the ones still active in the window. A player missing from here
-    # is dropped from the game data entirely, which would leave the core teammate columns totalling
-    # a smaller roster than the one the model was trained on. The name is dropped because it is held
-    # for search and display, and a player without one must not fall out of the data.
-    player_info: pd.DataFrame = players.get_all_players_info().drop(columns=[players.PLAYER_NAME.category_name])
-    player_info = player_info.dropna()
-
-    player_game_data: pd.DataFrame = player_games.get_game_data_after_date(historical_window_start_date)
-    player_game_data = player_game_data.dropna()
+    player_game_data: pd.DataFrame = player_games.get_players_game_data(
+        roster_player_ids,
+        window_start_date
+    ).dropna()
 
     # The target player's whole history is read rather than just the window, because their long
     # window columns are model inputs and a slice of a career would not match what training built.
@@ -951,125 +1200,114 @@ def _get_inference_player_game_data(
         subset=[player_games.PLAYER_ID.category_name, player_games.GAME_ID.category_name]
     )
 
-    _check_player_can_be_read(target_player_id, player_info, len(target_player_game_data))
-
-    team_game_data: pd.DataFrame = team_games.get_game_data_after_date(historical_window_start_date)
-    team_game_data = team_game_data.dropna()
-
-    if print_debug:
-        print("Getting previous game player ids...")
-
-    target_game_date_str = season.to_date_string(target_game.date)
-
-    # Get all player ids that played for the target team in the last game it played before this one.
-    # Reading its latest game outright would build a game inside recorded history from a roster that
-    # only existed later, which makes the core teammate columns read as changes on their own.
-    previous_team_games = team_game_data[
-        (team_game_data[team_games.TEAM_ID.category_name] == target_player_team_id)
-        & (team_game_data[team_games.GAME_DATE.category_name] < target_game_date_str)
-    ]
-
-    if previous_team_games.empty:
-        raise PredictionRefused(
-            Refusal.NO_TEAM_HISTORY,
-            f"Team {target_player_team_id} has no recorded game before {target_game_date_str}."
-        )
-
-    previous_game_data = previous_team_games.sort_values(
-        by=team_games.GAME_DATE.category_name
-    ).iloc[-1]
-    previous_game_id = previous_game_data[team_games.GAME_ID.category_name]
-    previous_team_id = previous_game_data[team_games.TEAM_ID.category_name]
-    previous_game_team_player_ids: set[int] = set(
+    previous_game_player_ids = set(
         player_game_data[
-        (player_game_data[player_games.TEAM_ID.category_name] == previous_team_id)
-        & (player_game_data[player_games.GAME_ID.category_name] == previous_game_id)
-        ]
-        [player_games.PLAYER_ID.category_name]
+            (player_game_data[player_games.TEAM_ID.category_name] == target_player_team_id)
+            & (player_game_data[player_games.GAME_ID.category_name] == recent_game_ids.iloc[-1])
+        ][player_games.PLAYER_ID.category_name]
     )
-    target_game_team_player_ids = (
-        previous_game_team_player_ids.union(added_core_teammate_player_ids)
+    playing_player_ids = (
+        previous_game_player_ids.union(added_core_teammate_player_ids)
         .difference(removed_core_teammate_player_ids)
     )
-    target_game_team_player_ids.add(target_player_id)
-
-    # The placeholder game is given the id prefix of its season phase, which is how every other game
-    # in the data says which phase it belongs to.
-    target_game_placeholder_id = game_columns.SEASON_ENCODINGS[target_game.season_type.value]
-
-    target_game_matchup: str = (
-        game_columns.HOME_OR_AWAY_ENCODING[game_columns.HOME]
-        if target_game.is_home(target_player_team_id)
-        else game_columns.HOME_OR_AWAY_ENCODING[game_columns.AWAY]
-    )
+    playing_player_ids.add(target_player_id)
 
     if print_debug:
         print("Creating placeholder rows...")
 
-    predicted_game_known_info_player_game_data_row: dict[str, Any] = {
-        player_games.TEAM_ID.category_name : target_player_team_id,
-        player_games.GAME_DATE.category_name : target_game_date_str,
-        player_games.GAME_ID.category_name : target_game_placeholder_id,
-        player_games.MINUTES_PLAYED.category_name : 1,
-        player_games.MATCHUP.category_name : target_game_matchup
-    }
-    predicted_game_known_info_player_game_data_rows = []
-
-    for player_id in target_game_team_player_ids:
-        predicted_game_known_info_player_teammate_game_data_row = predicted_game_known_info_player_game_data_row.copy()
-        predicted_game_known_info_player_teammate_game_data_row[player_games.PLAYER_ID.category_name] = player_id
-
-        if player_id in added_core_teammate_player_ids:
-            predicted_game_known_info_player_teammate_game_data_row[player_games.MINUTES_PLAYED.category_name] = game_columns.CORE_PLAYER_MINUTES_CUTOFF + 1
-
-        predicted_game_known_info_player_game_data_rows.append(predicted_game_known_info_player_teammate_game_data_row)
-
-    predicted_game_known_info_player_game_data = pd.DataFrame(predicted_game_known_info_player_game_data_rows)
-    player_game_data = pd.concat([player_game_data, predicted_game_known_info_player_game_data], ignore_index=True)
-
-    predicted_game_known_info_team_game_data_row = {
-        team_games.TEAM_ID.category_name : target_player_team_id,
-        team_games.GAME_DATE.category_name : target_game_date_str,
-        team_games.GAME_ID.category_name : target_game_placeholder_id,
-        team_games.MATCHUP.category_name : target_game_matchup
-    }
-    predicted_game_known_info_opponent_team_game_data_row = predicted_game_known_info_team_game_data_row.copy()
-    predicted_game_known_info_opponent_team_game_data_row[team_games.TEAM_ID.category_name] = target_player_opponent_team_id
-    predicted_game_known_info_team_game_data = pd.DataFrame(
-        [predicted_game_known_info_team_game_data_row, predicted_game_known_info_opponent_team_game_data_row]
-        )
-    team_game_data = pd.concat([team_game_data, predicted_game_known_info_team_game_data], ignore_index=True)
+    player_game_data = pd.concat(
+        [
+            player_game_data,
+            _placeholder_player_rows(
+                playing_player_ids,
+                added_core_teammate_player_ids,
+                target_player_team_id,
+                target_game
+            )
+        ],
+        ignore_index=True
+    )
+    team_game_data = pd.concat(
+        [
+            team_game_data,
+            _placeholder_team_rows(target_game, (target_player_team_id, opponent_team_id))
+        ],
+        ignore_index=True
+    )
 
     if print_debug:
         print("Processing data...")
 
-    histories = _preprocess_game_data(features, player_info, player_game_data, team_game_data)
+    histories = build_histories(features, player_info, player_game_data, team_game_data)
     history = histories.get(target_player_id)
 
-    # _check_player_can_be_read covers why this happens, so reaching here means the build dropped the
-    # player for a reason that check does not know about yet.
     if history is None:
-        raise PredictionRefused(
-            Refusal.TOO_FEW_GAMES,
-            f"The feature build produced no games for player {target_player_id}."
+        raise ValueError(f"The feature build produced no games for player {target_player_id}.")
+
+    found = np.flatnonzero(history.game_ids == _placeholder_game_id(target_game))
+
+    if len(found) != 1:
+        raise ValueError(
+            f"Expected exactly one placeholder game for player {target_player_id}, found {len(found)}."
         )
 
-    target_indices = np.flatnonzero(history.game_ids == target_game_placeholder_id)
-    if len(target_indices) != 1:
-        raise ValueError(f"Expected exactly one placeholder game for player {target_player_id}, found {len(target_indices)}.")
+    target_index = int(found[0])
 
-    target_index = int(target_indices[0])
+    return TargetGameRow(
+        history.static_input(target_index),
+        int(history.opponent_team_ids[target_index])
+    )
 
-    # A game only survives the build with a team row beside it, so a player whose games all fall
-    # outside the window read above arrives here with nothing in front of the placeholder.
-    if target_index < MINIMUM_PAST_GAMES:
-        raise PredictionRefused(
-            Refusal.TOO_FEW_GAMES,
-            f"The build found {target_index} games for player {target_player_id} before "
-            f"{target_game_date_str}, and a prediction reads at least {MINIMUM_PAST_GAMES}."
+# THE GAMES BEHIND IT: #
+def _read_past_games(
+    features: FeatureSet,
+    target_player_id: int,
+    target_game: Game,
+    build: FeatureBuild | None,
+    print_debug: bool = False
+    ) -> SubjectSequences:
+    """
+    The player's games behind the one being predicted, in the columns this model reads.
+
+    They come out of the published whole-league build, which holds every column any model of this
+    family reads, so one build answers all of them. Where nothing is published, the league is built
+    for this request instead, which is what a machine that has never run the build job has. They
+    cannot come from a smaller build: what the players around them were doing sits on every one of a
+    player's past games, so a build over a handful of players would fill those columns with a thinner
+    roster than the real one.
+
+    Raises:
+        PredictionRefused where too little sits behind the game for a sequence to be read.
+    """
+
+    if build is None:
+        history = build_league_histories(
+            features,
+            _window_start_date(None, target_game),
+            print_debug
+        ).get(target_player_id)
+        held = None if history is None else feature_store.sequences_in(history)
+
+    else:
+        found = build.subjects.get(target_player_id)
+        held = None if found is None else found.with_columns(
+            build.column_positions(features.sequence_columns)
         )
 
-    return (history, target_index)
+    games = (
+        feature_store.no_games(len(features.sequence_columns)) if held is None
+        else held.before(target_game.date)
+    )
+
+    if games.game_count < MINIMUM_PAST_GAMES:
+        raise PredictionRefused(
+            Refusal.TOO_FEW_GAMES,
+            f"The build found {games.game_count} games for player {target_player_id} before "
+            f"{season.to_date_string(target_game.date)}, and a prediction reads at least "
+            f"{MINIMUM_PAST_GAMES}."
+        )
+
+    return games
 
 def get_inference_data(
     features: FeatureSet,
@@ -1081,26 +1319,38 @@ def get_inference_data(
     print_debug: bool = False
     ) -> tuple[GameSequences, SequenceInputSamples]:
     """
-    Builds the input for one prediction: the target player's games and the single sample reading
-    them. See _get_inference_player_game_data for what the target game arguments mean.
+    Builds the input for one prediction: the games the player has played, and the single sample that
+    reads them.
+
+    The predicted game's row is built first, because it is the cheap half and it holds every reason a
+    request cannot be answered from what is stored. See build_target_game_row for what the roster
+    arguments mean.
     """
 
-    history, target_index = _get_inference_player_game_data(
+    build = feature_store.current(BUILD_NAME)
+
+    target_row = build_target_game_row(
         features,
         target_player_id,
         target_player_team_id,
         target_game,
         removed_core_teammate_player_ids,
         added_core_teammate_player_ids,
+        _window_start_date(build, target_game),
         print_debug
     )
+    past_games = _read_past_games(features, target_player_id, target_game, build, print_debug)
 
     if print_debug:
         print("Creating input chunk...")
 
-    input_data = build_inference_sample([(history, target_index)])
-
-    if print_debug:
-        print("Completed input data creation...")
-
-    return input_data
+    return build_inference_sample(
+        [
+            SequenceToRead(
+                past_games.sequence_values,
+                past_games.opponent_team_ids,
+                target_row.opponent_team_id
+            )
+        ],
+        target_row.static_input
+    )

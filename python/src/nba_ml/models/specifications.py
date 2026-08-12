@@ -7,12 +7,19 @@ service needs to list it and serve it, so nothing here limits what a model may p
 A family adds a subclass naming its category and holding whatever only that family needs.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar
 
 from nba_ml import paths
 from nba_ml.models.outputs import ModelOutput
+
+class GameSide(StrEnum):
+    """One side of a game, which is what an answer belonging to a game names."""
+
+    HOME = "home"
+    AWAY = "away"
 
 @dataclass(frozen=True)
 class ModelSpecification():
@@ -29,6 +36,31 @@ class ModelSpecification():
     name: str
     output: ModelOutput
     """The shape of an answer. See nba_ml/models/outputs.py."""
+
+    read_from: GameSide | None = field(default=None, kw_only=True)
+    """
+    Which side of the game a value above zero belongs to, for an answer with a direction.
+
+    A point differential is read off the home team's row, so a positive one is the home team's
+    margin and a caller has to say whose margin it is drawing. None where the answer names no side,
+    either because it has no direction or because the request already named the subject.
+    """
+
+    category_sides: tuple[GameSide, ...] | None = field(default=None, kw_only=True)
+    """
+    Which side of the game each category names, in the order the output lists them.
+
+    A category naming a side leads with that side's word, so a caller can put the team playing it in
+    place of the word and turn "home win" into the team's own name. None where no category names a
+    side, which is every yes or no answer.
+    """
+
+    def __post_init__(self):
+        if self.category_sides is not None and len(self.category_sides) != self.output.length:
+            raise ValueError(
+                "Naming the side of each category takes one side per category, because the two are "
+                "read together by position."
+            )
 
     @property
     def predicts(self) -> tuple[str, ...]:

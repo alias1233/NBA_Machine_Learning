@@ -16,7 +16,12 @@ import pandas as pd
 
 from nba_ml.entities import Game
 from nba_ml.feature_engineering import team_game_rows
-from nba_ml.feature_engineering.samples import GameHistory, build_inference_sample, build_split_samples
+from nba_ml.feature_engineering.samples import (
+    GameHistory,
+    build_inference_sample,
+    build_split_samples,
+    read_up_to
+)
 from nba_ml.feature_engineering.team_game_rows import FeatureSet, TargetValue
 from nba_ml.machine_learning.datasets import GameSequences, SequenceInputSamples
 from nba_ml.models.errors import PredictionRefused, Refusal
@@ -152,4 +157,12 @@ def get_inference_data(
     if print_debug:
         print("Creating input chunk...")
 
-    return build_inference_sample(sides if READS_OPPONENT_HISTORY else sides[:1])
+    named_history, named_index = sides[0]
+
+    return build_inference_sample(
+        [
+            read_up_to(history, index)
+            for history, index in (sides if READS_OPPONENT_HISTORY else sides[:1])
+        ],
+        named_history.static_input(named_index)
+    )

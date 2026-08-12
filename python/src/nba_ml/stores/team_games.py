@@ -1,6 +1,6 @@
 """One row per team per finished game, straight off the box score."""
 
-from datetime import date, datetime
+from datetime import date
 
 import pandas as pd
 
@@ -54,7 +54,7 @@ def get_all_team_game_data() -> pd.DataFrame:
 
     return data
 
-def get_game_data_after_date(date_start: datetime) -> pd.DataFrame:
+def get_game_data_after_date(date_start: date) -> pd.DataFrame:
     with DATABASE:
         data = DATABASE.query_dataframe(
             SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",

@@ -104,6 +104,7 @@ def _describe_build(
         model_specs.output.first_value,
         model_specs.output.length,
         model_specs.output.value_step,
+        model_specs.output.impossible_value,
         inputs.build_description
     )
 
@@ -170,6 +171,7 @@ def _build_datasets(
             min_output_value=model_specs.output.first_value,
             num_classifications=model_specs.output.length,
             output_value_step=model_specs.output.value_step,
+            impossible_value=model_specs.output.impossible_value,
             standardize_input=True
         )
 
@@ -262,7 +264,8 @@ def _value_scale(
         class_values=np.array([output.value_of(position) for position in range(output.length)]),
         actual_values=values,
         first_value=output.first_value,
-        value_step=output.value_step
+        value_step=output.value_step,
+        impossible_value=output.impossible_value
     )
 
 def _evaluate_saved_model(

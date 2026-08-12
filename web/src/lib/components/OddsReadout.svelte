@@ -1,5 +1,6 @@
 <!--
-	What the line settles at. Over first, then under, then push.
+	What the line settles at. Under first, then push, then over, which is the order the chart under
+	them reads from left to right.
 
 	Every answer is a sum over probabilities the page already holds, so moving the line asks the
 	server for nothing. 
@@ -38,20 +39,21 @@
 	);
 </script>
 
+<!-- data-explain names each part the About page's annotated answer runs a leader line to. -->
 <dl class:large>
-	<div class="over">
-		<dt class="micro">Over</dt>
-		<dd class="figure">{shown.over}%</dd>
-	</div>
-
-	<div class="under">
+	<div class="under" data-explain="under">
 		<dt class="micro">Under</dt>
 		<dd class="figure">{shown.under}%</dd>
 	</div>
 
-	<div class="push">
+	<div class="push" data-explain="push">
 		<dt class="micro">Push</dt>
 		<dd class="figure">{shown.push}%</dd>
+	</div>
+
+	<div class="over" data-explain="over">
+		<dt class="micro">Over</dt>
+		<dd class="figure">{shown.over}%</dd>
 	</div>
 </dl>
 
@@ -62,6 +64,13 @@
 	dl {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, var(--figure-column)));
+	}
+
+	/* The track is what holds the width. The figure inside it takes only the room its own words need,
+	   so anything measured against one of these finds the figure rather than the track around it. */
+	dl > div {
+		width: max-content;
+		max-width: 100%;
 	}
 
 	dt {

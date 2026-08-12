@@ -31,6 +31,24 @@ class ValueScale():
     value_step: int
     """How many whole numbers one class covers."""
 
+    impossible_value: int | None = None
+    """A whole number the statistic cannot take, which is therefore not on the line at all."""
+
+    def lines(self, classes: int) -> np.ndarray:
+        """
+        Every whole number the range holds, which is every line a model can be asked about.
+
+        A value that cannot happen is not one of them, so the numbers above it shift down onto the
+        ones the model does answer with and every class still covers value_step of them.
+        """
+
+        lines = self.first_value + np.arange(classes * self.value_step)
+
+        if self.impossible_value is None:
+            return lines
+
+        return np.where(lines >= self.impossible_value, lines + 1, lines)
+
 # Metrics scored during training, on batches of logits still held as tensors.
 
 def _accuracy(predictions: torch.Tensor, actuals: torch.Tensor) -> float:
@@ -141,8 +159,9 @@ def calculate_line_ranked_probability_score(
     lines are the easy ones. Lower is better.
     """
 
+    classes = predicted_probabilities.shape[1]
     per_value = np.repeat(predicted_probabilities, values.value_step, axis=1) / values.value_step
-    lines = values.first_value + np.arange(per_value.shape[1])
+    lines = values.lines(classes)
 
     # The chance of landing at or below each line, against whether it actually did.
     predicted_cumulative = np.cumsum(per_value, axis=1)

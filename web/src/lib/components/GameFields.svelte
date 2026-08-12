@@ -46,9 +46,10 @@
 			</select>
 		</div>
 
+		<!-- The home team first, which is the side the site reads a game from. -->
 		<div class="field">
-			<label class="micro" for="away">Away team</label>
-			<select id="away" name="away" bind:value={awayTeam}>
+			<label class="micro" for="home">Home team</label>
+			<select id="home" name="home" bind:value={homeTeam}>
 				<option value="">Pick a team</option>
 				{#each teams as team (team.abbreviation)}
 					<option value={team.abbreviation}>{team.name}</option>
@@ -57,8 +58,8 @@
 		</div>
 
 		<div class="field">
-			<label class="micro" for="home">Home team</label>
-			<select id="home" name="home" bind:value={homeTeam}>
+			<label class="micro" for="away">Away team</label>
+			<select id="away" name="away" bind:value={awayTeam}>
 				<option value="">Pick a team</option>
 				{#each teams as team (team.abbreviation)}
 					<option value={team.abbreviation}>{team.name}</option>

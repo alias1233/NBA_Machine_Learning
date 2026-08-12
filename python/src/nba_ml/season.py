@@ -7,6 +7,7 @@ change of data source cannot reach it.
 
 from datetime import date, datetime
 from enum import Enum
+from zoneinfo import ZoneInfo
 
 class SeasonType(Enum):
     """
@@ -28,8 +29,22 @@ def season_of(day: date) -> int:
 
     return day.year if day.month >= SEASON_START_MONTH else day.year - 1
 
+EASTERN_TIMEZONE = ZoneInfo("America/New_York")
+"""
+Where a game date is decided.
+
+A game is filed under its United States eastern date, which is the date its box score is written
+under, and a late tipoff falls on the next day in UTC. A server rented anywhere runs on UTC, so
+nothing may read today's date off the server clock.
+"""
+
+def today() -> date:
+    """Today's game date, which is today in the eastern time zone rather than on this machine."""
+
+    return datetime.now(EASTERN_TIMEZONE).date()
+
 def current_season() -> int:
-    return season_of(datetime.now())
+    return season_of(today())
 
 # A game id such as "0022300001" writes its season phase in the third character. Ids are stored as
 # numbers, so the two leading zeros are gone and it is the first one. This is the only place that

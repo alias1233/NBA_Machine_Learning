@@ -61,7 +61,7 @@ def predict(
     Returns a probability for every position of this model's output, in that order, and how many of
     the player's earlier games the answer was built from.
 
-    See features._get_inference_player_game_data for what the roster arguments mean.
+    See features.build_target_game_row for what the roster arguments mean.
 
     Args:
         target_player_team_id names the player's team outright. Leave it unset unless they have just
@@ -99,7 +99,7 @@ def predict(
 
     predicted_probabilities = torch.softmax(predictions, 1)
 
-    # The sample reads every game up to the one being predicted, so where it stops is how many the
+    # The sample reads every game behind the one being predicted, so where it stops is how many the
     # build found behind it.
     return Prediction(
         values=predicted_probabilities.tolist()[0],

@@ -107,7 +107,7 @@ def _predict_game_stat(
     if arguments.team is not None:
         raise SystemExit(
             f"The {specification.name} model answers about the whole game, so it takes no --team. "
-            "A point differential is the home team's."
+            "An answer with a direction, such as a point differential or a win, is the home team's."
         )
 
     _refuse_player_arguments(specification, arguments)
@@ -137,8 +137,10 @@ def _print_result(prediction: Prediction, output: ClassDistribution):
     print(f"\nBuilt from {prediction.past_games} past games.")
 
     if output.ordered:
+        # Read off what each position stands for rather than off its place in the array. Those are
+        # the same thing only where a range starts at zero and a position covers one whole number.
         expected_value = sum(
-            (output.first_value + position) * probability
+            output.value_of(position) * probability
             for position, probability in enumerate(prediction.values)
         )
         print(f"Expected value: {expected_value:.2f}")

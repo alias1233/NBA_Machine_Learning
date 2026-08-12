@@ -20,13 +20,12 @@
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
 	import UpcomingGames from '$lib/components/UpcomingGames.svelte';
 	import { longGameDay } from '$lib/games';
-	import { predictsPhrase, sentenceCase } from '$lib/models';
+	import { answerSentence, predictsPhrase, sentenceCase } from '$lib/models';
 	import { flow } from '$lib/motion';
-	import { expectedValue, readAnswer, sharePercentages } from '$lib/odds';
+	import { readAnswer } from '$lib/odds';
 	import { gameHref as buildGameHref } from '$lib/predictions';
 	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
 
-	import type { Answer } from '$lib/odds';
 	import type { GameChoice } from '$lib/predictions';
 	import type { Player, Roster, ScheduledGame } from '$lib/types';
 
@@ -158,9 +157,9 @@
 			rosters.some((roster) => roster.players.some(({ id }) => id === form.player?.id))
 	);
 
-	/** The two sides of the described game, named, which are the only answers to which team. */
+	/** The two sides of the described game, named, home first. The only answers to which team. */
 	const sides = $derived(
-		[form.awayTeam, form.homeTeam]
+		[form.homeTeam, form.awayTeam]
 			.filter((abbreviation) => abbreviation !== '')
 			.map((abbreviation) => ({
 				abbreviation,
@@ -250,18 +249,8 @@
 	const answerKey = $derived(JSON.stringify([data.choice, data.player?.id, data.model]));
 
 	/** The one sentence an answer is announced with, which is whatever its block leads with. */
-	function spoken(reached: Answer, stat: string): string {
-		if (reached.kind === 'integer_distribution') {
-			return `Expected ${expectedValue(reached.distribution).toFixed(1)} ${stat}.`;
-		}
-
-		const { names, probabilities } = reached.categories;
-
-		return `${sentenceCase(stat)}, ${names[0]} ${sharePercentages(probabilities)[0]} percent.`;
-	}
-
 	const announcement = $derived(
-		answer && data.player ? `${data.player.name}. ${spoken(answer, reached.stat)}` : ''
+		answer && data.player ? `${data.player.name}. ${answerSentence(answer, reached.stat)}` : ''
 	);
 
 	const gameHref = (game: ScheduledGame) =>

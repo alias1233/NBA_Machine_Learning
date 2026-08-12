@@ -11,7 +11,7 @@
 <script lang="ts">
 	import CategoryReading from '$lib/components/CategoryReading.svelte';
 	import DistributionReading from '$lib/components/DistributionReading.svelte';
-	import { CATEGORY_DECIMALS, expectedValue, sharePercentages } from '$lib/odds';
+	import { CATEGORY_DECIMALS, expectedValue, figureText, sharePercentages } from '$lib/odds';
 
 	import type { Answer } from '$lib/odds';
 	import type { ModelOutput } from '$lib/types';
@@ -31,24 +31,37 @@
 		stat: string;
 		/** Names the player and the stat, or says what to do before anything has been asked. */
 		heading: string;
+		/**
+		 * Where that heading sits in the page's outline. An answer is a prediction page's second
+		 * level, and a third on a page whose own sections are the second.
+		 */
+		headingLevel?: 2 | 3;
+		/**
+		 * What the lead figure counts and whose it is, where the model is read from one side of the
+		 * game. Empty everywhere else, because the heading already names what was asked about.
+		 */
+		figureNote?: string;
+		/**
+		 * What the categories are called for the chosen game, where they name its sides. Null leaves
+		 * the model's own words.
+		 */
+		categoryNames?: string[] | null;
 		/** Names the game. Empty before anything has been asked. */
 		subheading: string;
 		/** The line the address bar already names, if it names one. */
 		openOn: number | null;
 		/** The family's own page, so a reader can get from the number to how it was reached. */
-		aboutHref: string;
+		aboutHref?: string;
+		/**
+		 * True where the block stands for an answer rather than being one, which is the About page's
+		 * annotated block. It is not a prediction, so the line the reader drags is theirs alone and is
+		 * not written into the address bar.
+		 */
+		example?: boolean;
 		/** Whether this answer was asked for with a changed roster. */
 		customRoster: boolean;
 		/** How many earlier games the answer was built from, or null before there is one. */
 		pastGames: number | null;
-		/**
-		 * A second figure beside the lead one, for an answer that carries a reading its shape alone
-		 * does not give. Null where it carries none, which is most of them.
-		 *
-		 * The label is named by the model, so it stands while an answer is worked out. The figure is
-		 * read off the answer, so it is empty until there is one.
-		 */
-		second?: { label: string; figure: string } | null;
 	};
 
 	let {
@@ -57,12 +70,15 @@
 		loading,
 		stat,
 		heading,
+		headingLevel = 2,
+		figureNote = '',
+		categoryNames = null,
 		subheading,
 		openOn,
 		aboutHref,
+		example = false,
 		customRoster,
-		pastGames,
-		second = null
+		pastGames
 	}: Props = $props();
 
 	/** Below this the player has barely played, and an answer built on that little says so. */
@@ -74,13 +90,24 @@
 	);
 
 	const distribution = $derived(answer?.kind === 'integer_distribution' ? answer.distribution : null);
-	const categories = $derived(answer?.kind === 'category_distribution' ? answer.categories : null);
+
+	// The categories under the words the chosen game gives them, so a win reads as the team's name
+	// rather than as the side it plays.
+	const categories = $derived.by(() => {
+		if (answer?.kind !== 'category_distribution') return null;
+
+		const { names, probabilities } = answer.categories;
+
+		return { names: categoryNames ?? names, probabilities };
+	});
 
 	const answered = $derived(answer !== null && !loading);
 
 	/** What the lead figure is called. The model knows this before it has answered. */
 	const leadLabel = $derived(
-		output?.kind === 'category_distribution' ? output.categories[0] : 'Expected'
+		output?.kind === 'category_distribution'
+			? (categoryNames?.[0] ?? output.categories[0])
+			: 'Expected'
 	);
 
 	// A distribution leads with the value it expects. A set of categories has no value to average, so
@@ -88,7 +115,7 @@
 	const leadFigure = $derived.by(() => {
 		if (!answered) return '';
 
-		if (distribution) return expectedValue(distribution).toFixed(1);
+		if (distribution) return figureText(distribution, expectedValue(distribution));
 
 		if (categories) {
 			return `${sharePercentages(categories.probabilities, CATEGORY_DECIMALS)[0]}%`;
@@ -103,7 +130,8 @@
 <!-- The one container carrying the accent top edge unhovered, because it is the answer. -->
 <section class="block answer">
 	<header>
-		<h2>{heading}</h2>
+		<!-- The serif role rather than the level's own, so the block reads the same at either. -->
+		<svelte:element this={`h${headingLevel}`} class="type-h2">{heading}</svelte:element>
 		{#if subheading}
 			<p class="muted small">{subheading}</p>
 		{/if}
@@ -117,33 +145,38 @@
 		{/if}
 	</header>
 
-	<div class="lead">
-		<div>
-			<p class="micro muted">{leadLabel}</p>
+	<!-- data-explain names a part the About page's annotated answer runs a leader line to. -->
+	<div class="lead" data-explain="lead">
+		<p class="micro muted">{leadLabel}</p>
+
+		<!-- The note comes from the model and the chosen game, so it stands beside the reserved space
+		     as well and the block does not change size when the answer lands. -->
+		<div class="figure-row">
 			{#if answered}
 				<p class="figure-lead">{leadFigure}</p>
 			{:else}
 				<div class="waiting lead-figure"></div>
 			{/if}
-		</div>
 
-		{#if second}
-			<div>
-				<p class="micro muted">{second.label}</p>
-				{#if answered}
-					<p class="figure-lead">{second.figure}</p>
-				{:else}
-					<div class="waiting lead-figure"></div>
-				{/if}
-			</div>
-		{/if}
+			{#if figureNote}
+				<p class="figure-note">{figureNote}</p>
+			{/if}
+		</div>
 	</div>
 
 	{#if kind === 'category_distribution'}
 		<CategoryReading {categories} {loading} />
 	{:else}
 		<!-- The detailed view covers the page, so it is given the words this block names itself with. -->
-		<DistributionReading {distribution} {loading} {stat} {openOn} {heading} {subheading} />
+		<DistributionReading
+			{distribution}
+			{loading}
+			{stat}
+			{openOn}
+			{heading}
+			{subheading}
+			{example}
+		/>
 	{/if}
 
 	<!-- A changed answer must never look like the default one. -->
@@ -151,8 +184,10 @@
 		<p><span class="tag micro">Custom roster</span></p>
 	{/if}
 
-	<!-- From the number to how it was reached. -->
-	<p class="about-link small"><a href={aboutHref}>How this model works</a></p>
+	<!-- From the number to how it was reached. A block standing for no model has nowhere to send. -->
+	{#if aboutHref}
+		<p class="about-link small"><a href={aboutHref}>How this model works</a></p>
+	{/if}
 </section>
 
 <style>
@@ -163,7 +198,7 @@
 		border-top-color: var(--plane-accent);
 	}
 
-	header h2 {
+	header .type-h2 {
 		margin-bottom: var(--space-1);
 	}
 
@@ -172,16 +207,20 @@
 		margin-top: var(--space-2);
 	}
 
-	/* One figure, or two side by side where the answer carries a second reading. They wrap rather
-	   than shrink, so neither is ever set smaller than the other. */
 	.lead {
 		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-3) var(--space-6);
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 
-	.lead p:first-child {
-		margin-bottom: var(--space-2);
+	/* The figure keeps the lead and what it counts follows it on the same baseline, dropping under it
+	   where the column is too narrow to hold both. */
+	.figure-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		column-gap: var(--space-3);
+		row-gap: var(--space-1);
 	}
 
 	/* The way out of the block is a finger wide, like every other way out on the site. */
@@ -206,8 +245,10 @@
 		}
 	}
 
+	/* Given its width, because it holds nothing to take one from. */
 	.waiting.lead-figure {
+		width: calc(var(--space-8) * 2);
+		max-width: 100%;
 		height: var(--type-figure-lead);
-		max-width: calc(var(--space-8) * 2);
 	}
 </style>

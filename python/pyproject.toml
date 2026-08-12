@@ -2,7 +2,7 @@
 name = "nba-ml"
 version = "0.1.0"
 description = "Collects NBA data, builds features from it, trains models, and predicts NBA statistics."
-readme = "../README.md"
+readme = "README.md"
 requires-python = ">=3.11,<3.12"
 
 dependencies = [
@@ -20,11 +20,20 @@ dependencies = [
 
     "fastapi[standard]>=0.141.1,<0.142.0",
     "pydantic>=2.0",
+
+    # Windows ships no time zone database, and a game date is a United States eastern date.
+    "tzdata>=2024.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
 ]
 
 [project.scripts]
 nba-collect = "nba_ml.cli.collect:main"
 nba-schedule = "nba_ml.cli.schedule:main"
+nba-build-features = "nba_ml.cli.build_features:main"
 nba-train = "nba_ml.cli.train:main"
 nba-predict = "nba_ml.cli.predict:main"
 
@@ -34,3 +43,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nba_ml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

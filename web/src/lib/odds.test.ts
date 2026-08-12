@@ -8,11 +8,14 @@
  */
 
 import {
+	axisAt,
+	axisSpan,
 	axisTicks,
 	calculateOdds,
 	chartRange,
 	defaultLine,
 	expectedValue,
+	figureText,
 	highestValue,
 	mostLikelyOutcomes,
 	oddsPercentages,
@@ -20,7 +23,7 @@ import {
 	outcomes,
 	readAnswer,
 	sharePercentages,
-	valueSpan
+	valueAt
 } from './odds.ts';
 
 import type { Distribution, LineOdds } from './odds.ts';
@@ -49,6 +52,7 @@ const probabilities = [0.1, 0.15, 0.4, 0.25, 0.1];
 const over = (minimumValue: number, bucketWidth = 1): Distribution => ({
 	minimumValue,
 	bucketWidth,
+	impossibleValue: null,
 	probabilities
 });
 
@@ -130,17 +134,76 @@ for (const line of [-5, 10, 16.5, 17, 24, 99]) {
 
 check('a value names the bucket holding it', [9, 10, 12, 13, 24, 40].map((value) => outcomeOf(buckets, value)), [0, 0, 0, 1, 4, 4]);
 
-// Each bucket owns three whole numbers of the axis, so the drawn run reaches half a number past the
-// first and last it holds. This is what places a line by its value alone at any width.
-check('a drawn run of buckets spans every number it covers', valueSpan(buckets, { first: 1, last: 3 }), {
-	from: 12.5,
-	to: 21.5
+// Each bucket owns three steps of the axis, so the drawn run reaches half a step past the first and
+// last it holds. This is what places a line by its value alone at any width.
+check('a drawn run of buckets spans every step it covers', axisSpan(buckets, { first: 1, last: 3 }), {
+	from: 2.5,
+	to: 11.5
 });
 
-check('and a run of single values spans one each', valueSpan(over(10), { first: 1, last: 3 }), {
-	from: 10.5,
-	to: 13.5
+check('and a run of single values spans one each', axisSpan(over(10), { first: 1, last: 3 }), {
+	from: 0.5,
+	to: 3.5
 });
+
+// A point differential in miniature: five buckets of three over -6 to 6, with zero off the line
+// because a basketball game cannot end level. Every bucket still covers three outcomes.
+const margin: Distribution = {
+	minimumValue: -6,
+	bucketWidth: 3,
+	impossibleValue: 0,
+	probabilities: [0.1, 0.15, 0.4, 0.25, 0.1]
+};
+
+check('an impossible value is left out of the buckets either side of it', outcomes(margin).map(({ label }) => label), [
+	'-6 to -4',
+	'-3 to -1',
+	'1 to 3',
+	'4 to 6',
+	'7 to 9'
+]);
+
+check('and the range reaches one further to hold the same count', highestValue(margin), 9);
+
+// The middles are -5, -2, 2, 5 and 8.
+check('a bucket either side of it averages as its own middle', round(expectedValue(margin)), 2.05);
+
+check('the value itself is never landed on', rounded(calculateOdds(margin, 0)), {
+	over: 0.75,
+	under: 0.25,
+	push: 0
+});
+
+check('and neither half number beside it settles differently', [-0.5, 0.5].map((line) => rounded(calculateOdds(margin, line))), [
+	{ over: 0.75, under: 0.25, push: 0 },
+	{ over: 0.75, under: 0.25, push: 0 }
+]);
+
+check('a whole number line above it still pushes at its share of a bucket', rounded(calculateOdds(margin, 2)), {
+	over: round(0.35 + 0.4 / 3),
+	under: round(0.25 + 0.4 / 3),
+	push: round(0.4 / 3)
+});
+
+// The axis holds fifteen steps, so what a value is worth on it drops by one from the gap upward.
+check('the axis skips the value the model cannot answer with', [-6, -1, 0, 1, 9].map((value) => axisAt(margin, value)), [0, 5, 5.5, 6, 14]);
+
+check('and half a step either side of the gap lands on the gap', [-0.5, 0.5].map((value) => axisAt(margin, value)), [5.5, 5.5]);
+
+check('reading the axis back gives the value, and the gap gives the value it stands for', [0, 5, 5.5, 6, 14].map((axis) => valueAt(margin, axis)), [-6, -1, 0, 1, 9]);
+
+// On its own the run holding 15% of the answer is the single bucket below the gap, so the widening
+// is the whole of what puts the bucket above it on the chart.
+check('a line in the gap names both buckets it sits between', chartRange(margin, 0, 0.15), {
+	first: 1,
+	last: 2
+});
+
+// A statistic reaching below zero is where the sign carries the answer, so a positive one is marked
+// and a statistic that cannot go below zero is written plain.
+check('a figure on a statistic that can run below zero carries its sign', [5.64, -5.64, 0.04, -0.04, 0].map((value) => figureText(margin, value)), ['+5.6', '-5.6', '0.0', '0.0', '0.0']);
+
+check('and one that cannot is written plain', [5.64, 0].map((value) => figureText(over(0), value)), ['5.6', '0.0']);
 
 check('a result opens on the half number below what is expected', defaultLine(23.1), 23.5);
 check('and on the same one from above it', defaultLine(23.7), 23.5);
@@ -150,6 +213,7 @@ check('and on the same one from above it', defaultLine(23.7), 23.5);
 const spread: Distribution = {
 	minimumValue: 0,
 	bucketWidth: 1,
+	impossibleValue: null,
 	probabilities: Array.from({ length: 100 }, (_, value) =>
 		value >= 40 && value < 45 ? 0.1992 : 0.004 / 95
 	)
@@ -245,19 +309,28 @@ const answered = (output: Prediction['output'], values: number[]): Prediction =>
 
 check(
 	'a whole number answer is read as a distribution',
-	readAnswer(answered({ kind: 'integer_distribution', minimum_value: 10, outcomes: 2, bucket_width: 1 }, [0.4, 0.6])),
+	readAnswer(answered({ kind: 'integer_distribution', minimum_value: 10, outcomes: 2, bucket_width: 1, impossible_value: null }, [0.4, 0.6])),
 	{
 		kind: 'integer_distribution',
-		distribution: { minimumValue: 10, bucketWidth: 1, probabilities: [0.4, 0.6] }
+		distribution: { minimumValue: 10, bucketWidth: 1, impossibleValue: null, probabilities: [0.4, 0.6] }
 	}
 );
 
 check(
 	'and carries how wide a bucket is',
-	readAnswer(answered({ kind: 'integer_distribution', minimum_value: 10, outcomes: 2, bucket_width: 3 }, [0.4, 0.6])),
+	readAnswer(answered({ kind: 'integer_distribution', minimum_value: 10, outcomes: 2, bucket_width: 3, impossible_value: null }, [0.4, 0.6])),
 	{
 		kind: 'integer_distribution',
-		distribution: { minimumValue: 10, bucketWidth: 3, probabilities: [0.4, 0.6] }
+		distribution: { minimumValue: 10, bucketWidth: 3, impossibleValue: null, probabilities: [0.4, 0.6] }
+	}
+);
+
+check(
+	'and which value the model can never answer with',
+	readAnswer(answered({ kind: 'integer_distribution', minimum_value: -6, outcomes: 2, bucket_width: 3, impossible_value: 0 }, [0.4, 0.6])),
+	{
+		kind: 'integer_distribution',
+		distribution: { minimumValue: -6, bucketWidth: 3, impossibleValue: 0, probabilities: [0.4, 0.6] }
 	}
 );
 

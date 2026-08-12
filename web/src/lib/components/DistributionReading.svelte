@@ -26,20 +26,23 @@
 		/** What the answer names itself, which the detailed view carries because it covers the page. */
 		heading: string;
 		subheading: string;
+		/** True where the block stands for an answer rather than being one, so it owns no address bar. */
+		example?: boolean;
 	};
 
-	let { distribution, loading, stat, openOn, heading, subheading }: Props = $props();
+	let { distribution, loading, stat, openOn, heading, subheading, example = false }: Props =
+		$props();
 </script>
 
 <div class="surface reading" use:flowingHeight>
 	<div>
 		{#if distribution && !loading}
-			<DistributionAnswer {distribution} {stat} {openOn} {heading} {subheading} />
+			<DistributionAnswer {distribution} {stat} {openOn} {heading} {subheading} {example} />
 		{:else}
 			<div class="skeleton" aria-hidden="true">
 				<!-- The three the odds land in, named but unanswered, in the row they will be read on. -->
 				<div class="odds">
-					{#each ['Over', 'Under', 'Push'] as label (label)}
+					{#each ['Under', 'Push', 'Over'] as label (label)}
 						<div>
 							<p class="micro muted">{label}</p>
 							<div class="waiting figure"></div>

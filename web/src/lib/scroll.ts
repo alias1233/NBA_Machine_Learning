@@ -5,36 +5,138 @@
  * than leaving the reader to find it. A scroll runs only when its target is not already fully in
  * view, because scrolling somebody to what they are looking at reads as a twitch.
  *
+ * It starts at once and follows its target. The choice that asked for it usually sets off a flow,
+ * and where that flow moves the target the page is aimed again as it travels rather than corrected
+ * once everything has stopped. So a target the flow leaves where it is costs no wait at all, and one
+ * it carries is followed rather than jumped to at the end.
+ *
  * Focus never moves with the page.
  */
 
 import { tick } from 'svelte';
 import { prefersReducedMotion } from 'svelte/motion';
 
-import { settled } from '$lib/motion';
+import { MOTION, MOTION_SLOW } from '$lib/motion';
+
+/** Which edge of the target the page is brought to, as `scrollIntoView` reads it. */
+type Block = 'start' | 'end';
+
+/** How long the page takes to cover all but a twentieth of the distance to its destination. */
+const TRAVEL = MOTION_SLOW;
+
+/** Close enough that one eased step would round to nothing, so what is left is closed in one. */
+const SNAP = 2;
+
+/** No scroll runs longer than this, so a target that never settles cannot hold the page. */
+const LIMIT = 2000;
+
+const length = (value: string) => (Number.isNaN(parseFloat(value)) ? 0 : parseFloat(value));
 
 /**
- * The choice that asked for this usually moves the target, so it is measured once it has settled.
- * A choice that set off a longer flow than the usual one says how long to wait for it.
+ * What the target's chosen edge is offset by where it comes to rest: its own scroll margin, and the
+ * room the page keeps clear for the header. Both hold still for the whole walk, so they are read
+ * once rather than every frame.
+ */
+function resting(target: HTMLElement, block: Block): number {
+	const own = getComputedStyle(target);
+	const root = getComputedStyle(document.documentElement);
+
+	return block === 'start'
+		? -length(own.scrollMarginTop) - length(root.scrollPaddingTop)
+		: length(own.scrollMarginBottom) + length(root.scrollPaddingBottom);
+}
+
+/**
+ * Where the page has to sit for the target to rest at `block`, which is where `scrollIntoView` would
+ * put it. It is worked out rather than handed to the browser because a smooth scroll is aimed once,
+ * and this one is aimed again every frame.
+ */
+function destination(target: HTMLElement, block: Block, offset: number): number {
+	const box = target.getBoundingClientRect();
+	const edge = block === 'start' ? box.top : box.bottom - window.innerHeight;
+	const furthest = document.documentElement.scrollHeight - window.innerHeight;
+
+	return Math.min(Math.max(window.scrollY + edge + offset, 0), Math.max(furthest, 0));
+}
+
+function fullyVisible(target: HTMLElement): boolean {
+	const box = target.getBoundingClientRect();
+
+	return box.top >= 0 && box.bottom <= window.innerHeight;
+}
+
+/**
+ * Moves the page to the target and follows it for as long as the flow behind it runs.
+ *
+ * `flowing` is how long that flow lasts, and a choice setting off a longer one than usual says so.
+ * The wait it buys costs nothing where the target does not move, because the page is already on its
+ * way by then.
+ *
+ * Awaiting it waits for the page to stop, which is what anything opening at the target needs.
  */
 export async function scrollIntoViewIfOffScreen(
 	target: HTMLElement | undefined,
-	block: 'start' | 'end',
-	flowing?: number
+	block: Block,
+	flowing: number = MOTION
 ): Promise<void> {
 	if (!target) return;
 
-	// The tick puts the choice in the page. The wait is for the flow it set off, because the target
-	// usually rides on one.
+	// The tick puts the choice in the page, so what is measured below is the page it made.
 	await tick();
-	await settled(flowing);
 
-	const box = target.getBoundingClientRect();
+	const instant = prefersReducedMotion.current;
+	const offset = resting(target, block);
+	const following = performance.now() + (instant ? 0 : flowing);
+	const deadline = performance.now() + LIMIT;
 
-	if (box.top >= 0 && box.bottom <= window.innerHeight) return;
+	return new Promise((resolve) => {
+		let frame = 0;
+		let last = performance.now();
+		let travelling = false;
 
-	target.scrollIntoView({
-		behavior: prefersReducedMotion.current ? 'auto' : 'smooth',
-		block
+		// The reader taking the page over ends the walk, because the page is theirs from then on.
+		const stop = () => {
+			cancelAnimationFrame(frame);
+			window.removeEventListener('wheel', stop);
+			window.removeEventListener('touchmove', stop);
+			resolve();
+		};
+
+		const step = (now: number) => {
+			if (!target.isConnected || now > deadline) {
+				stop();
+				return;
+			}
+
+			const elapsed = now - last;
+			last = now;
+
+			// Not worth moving for yet. The flow can still push it off screen, so this keeps watching
+			// until the flow is over rather than giving up on the first frame.
+			if (!travelling && fullyVisible(target)) {
+				if (now >= following) stop();
+				else frame = requestAnimationFrame(step);
+				return;
+			}
+
+			travelling = true;
+
+			const left = destination(target, block, offset) - window.scrollY;
+
+			// Each frame closes the same share of whatever distance is left, so the page eases in on a
+			// target standing still and keeps pace with one the flow is still moving.
+			const closing =
+				instant || Math.abs(left) < SNAP ? 1 : 1 - Math.exp((-3 * elapsed) / TRAVEL);
+
+			window.scrollBy({ top: left * closing, behavior: 'instant' });
+
+			if (closing === 1 && now >= following) stop();
+			else frame = requestAnimationFrame(step);
+		};
+
+		frame = requestAnimationFrame(step);
+
+		window.addEventListener('wheel', stop, { passive: true });
+		window.addEventListener('touchmove', stop, { passive: true });
 	});
 }

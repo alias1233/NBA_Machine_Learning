@@ -70,6 +70,19 @@
 		overMenu = false;
 	}
 
+	/**
+	 * The entry for the page the reader is already on leaves it exactly as it stands.
+	 *
+	 * A prediction page holds an answer and everything that was asked for it, all of it in the
+	 * address bar, and the entry names the bare page, so following it would throw the lot away.
+	 */
+	function onFamilyEntry(event: MouseEvent, path: string) {
+		if (here !== path) return;
+
+		event.preventDefault();
+		revealed = false;
+	}
+
 	/** The first tap opens the menu. The second is the tab doing what it says, so the menu is done. */
 	function onModelsTab(event: MouseEvent) {
 		if (canHover.current) return;
@@ -268,7 +281,16 @@
 					{#if predictable.length > 0}
 						<ul class="panel" aria-labelledby="models-tab" bind:this={menuList}>
 							{#each predictable as family (family.name)}
-								<li><a href={familyPath(family)}>{family.title}</a></li>
+								{@const path = familyPath(family)}
+								<li>
+									<a
+										href={path}
+										aria-current={here === path ? 'page' : undefined}
+										onclick={(event) => onFamilyEntry(event, path)}
+									>
+										{family.title}
+									</a>
+								</li>
 							{/each}
 						</ul>
 					{/if}
@@ -441,6 +463,16 @@
 	.menu > ul a:focus-visible {
 		background: var(--surface);
 		color: var(--accent);
+	}
+
+	/* The entry for the page the reader is already on. It leads nowhere, so it is marked with a rule
+	   down its leading edge rather than underlined, which is what a link to somewhere else looks
+	   like. */
+	.menu > ul a[aria-current] {
+		border-left: var(--rule-accent);
+		background: var(--surface);
+		color: var(--accent);
+		cursor: default;
 	}
 
 	/* Open by hover where there is one, by the first tap on the tab where there is not, and by

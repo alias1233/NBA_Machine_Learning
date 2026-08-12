@@ -72,13 +72,20 @@ const REASONS: Record<string, string> = {
 	too_few_games: 'This player has no earlier game to read.',
 	missing_player_information: 'Too little is known about this player to predict.',
 	unknown_player_team: 'Say which of the two teams this player is on.',
-	no_team_history: 'This team has no earlier game to read.'
+	no_team_history: 'This team has no earlier game to read.',
+	service_busy: 'The service is answering as many predictions as it can. Try again in a moment.'
 };
 
+/**
+ * A named reason wins over the status, because a busy service and an unreachable one both answer
+ * 503 and only one of them is worth telling a reader to wait for.
+ */
 export function reasonFor(thrown: HttpError): string {
-	if (thrown.status === 503) return UNREACHABLE;
+	const named = REASONS[thrown.body.reason ?? ''];
 
-	return REASONS[thrown.body.reason ?? ''] ?? REFUSED;
+	if (named !== undefined) return named;
+
+	return thrown.status === 503 ? UNREACHABLE : REFUSED;
 }
 
 /**

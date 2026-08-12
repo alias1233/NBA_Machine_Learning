@@ -206,6 +206,7 @@ def build_split_samples(
     split_start_dates: Iterable[datetime],
     minimum_past_games: int,
     chunk_step_size: int = 1,
+    *,
     read_opponent_history: bool = False,
     print_debug: bool = False
     ) -> tuple[GameSequences, list[SequenceInputSamples]]:
@@ -293,36 +294,59 @@ def build_split_samples(
         [samples.to_samples(static_input_dim, sequence_count) for samples in all_samples]
     )
 
+@dataclass(frozen=True)
+class SequenceToRead():
+    """
+    One subject a prediction reads: the games behind the predicted one, and who they face in it.
+
+    The games are given outright rather than as a position in a history, because the two halves of a
+    prediction come from different places. The games behind it come from a build the whole league
+    shares, and the game being predicted is assembled per request.
+    """
+
+    past_games: np.ndarray
+    """Shaped (games, sequence features), oldest first."""
+
+    past_opponent_team_ids: np.ndarray
+    """Who the subject faced in each of those games, which is what marks the ones against this one."""
+
+    opponent_team_id: int
+    """Who the subject faces in the game being predicted."""
+
+def read_up_to(history: GameHistory, index: int) -> SequenceToRead:
+    """One subject's side of a prediction, taken out of a history that holds the predicted game."""
+
+    return SequenceToRead(
+        history.sequence_values[:index],
+        history.opponent_team_ids[:index],
+        int(history.opponent_team_ids[index])
+    )
+
 def build_inference_sample(
-    sides: Sequence[tuple[GameHistory, int]]
+    sides: Sequence[SequenceToRead],
+    static_input: np.ndarray
     ) -> tuple[GameSequences, SequenceInputSamples]:
     """
-    The one sample a prediction runs: the games each side reads, and where in them the target game
-    sits.
+    The one sample a prediction runs: the games each side reads, and the game being predicted.
 
     Args:
-        sides holds (history, the position of the target game in it), in the order the model reads
-        them. The answer is read off the first side, so its row is the static half of the input.
+        sides are the subjects the model reads, in the order it reads them.
+        static_input is everything read off the game being predicted, which belongs to the side the
+        answer is read off.
     """
-
-    histories = [history for history, _ in sides]
-    target_indices = [index for _, index in sides]
 
     samples = SequenceInputSamples(
         np.arange(len(sides), dtype=np.int64).reshape(1, -1),
-        np.array([target_indices], dtype=np.int64),
-        np.array(
-            [[int(history.opponent_team_ids[index]) for history, index in sides]],
-            dtype=np.int64
-        ),
-        histories[0].static_input(target_indices[0]).reshape(1, -1),
+        np.array([[len(side.past_games) for side in sides]], dtype=np.int64),
+        np.array([[side.opponent_team_id for side in sides]], dtype=np.int64),
+        static_input.reshape(1, -1),
         np.zeros(1, dtype=np.float64)
     )
 
     # None of these games belong to a training split, since nothing is being fit.
     game_sequences = GameSequences(
-        [history.sequence_values for history in histories],
-        [history.opponent_team_ids for history in histories],
+        [side.past_games for side in sides],
+        [side.past_opponent_team_ids for side in sides],
         np.zeros(len(sides), dtype=np.int64)
     )
 

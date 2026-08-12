@@ -41,7 +41,7 @@ def _describe(game: ScheduledGame, abbreviations: dict[int, str]) -> str:
     return f"{season.to_date_string(game.game.date)}  {away} at {home}"
 
 def _list(arguments: argparse.Namespace):
-    games = upcoming.upcoming_games(until=date.today() + timedelta(days=arguments.days))
+    games = upcoming.upcoming_games(until=season.today() + timedelta(days=arguments.days))
 
     if not games:
         print(f"No games scheduled in the next {arguments.days} days. Run nba-collect schedule, or add a mock game.")
@@ -94,7 +94,7 @@ def main():
     add_command.add_argument(
         "--date",
         type=_date,
-        default=date.today() + timedelta(days=1),
+        default=season.today() + timedelta(days=1),
         metavar="YYYY-MM-DD",
         help="Game date. Defaults to tomorrow."
     )

@@ -15,11 +15,19 @@
 	points. Arrow keys move one step and Page Up and Page Down move five, which a range input does not
 	do on its own.
 
+	The field takes only what the handle can reach. A typed number settles on the nearest of those and
+	the field's own keys step along the same run, so the two controls read the same value at every
+	press and no number the chart stands behind nothing for is ever asked about.
+
+	Where the model names a value it can never answer with, the handle steps straight over it and
+	settles on it, because every line either side of it asks the same question and that value is the
+	plainest way to write it.
+
 	Whatever the line settles at goes at the far end of the field's own row, so the control and what
 	it decides sit at the two ends of one line under the chart.
 -->
 <script lang="ts">
-	import { highestValue, lowestValue, valueSpan } from '$lib/odds';
+	import { axisAt, axisSpan, valueAt } from '$lib/odds';
 
 	import type { Snippet } from 'svelte';
 	import type { ChartRange, Distribution } from '$lib/odds';
@@ -45,16 +53,19 @@
 	// further, cannot reach every outcome by dragging. This is how many outcomes past it it travels.
 	const HEADROOM = 3;
 
-	const lowest = $derived(lowestValue(distribution));
-	const highest = $derived(highestValue(distribution));
-
 	const width = $derived(distribution.bucketWidth);
-	const span = $derived(valueSpan(distribution, range));
+
+	// The handle travels the axis rather than the values, so its thumb tracks the bars even where the
+	// model names a value it can never answer with and the two are not the same run.
+	const span = $derived(axisSpan(distribution, range));
+	const whole = $derived(
+		axisSpan(distribution, { first: 0, last: distribution.probabilities.length - 1 })
+	);
 
 	// The middle of the first and last bars drawn, and of the first and last the model has. The
 	// handle is laid out against bar middles, because that is what its thumb has to line up with.
 	const drawn = $derived({ first: span.from + width / 2, last: span.to - width / 2 });
-	const outermost = $derived({ first: lowest + (width - 1) / 2, last: highest - (width - 1) / 2 });
+	const outermost = $derived({ first: whole.from + width / 2, last: whole.to - width / 2 });
 
 	const travel = $derived({
 		first: Math.max(outermost.first, drawn.first - HEADROOM * width),
@@ -66,13 +77,52 @@
 	const aligned = $derived(travel.first === drawn.first && travel.last === drawn.last);
 	const columns = $derived(range.last - range.first + 1);
 
-	function onKeydown(event: KeyboardEvent) {
-		const direction = event.key === 'PageUp' ? 1 : event.key === 'PageDown' ? -1 : 0;
-		if (direction === 0) return;
+	/** The two ends of everything the handle can settle on, so the field offers exactly that run. */
+	const reach = $derived({
+		lowest: valueAt(distribution, outermost.first),
+		highest: valueAt(distribution, outermost.last)
+	});
+
+	/** The nearest line the handle could have been dragged to, which is where any other one settles. */
+	const nearest = (axis: number) =>
+		valueAt(
+			distribution,
+			Math.min(Math.max(Math.round(axis / STEP) * STEP, outermost.first), outermost.last)
+		);
+
+	/** Moves the line along the axis, which is the only run either control travels. */
+	function move(steps: number) {
+		line = nearest(axisAt(distribution, line) + steps * STEP);
+	}
+
+	// How many steps a key is worth on each control. The handle moves one step on an arrow already, so
+	// it takes only the pages. The field's own arrows count in halves from its minimum, which stops on
+	// the numbers the handle steps over, so it takes both and moves along the axis instead.
+	const HANDLE_KEYS: Record<string, number> = { PageUp: PAGE_STEPS, PageDown: -PAGE_STEPS };
+	const FIELD_KEYS: Record<string, number> = { ArrowUp: 1, ArrowDown: -1, ...HANDLE_KEYS };
+
+	const stepping = (keys: Record<string, number>) => (event: KeyboardEvent) => {
+		const steps = keys[event.key];
+
+		if (steps === undefined) return;
 
 		event.preventDefault();
-		line = Math.min(Math.max(line + direction * STEP * PAGE_STEPS, lowest), highest);
+		move(steps);
+	};
+
+	// A part typed number reads as nothing, so it is left alone until there is something to settle.
+	function onFieldInput(event: Event & { currentTarget: HTMLInputElement }) {
+		const typed = event.currentTarget.valueAsNumber;
+
+		if (Number.isNaN(typed)) return;
+
+		line = nearest(axisAt(distribution, typed));
 	}
+
+	// Whatever the reader left in the box is put back to the line it stands for once they leave it,
+	// so an emptied or half typed field never stands against the handle beside it.
+	const onFieldChange = (event: Event & { currentTarget: HTMLInputElement }) =>
+		(event.currentTarget.value = String(line));
 </script>
 
 <div class="control" style="--columns: {columns}">
@@ -85,9 +135,10 @@
 		min={travel.first}
 		max={travel.last}
 		step={STEP}
-		value={line}
-		oninput={(event) => (line = event.currentTarget.valueAsNumber)}
-		onkeydown={onKeydown}
+		value={axisAt(distribution, line)}
+		data-explain="line"
+		oninput={(event) => (line = valueAt(distribution, event.currentTarget.valueAsNumber))}
+		onkeydown={stepping(HANDLE_KEYS)}
 	/>
 
 	<div class="row">
@@ -97,10 +148,13 @@
 				id="{id}-number"
 				type="number"
 				class="numeric"
-				min={lowest}
-				max={highest}
+				min={reach.lowest}
+				max={reach.highest}
 				step={STEP}
-				bind:value={line}
+				value={line}
+				oninput={onFieldInput}
+				onchange={onFieldChange}
+				onkeydown={stepping(FIELD_KEYS)}
 			/>
 		</div>
 

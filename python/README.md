@@ -24,11 +24,12 @@ nba_ml/database.py               the database layer
 ## Running
 
 `python/` holds its own `pyproject.toml` and lock file. `uv sync` installs the package, which puts
-four commands on the path. They work from any directory.
+five commands on the path. They work from any directory.
 
 ```
 uv sync
 uv run nba-collect all                                # fetches everything newer than what is stored
+uv run nba-build-features                             # builds the whole league's features and publishes them
 uv run nba-schedule list                              # the upcoming games, and whether each is answerable
 uv run nba-train --model points                       # trains one model and writes a report next to it
 uv run nba-predict --model points --player "Luka Doncic" \
@@ -46,6 +47,9 @@ nba-collect players --all --start-index 2000          # every player, picking a 
 nba-collect schedule                                  # this season's games and next season's, played or not
 nba-collect --source nba_api --wait 1.5 all           # choose the service and how hard to push it
 
+nba-build-features --window-years 5                   # how far back to build, defaulting to what a prediction reads
+nba-build-features --everything-stored                # build every game held, which needs a developer machine
+
 nba-schedule list --days 14                           # what is coming, and what each game is still waiting on
 nba-schedule add-mock --home LAL --away LAC \
     --date 2026-08-08                                 # a made up game, for testing out of season
@@ -61,6 +65,7 @@ Everything generated is stored in `python/data/`, which is not in the repository
 
 ```
 data/databases/                              the collected SQLite files
+data/feature_builds/<family>/<version>/      the published whole-league features the service reads
 data/models/<family>/<model>/                model.pth, training_report.txt, graphs/
 data/training_cache/<family>/<model>/        the preprocessed training build, disposable
 ```

@@ -17,8 +17,9 @@ that has not caught up reads a played game as a layoff.
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
+from nba_ml import season
 from nba_ml.entities import GameStatus, ScheduledGame
 from nba_ml.stores import schedule, team_games, teams
 
@@ -52,6 +53,23 @@ def _oldest_missing_game_dates(
 
     return oldest
 
+def _still_to_play(scheduled: ScheduledGame, now: datetime, today: date) -> bool:
+    """
+    Whether a game has yet to start.
+
+    The tipoff is the exact answer and is stored in UTC, so it is read first. A game published
+    without one falls back to its date, which is a United States eastern date and never the server's.
+    """
+
+    if scheduled.tipoff is None:
+        return scheduled.game.date >= today
+
+    tipoff = scheduled.tipoff
+    if tipoff.tzinfo is None:
+        tipoff = tipoff.replace(tzinfo=timezone.utc)
+
+    return tipoff >= now
+
 def upcoming_games(until: date | None = None) -> list[UpcomingGame]:
     """
     Every game still to be played from today onwards, each marked ready or held back.
@@ -67,14 +85,18 @@ def upcoming_games(until: date | None = None) -> list[UpcomingGame]:
 
     stored_game_ids = team_games.stored_game_ids(min(scheduled.game.date for scheduled in games))
     oldest_missing = _oldest_missing_game_dates(games, stored_game_ids)
-    today = date.today()
+    now = datetime.now(timezone.utc)
+    today = season.today()
 
     still_to_play = []
     for scheduled in games:
         if scheduled.status is not GameStatus.SCHEDULED or scheduled.id in stored_game_ids:
             continue
 
-        if scheduled.game.date < today or (until is not None and scheduled.game.date > until):
+        if not _still_to_play(scheduled, now, today):
+            continue
+
+        if until is not None and scheduled.game.date > until:
             continue
 
         # Both teams are in oldest_missing, since this game itself has no box score.

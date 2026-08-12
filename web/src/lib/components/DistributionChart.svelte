@@ -18,7 +18,7 @@
 	import { onMount } from 'svelte';
 
 	import { MOTION_SLOW } from '$lib/motion';
-	import { axisTicks, expectedValue, outcomeOf, outcomes, valueSpan } from '$lib/odds';
+	import { axisAt, axisSpan, axisTicks, expectedValue, outcomeOf, outcomes } from '$lib/odds';
 
 	import type { ChartRange, Distribution } from '$lib/odds';
 
@@ -56,8 +56,8 @@
 
 	const bars = $derived(outcomes(distribution).slice(range.first, range.last + 1));
 
-	/** The stretch of the number line the drawn run covers, which every mark is placed against. */
-	const span = $derived(valueSpan(distribution, range));
+	/** The stretch of the axis the drawn run covers, which every mark is placed against. */
+	const span = $derived(axisSpan(distribution, range));
 
 	const tallest = $derived(Math.max(...bars.map(({ probability }) => probability)));
 
@@ -86,7 +86,14 @@
 
 	const expected = $derived(expectedValue(distribution));
 
-	/** Round values at whatever interval fits, plus the two ends where they would not crowd one. */
+	/**
+	 * Round values at whatever interval fits, plus the two ends where they would not crowd one, plus
+	 * the value the model can never answer with.
+	 *
+	 * That last one holds no room on the axis and carries no bar, but it is the join the two runs
+	 * either side of it meet on and the number a reader reads both against, so it is written under
+	 * the join whatever interval the rest of the marks land on.
+	 */
 	const marks = $derived.by(() => {
 		// Measured in whole numbers rather than in bars, because a bar can cover several of them.
 		const needed = (column > 0 ? MARK_ROOM / column : 5) * distribution.bucketWidth;
@@ -99,11 +106,15 @@
 			rounds.push(value);
 		}
 
-		const clear = step * 0.6;
+		const clear = step * 0.75;
 		const head = rounds[0] === undefined || rounds[0] - first >= clear ? [first] : [];
 		const tail = rounds.at(-1) === undefined || last - rounds.at(-1)! >= clear ? [last] : [];
 
-		return [...new Set([...head, ...rounds, ...tail])].sort((first, second) => first - second);
+		const gap = distribution.impossibleValue;
+		const join = gap !== null && gap > first && gap < last ? [gap] : [];
+
+		return [...new Set([...head, ...rounds, ...tail, ...join])]
+			.sort((first, second) => first - second);
 	});
 
 	/** Which outcome is being read, as a position in the answer, or null when none is. */
@@ -119,10 +130,13 @@
 	const percent = (probability: number) => `${(probability * 100).toFixed(1)}%`;
 
 	// The gap is drawn inside a column rather than between two, so a column is exactly a bar's share
-	// of the width and a value sits at the same fraction of it however wide the gaps are.
-	const positionOf = (value: number) => ((value - span.from) / (span.to - span.from)) * 100;
+	// of the width and a value sits at the same fraction of it however wide the gaps are. Placed off
+	// the axis rather than off the value, so a value the model can never answer with takes no room.
+	const positionOf = (value: number) =>
+		((axisAt(distribution, value) - span.from) / (span.to - span.from)) * 100;
 
-	const within = (value: number) => value >= span.from && value <= span.to;
+	const within = (value: number) =>
+		axisAt(distribution, value) >= span.from && axisAt(distribution, value) <= span.to;
 
 	// A round step is written without a decimal, so an axis climbing in whole percentages reads as
 	// whole numbers.
@@ -187,6 +201,7 @@
 			<div
 				class="bars"
 				class:drawing={!drawn}
+				data-explain="chart"
 				role="img"
 				aria-label={summary}
 				tabindex="0"
@@ -249,7 +264,6 @@
 
 	.readout {
 		min-height: var(--space-5);
-		max-width: none;
 		text-align: right;
 	}
 

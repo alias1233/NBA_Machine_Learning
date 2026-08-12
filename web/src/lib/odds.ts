@@ -30,10 +30,15 @@ export type Outcome = {
  * `bucketWidth` is how many whole numbers one probability covers. At one this is a chance per whole
  * number, which is what every player model answers with. Above one the model is saying it cannot
  * tell those numbers apart, so anything asked inside a bucket reads it as spread evenly across it.
+ *
+ * `impossibleValue` is a whole number the statistic cannot take, such as a point differential of
+ * zero. It is off the number line rather than inside a bucket, so the buckets either side of it read
+ * as -3 to -1 and 1 to 3 and neither is narrower than any other.
  */
 export type Distribution = {
 	minimumValue: number;
 	bucketWidth: number;
+	impossibleValue: number | null;
 	probabilities: number[];
 };
 
@@ -66,6 +71,7 @@ export function readAnswer(prediction: Prediction): Answer | null {
 			distribution: {
 				minimumValue: output.minimum_value,
 				bucketWidth: output.bucket_width,
+				impossibleValue: output.impossible_value,
 				probabilities: values
 			}
 		};
@@ -86,28 +92,61 @@ export type LineOdds = {
 	push: number;
 };
 
+/**
+ * Where a value sits on the axis an answer is drawn against, counted from the lowest outcome.
+ *
+ * The axis is the run of outcomes the model can actually answer with, so a value that cannot happen
+ * takes up no room on it and everything above it counts one lower. That leaves the axis a plain run
+ * of equal steps, which is what lets a bar, a mark and a handle all be placed by one number.
+ *
+ * A value need not be a whole one. The half number either side of a gap lands on the gap itself,
+ * because both ask exactly the same question of the answer.
+ */
+export function axisAt(distribution: Distribution, value: number): number {
+	const { minimumValue, impossibleValue } = distribution;
+
+	if (impossibleValue === null) return value - minimumValue;
+
+	return value - minimumValue - Math.min(Math.max(value - impossibleValue + 0.5, 0), 1);
+}
+
+/** The value a place on the axis stands for. The gap left by an impossible value reads as it. */
+export function valueAt(distribution: Distribution, axis: number): number {
+	const { minimumValue, impossibleValue } = distribution;
+
+	if (impossibleValue === null) return minimumValue + axis;
+
+	const gap = impossibleValue - minimumValue - 0.5;
+
+	if (axis < gap) return minimumValue + axis;
+
+	return axis > gap ? minimumValue + axis + 1 : impossibleValue;
+}
+
 /** The lowest and highest whole numbers the model can answer with. */
 export const lowestValue = (distribution: Distribution) => distribution.minimumValue;
 
-export const highestValue = ({ minimumValue, bucketWidth, probabilities }: Distribution) =>
-	minimumValue + probabilities.length * bucketWidth - 1;
+export const highestValue = (distribution: Distribution) =>
+	valueAt(distribution, distribution.probabilities.length * distribution.bucketWidth - 1);
+
+/** Which outcome a place on the axis falls in. Anything past either end is that end. */
+const outcomeAt = (distribution: Distribution, axis: number) =>
+	Math.min(
+		Math.max(Math.floor(axis / distribution.bucketWidth), 0),
+		distribution.probabilities.length - 1
+	);
 
 /** Which outcome a value falls in. Anything past either end is that end, which is how it was fit. */
-export function outcomeOf(distribution: Distribution, value: number): number {
-	const offset = Math.floor((value - distribution.minimumValue) / distribution.bucketWidth);
-
-	return Math.min(Math.max(offset, 0), distribution.probabilities.length - 1);
-}
+export const outcomeOf = (distribution: Distribution, value: number) =>
+	outcomeAt(distribution, axisAt(distribution, value));
 
 /** Each probability paired with the outcome it stands for. */
-export function outcomes({
-	minimumValue,
-	bucketWidth,
-	probabilities
-}: Distribution): Outcome[] {
+export function outcomes(distribution: Distribution): Outcome[] {
+	const { bucketWidth, probabilities } = distribution;
+
 	return probabilities.map((probability, offset) => {
-		const lowest = minimumValue + offset * bucketWidth;
-		const highest = lowest + bucketWidth - 1;
+		const lowest = valueAt(distribution, offset * bucketWidth);
+		const highest = valueAt(distribution, offset * bucketWidth + bucketWidth - 1);
 
 		return {
 			value: (lowest + highest) / 2,
@@ -125,6 +164,22 @@ export function expectedValue(distribution: Distribution): number {
 		(total, { value, probability }) => total + value * probability,
 		0
 	);
+}
+
+/**
+ * A value as a reader sees it.
+ *
+ * A statistic that can run below zero carries its sign, so a positive point differential reads +5.6
+ * and the mark of which side is ahead is on the figure itself. A statistic that cannot go below zero
+ * has nothing to mark, so it is written plain.
+ *
+ * The sign is decided after rounding, so a figure shown as zero is never given one.
+ */
+export function figureText(distribution: Distribution, value: number, decimals = 1): string {
+	const rounded = Number(value.toFixed(decimals));
+	const signed = lowestValue(distribution) < 0 && rounded > 0;
+
+	return `${signed ? '+' : ''}${rounded.toFixed(decimals)}`;
 }
 
 /**
@@ -173,8 +228,8 @@ export const defaultLine = (expected: number) => Math.floor(expected) + 0.5;
 /** A run of outcomes to draw, as positions in the answer rather than as values. */
 export type ChartRange = { first: number; last: number };
 
-/** The stretch of the number line a run of outcomes covers, from the outer edge of each end. */
-export type ValueSpan = { from: number; to: number };
+/** The stretch of the axis a run of outcomes covers, from the outer edge of each end. */
+export type AxisSpan = { from: number; to: number };
 
 /**
  * The smallest continuous run of outcomes holding `coverage` of the probability, widened to hold
@@ -206,27 +261,30 @@ export function chartRange(
 
 	let [first, last] = best;
 
+	// Widened off the axis rather than off the value, so a line sitting in a gap still names the two
+	// outcomes it falls between rather than only the one below it.
 	if (include !== null) {
-		first = Math.min(first, outcomeOf(distribution, Math.floor(include)));
-		last = Math.max(last, outcomeOf(distribution, Math.ceil(include)));
+		const at = axisAt(distribution, include);
+
+		first = Math.min(first, outcomeAt(distribution, Math.floor(at)));
+		last = Math.max(last, outcomeAt(distribution, Math.ceil(at)));
 	}
 
 	return { first, last };
 }
 
 /**
- * Where a drawn run starts and ends on the number line.
+ * Where a drawn run starts and ends on the axis.
  *
- * Each outcome owns its own share of the axis, so the edges sit half a whole number outside the
- * first and last numbers drawn. That is what lets a line be placed by its value alone, at any
- * bucket width.
+ * Each outcome owns its own share of it, so the edges sit half a step outside the first and last
+ * numbers drawn. That is what lets a line be placed by its value alone, at any bucket width.
  */
-export function valueSpan(distribution: Distribution, range: ChartRange): ValueSpan {
-	const { minimumValue, bucketWidth } = distribution;
+export function axisSpan(distribution: Distribution, range: ChartRange): AxisSpan {
+	const { bucketWidth } = distribution;
 
 	return {
-		from: minimumValue + range.first * bucketWidth - 0.5,
-		to: minimumValue + (range.last + 1) * bucketWidth - 0.5
+		from: range.first * bucketWidth - 0.5,
+		to: (range.last + 1) * bucketWidth - 0.5
 	};
 }
 

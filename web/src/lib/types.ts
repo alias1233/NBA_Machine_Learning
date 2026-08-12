@@ -7,6 +7,9 @@
 
 export type SeasonType = 'PRESEASON' | 'REGULAR_SEASON' | 'PLAYOFFS' | 'PLAY_IN';
 
+/** One side of a game, which is what an answer belonging to a game names. */
+export type GameSide = 'home' | 'away';
+
 export type Team = {
 	abbreviation: string;
 	name: string;
@@ -31,7 +34,9 @@ export type Roster = {
  *
  * An integer distribution counts up from `minimum_value` in steps of `bucket_width`. At a width of
  * one each value gets its own chance. Above one a position covers that many whole numbers, which is
- * what a model with too few games to fill a class per outcome answers with.
+ * what a model with too few games to fill a class per outcome answers with. `impossible_value` is a
+ * whole number the statistic cannot take, such as a point differential of zero, and it is off the
+ * number line rather than inside a position, so every position still covers `bucket_width` outcomes.
  *
  * A category distribution lists its categories most notable first, so a reading leads with the
  * first one. For a yes or no answer that is the chance of yes.
@@ -42,6 +47,7 @@ export type ModelOutput =
 			minimum_value: number;
 			outcomes: number;
 			bucket_width: number;
+			impossible_value: number | null;
 	  }
 	| { kind: 'category_distribution'; categories: string[] }
 	| { kind: 'values'; quantities: string[] };
@@ -53,6 +59,20 @@ export type Model = {
 	/** What the model answers about, in the words a reader sees. */
 	predicts: string[];
 	output: ModelOutput;
+	/**
+	 * Which side of the game a value above zero belongs to, for an answer with a direction.
+	 *
+	 * Null where the answer names no side. A point differential is read from the home team, so the
+	 * answer says whose margin it is drawing rather than leaving a signed number to say it.
+	 */
+	read_from: GameSide | null;
+	/**
+	 * Which side of the game each category names, in the order the output lists them.
+	 *
+	 * A name leads with its side's word, so the team playing that side goes in place of the word and
+	 * "home win" is read as the team's own name. Null where no category names a side.
+	 */
+	category_sides: GameSide[] | null;
 	/** Whether a trained file exists for it. A model without one is listed but cannot be asked. */
 	published: boolean;
 };

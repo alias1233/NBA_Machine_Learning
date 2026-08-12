@@ -10,9 +10,16 @@
  * model page all read the same words.
  *
  * Adding a family is one entry here and one folder under `src/routes/models/`.
+ *
+ * It also holds the words read off a model rather than off an answer: what it predicts, whose number
+ * an answer is when it belongs to one side of a game, and the sentence an answer is announced with.
  */
 
-import type { Model } from '$lib/types';
+// Relative and extended, so `npm test` can read this file with Node exactly as it stands.
+import { CATEGORY_DECIMALS, expectedValue, figureText, sharePercentages } from './odds.ts';
+
+import type { Answer } from './odds.ts';
+import type { GameSide, Model } from '$lib/types';
 
 export type ModelFamily = {
 	/** Matches the `family` field on a model from the service. */
@@ -85,3 +92,59 @@ export function predictsPhrase(predicts: string[]): string {
 }
 
 export const sentenceCase = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** The two sides of the game being asked about, named in full. */
+export type GameSides = Record<GameSide, string>;
+
+/**
+ * What the lead figure counts and whose it is, for a model read from one side of the game.
+ *
+ * A game statistic names no team, so nothing but this says which of the two a margin belongs to.
+ * Every other family names its subject in the heading already, so it gets nothing here.
+ */
+export function figureNote(model: Model | null, sides: GameSides | null): string {
+	if (!model?.read_from || !sides) return '';
+
+	return `${predictsPhrase(model.predicts)} for ${sides[model.read_from]}`;
+}
+
+/**
+ * The categories as a reader sees them once a game is chosen.
+ *
+ * A category naming a side of the game leads with that side's word, so the team playing it goes in
+ * place of the word and "home win" is read as "Toronto Raptors win". Null leaves the model's own
+ * words, which is every answer naming no side.
+ */
+export function namedCategories(model: Model | null, sides: GameSides | null): string[] | null {
+	const named = model?.category_sides;
+
+	if (!named || !sides || model.output.kind !== 'category_distribution') return null;
+
+	return model.output.categories.map((category, index) => {
+		const side = named[index];
+
+		if (!side) return category;
+
+		const rest = category.startsWith(side) ? category.slice(side.length).trim() : category;
+
+		return rest === '' ? sides[side] : `${sides[side]} ${rest}`;
+	});
+}
+
+/**
+ * The one sentence an answer is announced with, which is whatever its block leads with.
+ *
+ * `names` is what the categories are called for the chosen game, where they name one of its sides.
+ */
+export function answerSentence(answer: Answer, stat: string, names: string[] | null = null): string {
+	if (answer.kind === 'integer_distribution') {
+		const { distribution } = answer;
+
+		return `Expected ${figureText(distribution, expectedValue(distribution))} ${stat}.`;
+	}
+
+	const { probabilities } = answer.categories;
+	const shown = names ?? answer.categories.names;
+
+	return `${sentenceCase(stat)}, ${shown[0]} ${sharePercentages(probabilities, CATEGORY_DECIMALS)[0]} percent.`;
+}

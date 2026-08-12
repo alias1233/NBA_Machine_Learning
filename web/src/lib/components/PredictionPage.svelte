@@ -57,9 +57,12 @@
 	 * The line grows first and then widens into the column, so the press gets an answer of its own
 	 * straight away rather than waiting on the service. Nothing is awaited by the caller, because the
 	 * request it is answering goes out in the same breath.
+	 *
+	 * The walk starts with the reveal rather than after it, and follows the column for the whole of
+	 * both phases, because the page is still growing under it while they run.
 	 */
 	export async function reveal(): Promise<void> {
-		const revealing = opened ? 0 : MOTION_REVEAL;
+		const revealing = opened ? 0 : MOTION_SLOW + MOTION_REVEAL;
 
 		if (!opened) {
 			opened = true;

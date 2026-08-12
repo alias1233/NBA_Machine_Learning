@@ -106,7 +106,6 @@
 				<!-- Not a family and nothing to act on, so it is a panel rather than another block. -->
 				<div class="panel more">
 					<h3>More models</h3>
-					<p class="muted small">Each new family is listed here as it lands.</p>
 					<span class="tag micro">Coming soon</span>
 				</div>
 			{/if}

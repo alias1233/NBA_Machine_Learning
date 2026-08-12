@@ -29,3 +29,7 @@ Have models accessible through a website where users can predict future statisti
 python/ : the machine learning pipeline: collection, feature engineering, training, inference
 web/    : the website, SvelteKit.
 ```
+
+# Deployment
+
+1. ...

@@ -2,7 +2,7 @@
 	The team statistics page.
 
 	A request names a game and one of its two sides, so choosing a card fills the game and leaves the
-	reader in the team field, which is the one thing left to say.
+	reader in the team field with its two teams shown, which is the one thing left to say.
 
 	The form is the reader's pending request and the URL is the answered one. Editing a field or
 	choosing a card changes the form, and only the button copies it into the URL, which is what runs
@@ -18,10 +18,10 @@
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
 	import UpcomingGames from '$lib/components/UpcomingGames.svelte';
 	import { longGameDay } from '$lib/games';
-	import { predictsPhrase, sentenceCase } from '$lib/models';
+	import { answerSentence, predictsPhrase, sentenceCase } from '$lib/models';
 	import { flow } from '$lib/motion';
 	import { gameHref as buildGameHref } from '$lib/predictions';
-	import { expectedValue, readAnswer } from '$lib/odds';
+	import { readAnswer } from '$lib/odds';
 	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
 
 	import type { GameChoice } from '$lib/predictions';
@@ -65,9 +65,9 @@
 		) ?? null
 	);
 
-	/** The two sides of the described game, named. They are the only answers to which team. */
+	/** The two sides of the described game, named, home first. The only answers to which team. */
 	const sides = $derived(
-		[form.awayTeam, form.homeTeam]
+		[form.homeTeam, form.awayTeam]
 			.filter((abbreviation) => abbreviation !== '')
 			.map((abbreviation) => ({
 				abbreviation,
@@ -132,43 +132,57 @@
 	const answerKey = $derived(JSON.stringify([data.choice, data.team, data.model]));
 
 	/** The one sentence an answer is announced with, which is whatever its block leads with. */
-	const announcement = $derived.by(() => {
-		if (answer?.kind !== 'integer_distribution') return '';
-
-		return `${reached.heading}. Expected ${expectedValue(answer.distribution).toFixed(1)}.`;
-	});
+	const announcement = $derived(
+		answer ? `${reached.heading}. ${answerSentence(answer, reached.stat)}` : ''
+	);
 
 	const gameHref = (game: ScheduledGame) =>
 		buildGameHref(game, { model: form.model, team: form.team });
 
+	/**
+	 * Opens the team field's own list, which is the reveal the player picker gets from a focus.
+	 *
+	 * A native field only opens when asked, and only while the press that asked for it still counts.
+	 * A reader who has moved on in the meantime is left alone, and a browser that cannot open a list
+	 * on request leaves the field focused, which is where this started.
+	 */
+	function revealTeams() {
+		if (document.activeElement !== teamField) return;
+
+		try {
+			teamField?.showPicker();
+		} catch {
+			// Nothing to fall back to. The field is focused and the reader opens it themselves.
+		}
+	}
+
 	// The URL is rewritten in place, which runs no load, so the answer beside it keeps standing until
 	// the button asks for a new one.
 	function chooseGame(game: ScheduledGame) {
-		scrollIntoViewIfOffScreen(submitButton, 'end');
+		// The list is opened once the page has stopped moving, because a native one closes the moment
+		// it scrolls. The focus below is not, since nothing takes that away.
+		scrollIntoViewIfOffScreen(submitButton, 'end').then(revealTeams);
 
-		if (game === selectedGame) {
-			teamField?.focus({ preventScroll: true });
-			return;
+		if (game !== selectedGame) {
+			// A new game has two different sides, so whichever was chosen is no longer one of them.
+			form.date = game.date;
+			form.awayTeam = game.away_team.abbreviation;
+			form.homeTeam = game.home_team.abbreviation;
+			form.seasonType = game.season_type;
+			form.team = '';
+
+			// The live URL, not page.url, because a shallow write does not refresh page.url and the
+			// next write would put back what the last one replaced, including the team just cleared.
+			const url = new URL(location.href);
+			url.searchParams.set('date', game.date);
+			url.searchParams.set('away', game.away_team.abbreviation);
+			url.searchParams.set('home', game.home_team.abbreviation);
+			url.searchParams.set('type', game.season_type);
+			url.searchParams.delete('team');
+			replaceState(url, page.state);
 		}
 
-		// A new game has two different sides, so whichever was chosen is no longer one of them.
-		form.date = game.date;
-		form.awayTeam = game.away_team.abbreviation;
-		form.homeTeam = game.home_team.abbreviation;
-		form.seasonType = game.season_type;
-		form.team = '';
-
-		// The live URL, not page.url, because a shallow write does not refresh page.url and the next
-		// write would put back what the last one replaced, including the team this just cleared.
-		const url = new URL(location.href);
-		url.searchParams.set('date', game.date);
-		url.searchParams.set('away', game.away_team.abbreviation);
-		url.searchParams.set('home', game.home_team.abbreviation);
-		url.searchParams.set('type', game.season_type);
-		url.searchParams.delete('team');
-		replaceState(url, page.state);
-
-		// Which side to answer for is the one thing left to say, so the reader is put in it.
+		// Which side to answer for is the one thing left to say, so the reader is put in it at once.
 		teamField?.focus({ preventScroll: true });
 	}
 

@@ -4,9 +4,9 @@
 	A request names a game and nothing else, so choosing a card is the whole of it and the reader is
 	walked straight to the button.
 
-	Anything with a direction is read from the home side. That is why an answer names the home team
-	first, and why the point differential carries the chance the home team wins beside what it
-	expects.
+	A request names no team, so a model whose answer belongs to one side of the game says which side
+	that is. The stat control names that team before a prediction and the answer names it beside the
+	figure, because the number itself carries nothing to say whose it is.
 
 	The form is the reader's pending request and the URL is the answered one. Editing a field or
 	choosing a card changes the form, and only the button copies it into the URL, which is what runs
@@ -22,12 +22,19 @@
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
 	import UpcomingGames from '$lib/components/UpcomingGames.svelte';
 	import { longGameDay } from '$lib/games';
-	import { predictsPhrase, sentenceCase } from '$lib/models';
+	import {
+		answerSentence,
+		figureNote,
+		namedCategories,
+		predictsPhrase,
+		sentenceCase
+	} from '$lib/models';
 	import { flow } from '$lib/motion';
-	import { calculateOdds, expectedValue, oddsPercentages, readAnswer } from '$lib/odds';
+	import { readAnswer } from '$lib/odds';
 	import { gameHref as buildGameHref } from '$lib/predictions';
 	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
 
+	import type { GameSides } from '$lib/models';
 	import type { GameChoice } from '$lib/predictions';
 	import type { ScheduledGame } from '$lib/types';
 
@@ -35,12 +42,6 @@
 
 	const TITLE = 'Game statistics';
 	const ABOUT = '/models/game-stats/about';
-
-	/**
-	 * The one model whose answer also says who wins. It is a margin counted from the home side, so
-	 * everything above zero is the home team winning and the odds already hold it.
-	 */
-	const MARGIN_MODEL = 'point_differential';
 
 	/**
 	 * The pending request. It starts as the answered one and is the reader's until the button copies
@@ -87,26 +88,30 @@
 	const teamName = (abbreviation: string) =>
 		data.teams.find((team) => team.abbreviation === abbreviation)?.name ?? abbreviation;
 
+	/** The two sides of a described game, named in full. Null until both of them are named. */
+	const namedSides = (game: GameChoice): GameSides | null =>
+		game.homeTeam === '' || game.awayTeam === ''
+			? null
+			: { home: teamName(game.homeTeam), away: teamName(game.awayTeam) };
+
 	/**
 	 * How an answer names itself: the two teams and the stat, then the day.
 	 *
-	 * The home team is named first, which is the order that says which way a margin counts. Nothing
-	 * else on the page distinguishes the two sides.
+	 * The home team is named first, which is the order that says which way a margin counts. A model
+	 * read from one side says so beside its figure, and a category naming a side is named by the team
+	 * playing it, because nothing else in a game statistic's answer marks which team it is about.
 	 */
 	function describe(modelName: string, game: GameChoice) {
-		const named = data.models.find(({ name }) => name === modelName);
+		const named = data.models.find(({ name }) => name === modelName) ?? null;
 		const stat = named ? predictsPhrase(named.predicts) : '';
-		const matchup =
-			game.homeTeam === '' || game.awayTeam === ''
-				? ''
-				: `${teamName(game.homeTeam)} vs ${teamName(game.awayTeam)}`;
+		const sides = namedSides(game);
 
 		return {
 			stat,
-			model: modelName,
-			home: game.homeTeam,
-			heading: `${matchup}, ${stat}`,
-			subheading: longGameDay(game.date)
+			heading: `${sides ? `${sides.home} vs ${sides.away}` : ''}, ${stat}`,
+			subheading: longGameDay(game.date),
+			note: figureNote(named, sides),
+			categoryNames: namedCategories(named, sides)
 		};
 	}
 
@@ -124,7 +129,7 @@
 				})
 			: data.prediction
 				? reached
-				: { stat: '', model: '', home: '', heading: missing, subheading: '' }
+				: { stat: '', heading: missing, subheading: '', note: '', categoryNames: null }
 	);
 
 	// The loader only offers models the site has a reading for, so this is null while loading and
@@ -137,38 +142,27 @@
 		data.models.find(({ name }) => name === (predicting ? form.model : data.model)) ?? null
 	);
 
-	/**
-	 * The chance the home team wins, which a margin answer already holds: it is the odds on a line of
-	 * zero. Named by the model, so the label stands while the figure is worked out.
-	 */
-	const winChance = $derived.by(() => {
-		if (shown.model !== MARGIN_MODEL || shown.home === '') return null;
+	/** Which side the stat in the form is counted from, once the game names both. */
+	const countedFrom = $derived.by(() => {
+		const side = data.models.find(({ name }) => name === form.model)?.read_from;
+		const sides = namedSides(form);
 
-		const label = `${shown.home} wins`;
-
-		if (answer?.kind !== 'integer_distribution' || predicting) return { label, figure: '' };
-
-		// A game cannot end level, so the home team wins whenever they do not lose. Zero starts an
-		// outcome, so the chance they lose is an exact sum whether the model answers in single points
-		// or in threes, and neither reading has to know how wide an outcome is.
-		const { under } = calculateOdds(answer.distribution, 0);
-		const wins = oddsPercentages({ over: 1 - under, under, push: 0 });
-
-		return { label, figure: `${wins.over}%` };
+		return side && sides ? { side, team: sides[side] } : null;
 	});
 
 	// A new game or stat is a new answer, so the block starts from its own line.
 	const answerKey = $derived(JSON.stringify([data.choice, data.model]));
 
-	/** The one sentence an answer is announced with, which is whatever its block leads with. */
+	/**
+	 * The one sentence an answer is announced with, which is whatever its block leads with. A figure
+	 * belonging to one side is spoken with that side named, as it is drawn.
+	 */
 	const announcement = $derived.by(() => {
-		if (answer?.kind !== 'integer_distribution') return '';
+		if (!answer) return '';
 
-		const expected = `Expected ${expectedValue(answer.distribution).toFixed(1)}.`;
+		const spoken = answerSentence(answer, reached.note || reached.stat, reached.categoryNames);
 
-		return [reached.heading, expected, winChance?.figure && `${winChance.label} ${winChance.figure}.`]
-			.filter(Boolean)
-			.join(' ');
+		return `${reached.heading}. ${spoken}`;
 	});
 
 	const gameHref = (game: ScheduledGame) => buildGameHref(game, { model: form.model });
@@ -254,9 +248,11 @@
 							<option value={option.name}>{sentenceCase(predictsPhrase(option.predicts))}</option>
 						{/each}
 					</select>
-					{#if form.model === MARGIN_MODEL && form.homeTeam !== ''}
+					<!-- A stat with a direction is counted from one side, and the answer names no team,
+					     so the control choosing it says which side that is. -->
+					{#if countedFrom}
 						<p class="small muted" transition:flow>
-							Counted from {teamName(form.homeTeam)}, who are at home.
+							Counted from {countedFrom.team}, the {countedFrom.side} team.
 						</p>
 					{/if}
 				</div>
@@ -286,12 +282,13 @@
 						loading={predicting}
 						stat={shown.stat}
 						heading={shown.heading}
+						figureNote={shown.note}
+						categoryNames={shown.categoryNames}
 						subheading={shown.subheading}
 						openOn={data.line}
 						aboutHref={ABOUT}
 						customRoster={false}
 						pastGames={data.prediction?.past_games ?? null}
-						second={winChance}
 					/>
 				{/key}
 			{/if}

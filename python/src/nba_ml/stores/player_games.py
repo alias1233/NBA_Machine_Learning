@@ -1,11 +1,12 @@
 """One row per player per finished game, straight off the box score."""
 
-from datetime import date, datetime
+from datetime import date
+from typing import Collection
 
 import pandas as pd
 
 from nba_ml import paths, season
-from nba_ml.database import Categories, Database, DataConflictHandler, DataType
+from nba_ml.database import Categories, Category, Database, DataConflictHandler, DataType
 
 # Categories
 ALL_CATEGORIES = Categories()
@@ -58,7 +59,7 @@ def get_all_player_game_data() -> pd.DataFrame:
 
 def get_specific_player_game_data(
         player_id: int,
-        date_start: datetime | None = None
+        date_start: date | None = None
         ) -> pd.DataFrame:
     SQL_condition = f"{PLAYER_ID.category_name} = :{PLAYER_ID.category_name}"
     condition_params: dict = {PLAYER_ID : player_id}
@@ -74,7 +75,61 @@ def get_specific_player_game_data(
 
     return data
 
-def get_game_data_after_date(date_start: datetime) -> pd.DataFrame:
+def _held_in(category: Category, values: Collection[int]) -> str:
+    """
+    A filter matching any of the given whole numbers.
+
+    They are written into the condition rather than bound, because one bound parameter is one value
+    and this is a list of them. Each is read as an integer first, so nothing else can reach the SQL.
+    """
+
+    return f"{category.category_name} IN ({','.join(str(int(value)) for value in values)})"
+
+def get_players_game_data(
+        player_ids: Collection[int],
+        date_start: date | None = None
+        ) -> pd.DataFrame:
+    """
+    Every stored game of the named players, which is what a prediction reads around one player: the
+    player themselves and the team mates whose recent form its roster columns total.
+    """
+
+    if not player_ids:
+        return pd.DataFrame(columns=DATABASE.category_names)
+
+    SQL_condition = _held_in(PLAYER_ID, player_ids)
+    condition_params: dict = {}
+
+    if date_start is not None:
+        SQL_condition += f" AND {GAME_DATE.category_name} >= :{GAME_DATE.category_name}"
+        condition_params[GAME_DATE] = season.to_date_string(date_start)
+
+    with DATABASE:
+        data = DATABASE.query_dataframe(
+            SQL_condition=SQL_condition,
+            condition_params=condition_params or None
+        )
+
+    return data
+
+def player_ids_in_games(team_id: int, game_ids: Collection[int]) -> set[int]:
+    """Who played for a team in the named games, which is the roster around those games."""
+
+    if not game_ids:
+        return set()
+
+    with DATABASE:
+        rows = DATABASE.query(
+            SQL_condition=(
+                f"{TEAM_ID.category_name} = :{TEAM_ID.category_name} AND {_held_in(GAME_ID, game_ids)}"
+            ),
+            condition_params={TEAM_ID : team_id},
+            categories=[PLAYER_ID]
+        )
+
+    return {int(row[0]) for row in rows}
+
+def get_game_data_after_date(date_start: date) -> pd.DataFrame:
     with DATABASE:
         data = DATABASE.query_dataframe(
             SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",

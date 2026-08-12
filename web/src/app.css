@@ -66,6 +66,10 @@
 	--warn-wash: light-dark(#f8edd6, #2a2211);
 	--warn-border: light-dark(#dfc79b, #5c4a1d);
 	--chart-neutral: light-dark(#8a8375, #807969);
+	/* The leader lines on the About page's annotated answer. One tone in both themes, because a
+	   leader crosses the page and a block on its way to the part it names and those two swap, so it
+	   is the one mid tone that reads on either. */
+	--leader: #7d7668;
 	/* What the model expects, marked on the chart. Ink rather than a hue of its own, so it is the
 	   opposite of the paper in either theme and is never mistaken for over, under or push. */
 	--chart-expected: var(--ink);
@@ -83,6 +87,9 @@
 	--type-body: 1rem;
 	--type-small: 0.875rem;
 	--type-micro: 0.75rem;
+	/* What a lead figure counts and whose it is. A step above body text, which nothing else on an
+	   answer takes, so the phrase reads as part of the figure without taking the lead from it. */
+	--type-note: 1.125rem;
 	--type-figure: 1.25rem;
 	/* A figure given room to be read from further away, which is the odds in the detailed view. */
 	--type-figure-large: 1.75rem;
@@ -263,10 +270,8 @@ h3,
 	line-height: 1.25;
 }
 
-/* Prose measures no wider than 68 characters, wherever it lands. */
 p {
 	margin: 0;
-	max-width: 68ch;
 }
 
 ul,
@@ -327,6 +332,14 @@ a {
 	letter-spacing: -0.01em;
 	line-height: 1.2;
 	font-variant-numeric: tabular-nums;
+}
+
+/* The interface face, not the mono one, because it is a phrase rather than a measurement. */
+.figure-note {
+	font-size: var(--type-note);
+	font-weight: 500;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
 }
 
 .figure-lead {

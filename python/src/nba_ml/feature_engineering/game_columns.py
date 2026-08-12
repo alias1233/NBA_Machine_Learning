@@ -594,6 +594,13 @@ SEASON_ENCODINGS = {
     season_type.value : prefix
     for season_type, prefix in GAME_ID_PREFIXES.items()
 }
+SEASON_TYPE = 'SEASON_TYPE'
+"""
+Which phase a game belongs to, as the one character a game id names it with.
+
+A label rather than a model input: the columns above are what a model reads, and this is what
+grouping a subject's games by phase needs.
+"""
 def add_encoded_season_type_columns(
     team_game_data: pd.DataFrame,
     game_id_column: str
@@ -605,6 +612,7 @@ def add_encoded_season_type_columns(
     """
 
     season_type_id = team_game_data[game_id_column].astype(str).str[0]
+    team_game_data[SEASON_TYPE] = season_type_id
 
     for season_type in ALL_SEASON_TYPES:
         team_game_data[season_type] = _encode_equality_as_integer(season_type_id, SEASON_ENCODINGS[season_type])

@@ -8,8 +8,13 @@
 	across a screen.
 
 	The exact figures sit behind one disclosure at the top, beside what the model expects. It opens as
-	a panel over the drawing, so nothing else in the view moves, and it holds every outcome ordered
-	either by value or by chance, which is the ranking a reader wants when they want one.
+	a panel over the drawing and the controls under it, so nothing else in the view moves, and it holds
+	every outcome ordered either by value or by chance, which is the ranking a reader wants when they
+	want one. It reaches down to the foot of the view rather than stopping at the drawing, because on a
+	phone the drawing alone is three rows of table and a scroll with nowhere to go.
+
+	Opening it puts the reader inside it, so a swipe or an arrow key belongs to the table rather than
+	to whatever it is standing over. Closing hands them back to the control that opened it.
 
 	A modal dialog, so the reader is inside it until they leave: Escape closes an open panel and then
 	the view, focus stays within it, and the page underneath it holds still and comes back where it was.
@@ -23,6 +28,7 @@
 	import {
 		calculateOdds,
 		expectedValue,
+		figureText,
 		mostLikelyOutcomes,
 		oddsPercentages,
 		outcomes
@@ -61,6 +67,7 @@
 	const range = $derived({ first: 0, last: distribution.probabilities.length - 1 });
 
 	const expected = $derived(expectedValue(distribution));
+	const expectedText = $derived(figureText(distribution, expected));
 	const likeliest = $derived(mostLikelyOutcomes(distribution, 1)[0]);
 
 	// Ordered by chance is the ranking, so one table answers both questions the reader can ask of it.
@@ -75,11 +82,11 @@
 
 	const summary = $derived(
 		[
-			`Expected ${expected.toFixed(1)} ${stat}.`,
+			`Expected ${expectedText} ${stat}.`,
 			`Most likely ${likeliest.label} ${stat}.`,
-			`Over ${line}, ${spoken.over} percent.`,
 			`Under ${line}, ${spoken.under} percent.`,
-			`Push ${line}, ${spoken.push} percent.`
+			`Push ${line}, ${spoken.push} percent.`,
+			`Over ${line}, ${spoken.over} percent.`
 		].join(' ')
 	);
 
@@ -117,6 +124,18 @@
 			closer?.focus();
 		}
 	});
+
+	/** Plain, not state, because this only records where the last run left off. */
+	let wasShowing = false;
+
+	// A panel standing over the drawing owns what the reader does next, so it takes the focus and
+	// gives it back. Everything a swipe or an arrow key could land on instead is behind it.
+	$effect(() => {
+		if (showing) sheet?.focus({ preventScroll: true });
+		else if (wasShowing) toggle?.focus({ preventScroll: true });
+
+		wasShowing = showing;
+	});
 </script>
 
 <dialog bind:this={dialog} aria-labelledby={TITLE} onclose={onclose} onkeydown={onKeydown}>
@@ -135,7 +154,7 @@
 				<dl class="facts">
 					<div>
 						<dt class="micro muted">Expected</dt>
-						<dd class="figure">{expected.toFixed(1)}</dd>
+						<dd class="figure">{expectedText}</dd>
 					</div>
 				</dl>
 
@@ -174,7 +193,8 @@
 			the room its own contents need and no more.
 		-->
 		{#if showing}
-			<div bind:this={sheet} id={SHEET} class="panel sheet" transition:appear>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div bind:this={sheet} id={SHEET} class="panel sheet" tabindex="-1" transition:appear>
 				<h3>All outcomes</h3>
 
 				<div class="sheet-body">
@@ -310,18 +330,23 @@
 	}
 
 	/*
-	 * A panel over the drawing, in the same grid cell, so opening one moves nothing else in the view.
-	 * It floats above the page, so it is one of the few things on the site carrying a shadow. It hangs
-	 * from the end the control that opened it sits at and is only as wide as what it holds, because
-	 * two columns of figures spread across a screen are harder to read across, not easier.
+	 * A panel over the drawing, taking the same column and everything below the words, so opening one
+	 * moves nothing else in the view. It floats above the page, so it is one of the few things on the
+	 * site carrying a shadow. It hangs from the end the control that opened it sits at and is only as
+	 * wide as what it holds, because two columns of figures spread across a screen are harder to read
+	 * across, not easier.
+	 *
+	 * It runs to the foot of the view rather than to the foot of the drawing. The drawing is a set
+	 * height and on a phone that is a scroller three rows tall, which reads as one that does not work.
 	 */
 	.sheet {
-		grid-area: 2 / 1;
+		grid-row: 2 / -1;
+		grid-column: 1;
 		/* Raised over the drawing rather than merely later than it. The chart places its own marks,
 		   and a positioned thing is painted above every plain background whatever the order. */
 		position: relative;
 		z-index: 1;
-		/* It takes the room its own contents need and no more, up to the whole drawing, so a short
+		/* It takes the room its own contents need and no more, up to everything it spans, so a short
 		   run is a short panel and sixty rows are a scrolling one. */
 		align-self: start;
 		justify-self: end;
@@ -335,9 +360,12 @@
 		box-shadow: var(--shadow);
 	}
 
+	/* The table is what runs out of room, so it is what scrolls. A swipe that reaches either end of it
+	   stops there rather than carrying on into the view behind. */
 	.sheet-body {
 		min-height: 0;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding-right: var(--space-5);
 	}
 

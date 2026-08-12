@@ -23,9 +23,10 @@ from dateutil.relativedelta import relativedelta
 
 from nba_ml import season
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import game_columns, rolling
+from nba_ml.feature_engineering import game_columns, rolling, situations
 from nba_ml.feature_engineering.rolling import RollingCategory
 from nba_ml.feature_engineering.samples import OUTPUT, GameHistory, split_into_histories
+from nba_ml.feature_engineering.situations import SituationalStat
 from nba_ml.stores import team_games as team_game_store
 
 ROLLING_WINDOW = 15
@@ -61,6 +62,23 @@ OPPONENT_TEAM_ID = game_columns.OPPONENT_PREFIX + TEAM_ID
 # WHAT A GAME HOLDS: #
 WIN = team_game_store.WIN_LOSS.category_name
 """The win or loss column, which the build rewrites as one for a win."""
+
+WON, LOST = 0, 1
+"""
+Which position of a two category answer each result is, for a model fit to say who wins.
+
+A model answering in named categories is fit against the position it should answer with, and a
+reader is led with the first one, so a win comes first. A family naming the two categories orders
+them this way.
+"""
+
+WIN_CATEGORY = 'WIN_CATEGORY'
+"""
+The same result as one of those positions rather than as a flag.
+
+WIN stays one for a win, because it is a stat the build averages and the mean of it is a win rate.
+This is only ever a value to be fit against, so no model reads it as a feature.
+"""
 
 IS_HOME_ROW = 'IS_HOME_ROW'
 """
@@ -177,12 +195,23 @@ The opposing team's own schedule and record, which decide a game as much as the 
 Home or away and the season phase are left out, because both teams already share them.
 """
 
+SITUATIONS = [situations.IN_THIS_SEASON_TYPE, situations.AT_HOME_OR_AWAY]
+"""
+Which kinds of game a team's own form is read in. See feature_engineering/situations.py.
+
+Measured on the point differential over three seeds on 2026-08-11. These two beat reading none on
+every seed, and adding the team's form against the side it faces on top of them was worth nothing.
+Two teams meet a handful of times a season and neither roster is the one that met last time, so
+there is little there to read.
+"""
+
 class TargetValue(Enum):
     """Which finished column of this build holds a value a model can be fit against."""
 
     POINT_DIFFERENTIAL = game_columns.POINT_DIFFERENTIAL
     TEAM_POINTS = game_columns.POINTS
     GAME_TOTAL = game_columns.GAME_TOTAL
+    RESULT = WIN_CATEGORY
 
 # WHICH COLUMNS A MODEL READS: #
 @dataclass(frozen=True)
@@ -198,6 +227,9 @@ class FeatureSet():
     """The finished column the value being predicted is read off."""
 
     rolling_categories: list[RollingCategory]
+    situational_stats: list[SituationalStat]
+    """What a team's form in games like this one is read over. See feature_engineering/situations.py."""
+
     columns_copied_from_opponent: list[str]
     """The team columns worth carrying over to the row of the team it is playing."""
 
@@ -237,10 +269,19 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
         ]
     )
 
+    # How the team does in games like this one, measured against the recent form above rather than
+    # against a whole season, so a team that has changed is not read as its old self.
+    situational_stats = [
+        SituationalStat(stat, stat, PAST_MEAN_PREFIX + stat) for stat in SEASON_LEVEL_STATS
+    ]
+    situational_columns = situations.all_columns(SITUATIONS, situational_stats)
+
     # Everything the team knows about itself going into the game, read a second time off the side it
     # is facing. That is what makes one row describe a whole game rather than half of one.
     columns_copied_from_opponent = (
-        [category.column_name for category in rolling_categories] + OPPONENT_CONTEXT_STATS
+        [category.column_name for category in rolling_categories]
+        + situational_columns
+        + OPPONENT_CONTEXT_STATS
     )
     opponent_columns = [
         game_columns.OPPONENT_PREFIX + column for column in columns_copied_from_opponent
@@ -249,6 +290,7 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
     return FeatureSet(
         output_column=target.value,
         rolling_categories=rolling_categories,
+        situational_stats=situational_stats,
         columns_copied_from_opponent=columns_copied_from_opponent,
         sequence_columns=sorted(set(
             OWN_GAME_STATS
@@ -260,6 +302,7 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
             set(
                 CONTEXT_COLUMNS
                 + [category.column_name for category in rolling_categories]
+                + situational_columns
                 + opponent_columns
             )
             - set(dropped_static_columns)
@@ -313,6 +356,7 @@ def build_rows(features: FeatureSet, team_game_data: pd.DataFrame) -> pd.DataFra
         team_game_data[game_columns.HOME_OR_AWAY].eq(0).fillna(False).astype(bool)
     )
     team_game_data = game_columns.encode_win_loss_column_as_integer(team_game_data, WIN)
+    team_game_data[WIN_CATEGORY] = np.where(team_game_data[WIN] == 1, WON, LOST)
     team_game_data = game_columns.add_break_columns(
         team_game_data,
         GAME_DATE,
@@ -350,6 +394,14 @@ def build_rows(features: FeatureSet, team_game_data: pd.DataFrame) -> pd.DataFra
         team_game_data,
         features.rolling_categories,
         group_by_column=TEAM_ID
+        )
+
+    # After the rolling columns, because a team's form in a kind of game is measured against them.
+    team_game_data = situations.add_columns(
+        team_game_data,
+        TEAM_ID,
+        SITUATIONS,
+        features.situational_stats
         )
 
     # Last, because it carries the finished rolling columns over to the row of the team being played.

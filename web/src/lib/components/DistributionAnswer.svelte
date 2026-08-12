@@ -27,6 +27,7 @@
 		chartRange,
 		defaultLine,
 		expectedValue,
+		figureText,
 		highestValue,
 		lowestValue,
 		mostLikelyOutcomes,
@@ -44,9 +45,11 @@
 		/** What the answer names itself, which the detailed view carries because it covers the page. */
 		heading: string;
 		subheading: string;
+		/** True where the block stands for an answer rather than being one, so it owns no address bar. */
+		example?: boolean;
 	};
 
-	let { distribution, stat, openOn, heading, subheading }: Props = $props();
+	let { distribution, stat, openOn, heading, subheading, example = false }: Props = $props();
 
 	const URL_SYNC_DELAY = 300;
 
@@ -77,11 +80,11 @@
 	// reads 0.0 percent, because a half number cannot be landed on.
 	const summary = $derived(
 		[
-			`Expected ${expected.toFixed(1)} ${stat}.`,
+			`Expected ${figureText(distribution, expected)} ${stat}.`,
 			`Most likely ${likeliest.label} ${stat}.`,
-			`Over ${line}, ${spoken.over} percent.`,
 			`Under ${line}, ${spoken.under} percent.`,
-			`Push ${line}, ${spoken.push} percent.`
+			`Push ${line}, ${spoken.push} percent.`,
+			`Over ${line}, ${spoken.over} percent.`
 		].join(' ')
 	);
 
@@ -89,6 +92,10 @@
 
 	$effect(() => {
 		const chosen = line;
+
+		// A block standing for an answer rather than being one was never asked for, so there is
+		// nothing in the address bar for its line to keep in step with.
+		if (example) return;
 
 		// The first run is the value the answer opened on, which the address bar already agrees with.
 		if (!opened) {

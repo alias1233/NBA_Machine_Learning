@@ -11,7 +11,8 @@ def _adjust_classification_outputs(
     outputs: np.ndarray,
     min_output_value: int,
     num_classifications: int | None,
-    output_value_step: int = 1
+    output_value_step: int = 1,
+    impossible_value: int | None = None
     ) -> np.ndarray:
     """
     Turns the values into the classes a model is fit against, folding anything outside the class
@@ -21,12 +22,21 @@ def _adjust_classification_outputs(
         output_value_step is how many values one class covers. At one every value is its own class.
         Above one the classes are buckets, which is what a model with too few samples to fill a class
         per value is given.
+
+        impossible_value is a whole number the statistic cannot take, such as a point differential of
+        zero. It is not on the line at all, so everything above it counts one step lower and every
+        class still covers output_value_step outcomes.
     """
 
-    adjusted = (outputs.astype(np.int64) - min_output_value) // output_value_step
+    values = outputs.astype(np.int64)
+    steps = values - min_output_value
+
+    if impossible_value is not None:
+        steps = steps - (values > impossible_value)
+
     maximum = None if num_classifications is None else num_classifications - 1
 
-    return adjusted.clip(min=0, max=maximum)
+    return (steps // output_value_step).clip(min=0, max=maximum)
 
 def summarize_classification_outputs(
     outputs: torch.Tensor,
@@ -243,6 +253,7 @@ def build_classification_datasets(
     min_output_value: int = 0,
     num_classifications: int | None = None,
     output_value_step: int = 1,
+    impossible_value: int | None = None,
     standardize_input: bool = False
     ) -> tuple[
         SequenceGameDataset,
@@ -257,7 +268,8 @@ def build_classification_datasets(
 
     Args:
         min_output_value is the value the first class stands for, and output_value_step how many
-        values one class covers. Anything outside the range folds into the nearest end.
+        values one class covers. Anything outside the range folds into the nearest end, and
+        impossible_value names a whole number inside it that the statistic cannot take.
 
     The scalers are fit only on the games and samples of the training split, and come back None
     unless standardize_input is set.
@@ -291,7 +303,8 @@ def build_classification_datasets(
                 samples.outputs,
                 min_output_value,
                 num_classifications,
-                output_value_step
+                output_value_step,
+                impossible_value
             ),
             values=samples.outputs
         )

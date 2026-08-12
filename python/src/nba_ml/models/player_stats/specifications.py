@@ -168,3 +168,20 @@ ALL_MODEL_SPECIFICATIONS = {
     )
 }
 
+def union_feature_set() -> FeatureSet:
+    """
+    Every column any model of this family reads, resolved as one feature set.
+
+    This is what the whole-league build is made over, so one build answers all fourteen models and
+    adding a model adds no build. build_feature_set already takes the union of what each stat asks
+    for, so this is a call rather than a second definition of the columns.
+    """
+
+    return build_feature_set(
+        tuple(
+            target_stat
+            for specification in ALL_MODEL_SPECIFICATIONS.values()
+            for target_stat in specification.target_stats
+        )
+    )
+

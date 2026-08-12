@@ -1,5 +1,6 @@
 __pycache__/
 .venv/
+.pytest_cache/
 
 # Databases, trained models, cached training builds, and graphs
 data/

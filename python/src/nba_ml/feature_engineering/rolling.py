@@ -41,23 +41,37 @@ class RollingCategory():
 
 MEAN_FUNCTION: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series] = lambda x : x.mean()
 STD_FUNCTION: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series] = lambda x : x.std()
+COUNT_FUNCTION: Callable[[Rolling | Expanding | ExponentialMovingWindow], pd.Series] = lambda x : x.count()
+
+def _grouping(dataframe: pd.DataFrame, group_by_column: str | list[str] | None):
+    """The columns to group by, as the list of series pandas wants, or None for one whole group."""
+
+    if group_by_column is None:
+        return None
+
+    if isinstance(group_by_column, str):
+        return [dataframe[group_by_column]]
+
+    return [dataframe[column] for column in group_by_column]
 
 def calculate_rolling_function_column(
         dataframe: pd.DataFrame,
         rolling_param: RollingCategory,
-        group_by_column: str | None = None
+        group_by_column: str | list[str] | None = None
         ) -> pd.Series:
     """
     Args:
         group_by_column restarts the window for every group, so one call covers every group in the
-        frame. Without it the whole column is treated as one group.
+        frame. Without it the whole column is treated as one group. Naming more than one column
+        restarts the window per combination of them, which is what reading a subject's games of one
+        kind takes.
 
     The frame must be sorted so that each group's rows are in the order the window should read them,
     and its row labels must be unique.
     """
 
     calculated_from_column = dataframe[rolling_param.calculated_from_column_name]
-    groups = None if group_by_column is None else dataframe[group_by_column]
+    groups = _grouping(dataframe, group_by_column)
 
     if rolling_param.exclusive:
         calculated_from_column = (
@@ -86,7 +100,9 @@ def calculate_rolling_function_column(
 
     if groups is not None:
         # A grouped window comes back keyed by group, so put the values back on the frame's own rows.
-        rolling_column = rolling_column.reset_index(level=0, drop=True).reindex(dataframe.index)
+        rolling_column = rolling_column.reset_index(
+            level=list(range(len(groups))), drop=True
+        ).reindex(dataframe.index)
 
     if rolling_param.fill_na_value is not None:
         rolling_column = rolling_column.fillna(rolling_param.fill_na_value)
@@ -96,7 +112,7 @@ def calculate_rolling_function_column(
 def add_rolling_function_columns(
         dataframe: pd.DataFrame,
         rolling_params: list[RollingCategory],
-        group_by_column: str | None = None
+        group_by_column: str | list[str] | None = None
         ) -> pd.DataFrame:
     """
     Computes rolling functions on the given dataframe.
