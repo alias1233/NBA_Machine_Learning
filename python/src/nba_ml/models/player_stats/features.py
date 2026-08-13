@@ -15,14 +15,24 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from enum import Enum
-from typing import Any, Collection, Iterable
+from typing import Collection, Iterable
 
 import pandas as pd
 import numpy as np
 
 from nba_ml import season
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import feature_store, game_columns, rolling, situations
+from nba_ml.feature_engineering import (
+    feature_store,
+    game_columns,
+    placeholders,
+    player_columns,
+    rolling,
+    schedule_columns,
+    season_columns,
+    situations,
+    team_columns
+)
 from nba_ml.feature_engineering.feature_store import FeatureBuild, SubjectSequences
 from nba_ml.feature_engineering.rolling import RollingCategory
 from nba_ml.feature_engineering.situations import SituationalStat
@@ -50,7 +60,7 @@ HISTORICAL_WINDOW_LENGTH_YEARS = 5
 BUILD_NAME = "player_stats"
 """Names the directory this family's published whole-league builds are kept under."""
 
-ROSTER_GAMES_READ = game_columns.CORE_ROTATION_WINDOW
+ROSTER_GAMES_READ = player_columns.CORE_ROTATION_WINDOW
 """
 How many of the team's last games a prediction reads the whole roster of.
 
@@ -72,7 +82,8 @@ PAST_MEAN_ALLOWED_INFIX = "PAST_MEAN_ALLOWED_"
 
 PRE_UNUSED_PLAYER_CATEGORIES = [
     player_games.MATCHUP.category_name,
-    player_games.WIN_LOSS.category_name
+    player_games.WIN_LOSS.category_name,
+    player_games.SEASON_TYPE.category_name
 ]
 
 DUPLICATE_PLAYER_TEAM_MERGED_CATEGORIES = [
@@ -127,18 +138,18 @@ class TargetStatColumns():
 
 class TargetStat(Enum):
     POINTS = TargetStatColumns(
-        output_column=game_columns.POINTS + game_columns.PLAYER_SUFFIX,
+        output_column=game_columns.POINTS + player_columns.PLAYER_SUFFIX,
         sequence_stats=(
-            game_columns.POINTS + game_columns.PLAYER_SUFFIX,
-            player_games.OFFENSIVE_REBOUNDS.category_name + game_columns.PLAYER_SUFFIX,
-            team_games.ASSISTS.category_name + game_columns.TEAM_SUFFIX,
-            player_games.TURNOVERS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.FIELD_GOALS_MADE.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.THREE_POINTERS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.THREE_POINTERS_MADE.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.FREE_THROWS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.FREE_THROWS_MADE.category_name + game_columns.PLAYER_SUFFIX,
+            game_columns.POINTS + player_columns.PLAYER_SUFFIX,
+            player_games.OFFENSIVE_REBOUNDS.category_name + player_columns.PLAYER_SUFFIX,
+            team_games.ASSISTS.category_name + player_columns.TEAM_SUFFIX,
+            player_games.TURNOVERS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.FIELD_GOALS_ATTEMPTED.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.FIELD_GOALS_MADE.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.THREE_POINTERS_ATTEMPTED.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.THREE_POINTERS_MADE.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.FREE_THROWS_ATTEMPTED.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.FREE_THROWS_MADE.category_name + player_columns.PLAYER_SUFFIX,
         ),
         career_stats=(game_columns.POINTS,),
         player_recent_mean_stats=(game_columns.POINTS,),
@@ -157,14 +168,14 @@ class TargetStat(Enum):
     )
 
     REBOUNDS = TargetStatColumns(
-        output_column=game_columns.REBOUNDS + game_columns.PLAYER_SUFFIX,
+        output_column=game_columns.REBOUNDS + player_columns.PLAYER_SUFFIX,
         sequence_stats=(
-            player_games.OFFENSIVE_REBOUNDS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.DEFENSIVE_REBOUNDS.category_name + game_columns.PLAYER_SUFFIX,
-            team_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
-            team_games.FIELD_GOALS_MADE.category_name + game_columns.TEAM_SUFFIX,
-            team_games.THREE_POINTERS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
-            team_games.THREE_POINTERS_MADE.category_name + game_columns.TEAM_SUFFIX,
+            player_games.OFFENSIVE_REBOUNDS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.DEFENSIVE_REBOUNDS.category_name + player_columns.PLAYER_SUFFIX,
+            team_games.FIELD_GOALS_ATTEMPTED.category_name + player_columns.TEAM_SUFFIX,
+            team_games.FIELD_GOALS_MADE.category_name + player_columns.TEAM_SUFFIX,
+            team_games.THREE_POINTERS_ATTEMPTED.category_name + player_columns.TEAM_SUFFIX,
+            team_games.THREE_POINTERS_MADE.category_name + player_columns.TEAM_SUFFIX,
         ),
         career_stats=(
             player_games.OFFENSIVE_REBOUNDS.category_name,
@@ -183,14 +194,14 @@ class TargetStat(Enum):
     )
 
     ASSISTS = TargetStatColumns(
-        output_column=player_games.ASSISTS.category_name + game_columns.PLAYER_SUFFIX,
+        output_column=player_games.ASSISTS.category_name + player_columns.PLAYER_SUFFIX,
         sequence_stats=(
-            player_games.ASSISTS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.TURNOVERS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
-            player_games.FIELD_GOALS_MADE.category_name + game_columns.TEAM_SUFFIX,
-            player_games.THREE_POINTERS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
-            player_games.THREE_POINTERS_MADE.category_name + game_columns.TEAM_SUFFIX,
+            player_games.ASSISTS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.TURNOVERS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.FIELD_GOALS_ATTEMPTED.category_name + player_columns.TEAM_SUFFIX,
+            player_games.FIELD_GOALS_MADE.category_name + player_columns.TEAM_SUFFIX,
+            player_games.THREE_POINTERS_ATTEMPTED.category_name + player_columns.TEAM_SUFFIX,
+            player_games.THREE_POINTERS_MADE.category_name + player_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.ASSISTS.category_name,),
         situational_stats=(player_games.ASSISTS.category_name,),
@@ -205,14 +216,14 @@ class TargetStat(Enum):
     )
 
     THREE_POINTERS = TargetStatColumns(
-        output_column=player_games.THREE_POINTERS_MADE.category_name + game_columns.PLAYER_SUFFIX,
+        output_column=player_games.THREE_POINTERS_MADE.category_name + player_columns.PLAYER_SUFFIX,
         sequence_stats=(
-            player_games.THREE_POINTERS_MADE.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.THREE_POINTERS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
-            team_games.THREE_POINTERS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
-            team_games.THREE_POINTERS_MADE.category_name + game_columns.TEAM_SUFFIX,
-            team_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.TEAM_SUFFIX,
+            player_games.THREE_POINTERS_MADE.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.THREE_POINTERS_ATTEMPTED.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.FIELD_GOALS_ATTEMPTED.category_name + player_columns.PLAYER_SUFFIX,
+            team_games.THREE_POINTERS_ATTEMPTED.category_name + player_columns.TEAM_SUFFIX,
+            team_games.THREE_POINTERS_MADE.category_name + player_columns.TEAM_SUFFIX,
+            team_games.FIELD_GOALS_ATTEMPTED.category_name + player_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.THREE_POINTERS_MADE.category_name,),
         situational_stats=(player_games.THREE_POINTERS_MADE.category_name,),
@@ -225,12 +236,12 @@ class TargetStat(Enum):
     )
 
     STEALS = TargetStatColumns(
-        output_column=player_games.STEALS.category_name + game_columns.PLAYER_SUFFIX,
+        output_column=player_games.STEALS.category_name + player_columns.PLAYER_SUFFIX,
         sequence_stats=(
-            player_games.STEALS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.DEFENSIVE_REBOUNDS.category_name + game_columns.PLAYER_SUFFIX,
-            team_games.STEALS.category_name + game_columns.TEAM_SUFFIX,
-            team_games.TURNOVERS.category_name + game_columns.TEAM_SUFFIX,
+            player_games.STEALS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.DEFENSIVE_REBOUNDS.category_name + player_columns.PLAYER_SUFFIX,
+            team_games.STEALS.category_name + player_columns.TEAM_SUFFIX,
+            team_games.TURNOVERS.category_name + player_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.STEALS.category_name,),
         situational_stats=(player_games.STEALS.category_name,),
@@ -241,11 +252,11 @@ class TargetStat(Enum):
     )
 
     BLOCKS = TargetStatColumns(
-        output_column=player_games.BLOCKS.category_name + game_columns.PLAYER_SUFFIX,
+        output_column=player_games.BLOCKS.category_name + player_columns.PLAYER_SUFFIX,
         sequence_stats=(
-            player_games.BLOCKS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.DEFENSIVE_REBOUNDS.category_name + game_columns.PLAYER_SUFFIX,
-            team_games.BLOCKS.category_name + game_columns.TEAM_SUFFIX,
+            player_games.BLOCKS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.DEFENSIVE_REBOUNDS.category_name + player_columns.PLAYER_SUFFIX,
+            team_games.BLOCKS.category_name + player_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.BLOCKS.category_name,),
         situational_stats=(player_games.BLOCKS.category_name,),
@@ -256,12 +267,12 @@ class TargetStat(Enum):
     )
 
     TURNOVERS = TargetStatColumns(
-        output_column=player_games.TURNOVERS.category_name + game_columns.PLAYER_SUFFIX,
+        output_column=player_games.TURNOVERS.category_name + player_columns.PLAYER_SUFFIX,
         sequence_stats=(
-            player_games.TURNOVERS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.ASSISTS.category_name + game_columns.PLAYER_SUFFIX,
-            player_games.FIELD_GOALS_ATTEMPTED.category_name + game_columns.PLAYER_SUFFIX,
-            team_games.TURNOVERS.category_name + game_columns.TEAM_SUFFIX,
+            player_games.TURNOVERS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.ASSISTS.category_name + player_columns.PLAYER_SUFFIX,
+            player_games.FIELD_GOALS_ATTEMPTED.category_name + player_columns.PLAYER_SUFFIX,
+            team_games.TURNOVERS.category_name + player_columns.TEAM_SUFFIX,
         ),
         career_stats=(player_games.TURNOVERS.category_name,),
         situational_stats=(player_games.TURNOVERS.category_name,),
@@ -332,36 +343,36 @@ the words a reader sees, and a line for the training report. Nothing else branch
 
 # Columns every model gets, whatever it is predicting.
 SEQUENCE_STATS_ALWAYS = [
-    player_games.MINUTES_PLAYED.category_name + game_columns.PLAYER_SUFFIX,
-    game_columns.POINTS + game_columns.TEAM_SUFFIX,
-    game_columns.OPPONENT_PREFIX + game_columns.POINTS,
+    player_games.MINUTES_PLAYED.category_name + player_columns.PLAYER_SUFFIX,
+    game_columns.POINTS + player_columns.TEAM_SUFFIX,
+    team_columns.OPPONENT_PREFIX + game_columns.POINTS,
     player_games.PLUS_MINUS.category_name,
-    player_games.PERSONAL_FOULS.category_name + game_columns.PLAYER_SUFFIX,
-    game_columns.HOME_OR_AWAY, game_columns.REST, game_columns.BREAK_LENGTH,
-    game_columns.SEASON_OPENER, game_columns.CAREER_DEBUT,
-    game_columns.CHANGED_TEAM,
-    game_columns.POSSESSIONS,
-    team_games.MINUTES_PLAYED.category_name + game_columns.TEAM_SUFFIX
+    player_games.PERSONAL_FOULS.category_name + player_columns.PLAYER_SUFFIX,
+    team_columns.HOME_OR_AWAY, schedule_columns.REST, schedule_columns.BREAK_LENGTH,
+    schedule_columns.SEASON_OPENER, schedule_columns.CAREER_DEBUT,
+    player_columns.CHANGED_TEAM,
+    team_columns.POSSESSIONS,
+    team_games.MINUTES_PLAYED.category_name + player_columns.TEAM_SUFFIX
 ] + (
-    game_columns.ALL_SEASON_TYPES
-    + game_columns.ALL_SEASON_CONTEXT_COLUMNS
-    + game_columns.ALL_AVAILABILITY_COLUMNS
-    + game_columns.get_recent_game_count_columns()
+    season_columns.ALL_SEASON_TYPES
+    + season_columns.ALL_SEASON_CONTEXT_COLUMNS
+    + player_columns.ALL_AVAILABILITY_COLUMNS
+    + schedule_columns.get_recent_game_count_columns()
 )
 
 # A career debut is left out here, because a game only becomes a sample once MINIMUM_PAST_GAMES sit
 # behind it, so the game being predicted is never anyone's first.
 STATIC_STATS_ALWAYS = [
-    game_columns.AGE_DURING_GAME, game_columns.NBA_EXPERIENCE_DURING_GAME,
-    game_columns.HOME_OR_AWAY, game_columns.REST, game_columns.BREAK_LENGTH,
-    game_columns.SEASON_OPENER,
-    game_columns.CHANGED_TEAM,
-    game_columns.GAMES_PLAYED
+    player_columns.NBA_EXPERIENCE_DURING_GAME,
+    team_columns.HOME_OR_AWAY, schedule_columns.REST, schedule_columns.BREAK_LENGTH,
+    schedule_columns.SEASON_OPENER,
+    player_columns.CHANGED_TEAM,
+    schedule_columns.GAMES_PLAYED
 ] + (
-    game_columns.ALL_SEASON_TYPES
-    + game_columns.ALL_SEASON_CONTEXT_COLUMNS
-    + game_columns.ALL_AVAILABILITY_COLUMNS
-    + game_columns.get_recent_game_count_columns()
+    season_columns.ALL_SEASON_TYPES
+    + season_columns.ALL_SEASON_CONTEXT_COLUMNS
+    + player_columns.ALL_AVAILABILITY_COLUMNS
+    + schedule_columns.get_recent_game_count_columns()
 )
 
 OPPONENT_ALLOWED_TEAM_STATS_ALWAYS = [
@@ -384,7 +395,7 @@ It is still the weakest of the three here, so it is the first to cut if this bui
 
 TEAM_FRAME_COLUMNS = {
     category.category_name for category in team_games.ALL_CATEGORIES.get_categories()
-} | {game_columns.POINTS, game_columns.REBOUNDS, game_columns.POSSESSIONS}
+} | {game_columns.POINTS, game_columns.REBOUNDS, team_columns.POSSESSIONS}
 """
 The columns the team frame holds under a name the player frame also uses.
 
@@ -457,7 +468,7 @@ def _column_name_after_merge(
     """
 
     if player_column in team_column_names:
-        return player_column + game_columns.PLAYER_SUFFIX
+        return player_column + player_columns.PLAYER_SUFFIX
 
     return player_column
 
@@ -529,7 +540,7 @@ def build_feature_set(
 
     opponent_allowed_team_categories = [
         RollingCategory(
-            game_columns.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat,
+            team_columns.OPPONENT_PREFIX + PAST_MEAN_ALLOWED_INFIX + stat,
             stat,
             rolling.MEAN_FUNCTION,
             ROLLING_WINDOW
@@ -538,12 +549,12 @@ def build_feature_set(
 
     # How the opposing team's own season is going, which is what tells a model whether the game
     # still matters to them. Only their record is carried over, since both teams share the calendar.
-    opponent_record_column = game_columns.OPPONENT_PREFIX + game_columns.TEAM_WIN_PERCENTAGE
+    opponent_record_column = team_columns.OPPONENT_PREFIX + season_columns.TEAM_WIN_PERCENTAGE
 
     # Who the team gained, lost and is missing around the player, measured in the same recent
     # averages the player's own form is measured in.
     core_teammate_stat_columns = [category.column_name for category in player_mean_categories]
-    core_teammate_columns = game_columns.get_core_teammate_columns(core_teammate_stat_columns)
+    core_teammate_columns = player_columns.get_core_teammate_columns(core_teammate_stat_columns)
 
     # How much the opponent lets teams beat their own averages is read off the game being predicted
     # and not off each past game. Measured on 2026-08-11: shuffling those ten columns away inside the
@@ -599,7 +610,7 @@ def build_feature_set(
         opponent_columns_to_copy=[
             team_games.TEAM_ID.category_name,
             game_columns.POINTS,
-            game_columns.TEAM_WIN_PERCENTAGE
+            season_columns.TEAM_WIN_PERCENTAGE
         ],
         sequence_columns=sequence_columns,
         static_columns=static_columns
@@ -625,22 +636,19 @@ def _build_player_info_features(
 def _preprocess_player_info(player_info: pd.DataFrame) -> pd.DataFrame:
     player_info = player_info.copy()
 
-    player_info[players.BIRTHDATE.category_name] = pd.to_datetime(
-        player_info[players.BIRTHDATE.category_name]
-        )
     player_info[players.FROM_YEAR.category_name] = pd.to_datetime(
         player_info[players.FROM_YEAR.category_name], format='%Y'
         )
-    player_info = game_columns.convert_height_to_inches(
+    player_info = player_columns.convert_height_to_inches(
         player_info,
         players.HEIGHT.category_name,
         fill_unknown_with_mean=True
     )
-    player_info = game_columns.encode_undrafted(
+    player_info = player_columns.encode_undrafted(
         player_info,
         players.DRAFT_NUMBER.category_name
     )
-    player_info = game_columns.handle_unknown_weight(
+    player_info = player_columns.handle_unknown_weight(
         player_info,
         players.WEIGHT.category_name,
         fill_unknown_with_mean=True
@@ -677,15 +685,7 @@ def _preprocess_player_game_data(
         player_games.OFFENSIVE_REBOUNDS.category_name,
         player_games.DEFENSIVE_REBOUNDS.category_name
         )
-    player_game_data = game_columns.add_age_during_game_column(
-        player_game_data,
-        player_info,
-        players.PLAYER_ID.category_name,
-        player_games.PLAYER_ID.category_name,
-        players.BIRTHDATE.category_name,
-        player_games.GAME_DATE.category_name
-    )
-    player_game_data = game_columns.add_years_NBA_experience_during_game_column(
+    player_game_data = player_columns.add_years_NBA_experience_during_game_column(
         player_game_data,
         player_info,
         players.PLAYER_ID.category_name,
@@ -702,21 +702,21 @@ def _preprocess_player_game_data(
         by=[player_games.PLAYER_ID.category_name, player_games.GAME_DATE.category_name]
         ).reset_index(drop=True)
 
-    player_game_data = game_columns.add_break_columns(
+    player_game_data = schedule_columns.add_break_columns(
         player_game_data,
         player_games.GAME_DATE.category_name,
         group_by_column=player_games.PLAYER_ID.category_name
         )
-    player_game_data = game_columns.add_changed_team_column(
+    player_game_data = player_columns.add_changed_team_column(
         player_game_data,
         player_games.TEAM_ID.category_name,
         group_by_column=player_games.PLAYER_ID.category_name
     )
-    player_game_data = game_columns.add_games_played_column(
+    player_game_data = schedule_columns.add_games_played_column(
         player_game_data,
         player_games.PLAYER_ID.category_name
     )
-    player_game_data = game_columns.add_recent_game_count_columns(
+    player_game_data = schedule_columns.add_recent_game_count_columns(
         player_game_data,
         player_games.GAME_DATE.category_name,
         group_by_column=player_games.PLAYER_ID.category_name
@@ -754,31 +754,31 @@ def _preprocess_team_game_data(
         team_games.OFFENSIVE_REBOUNDS.category_name,
         team_games.DEFENSIVE_REBOUNDS.category_name
         )
-    team_game_data = game_columns.add_possessions_column(
+    team_game_data = team_columns.add_possessions_column(
         team_game_data,
         team_games.FIELD_GOALS_ATTEMPTED.category_name,
         team_games.FREE_THROWS_ATTEMPTED.category_name,
         team_games.OFFENSIVE_REBOUNDS.category_name,
         team_games.TURNOVERS.category_name
         )
-    team_game_data = game_columns.add_encoded_season_type_columns(
+    team_game_data = season_columns.add_encoded_season_type_columns(
         team_game_data,
         team_games.GAME_ID.category_name
         )
-    team_game_data = game_columns.add_encoded_home_or_away_column(
+    team_game_data = team_columns.add_encoded_home_or_away_column(
         team_game_data,
         team_games.MATCHUP.category_name
         )
-    team_game_data = game_columns.encode_win_loss_column_as_integer(
+    team_game_data = team_columns.encode_win_loss_column_as_integer(
         team_game_data,
         team_games.WIN_LOSS.category_name
     )
-    team_game_data = game_columns.add_season_standings_columns(
+    team_game_data = season_columns.add_season_standings_columns(
         team_game_data,
         team_games.GAME_DATE.category_name,
         team_games.TEAM_ID.category_name,
         team_games.WIN_LOSS.category_name,
-        game_columns.REGULAR_SEASON
+        season_columns.REGULAR_SEASON
     )
 
     team_game_data = rolling.add_rolling_function_columns(
@@ -786,7 +786,7 @@ def _preprocess_team_game_data(
         features.team_rolling_categories,
         group_by_column=team_games.TEAM_ID.category_name
     )
-    team_game_data = game_columns.add_opponent_stat_columns(
+    team_game_data = team_columns.add_opponent_stat_columns(
         team_game_data,
         team_games.GAME_ID.category_name,
         team_games.TEAM_ID.category_name,
@@ -797,7 +797,7 @@ def _preprocess_team_game_data(
         features.team_difference_columns
     )
 
-    opponent_team_id_column = game_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name
+    opponent_team_id_column = team_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name
     team_game_data = team_game_data.sort_values(
         by=[opponent_team_id_column, team_games.GAME_DATE.category_name]
         ).reset_index(drop=True)
@@ -840,7 +840,7 @@ def build_histories(
     team_game_data = _preprocess_team_game_data(features, team_game_data.copy())
 
     # These two read the team's game order, so they come after the team frame is built.
-    player_game_data = game_columns.add_availability_columns(
+    player_game_data = player_columns.add_availability_columns(
         player_game_data,
         team_game_data,
         player_games.PLAYER_ID.category_name,
@@ -852,7 +852,7 @@ def build_histories(
     )
 
     # Last, because it reads the player's finished rolling means and the team's game order.
-    player_game_data = game_columns.add_core_teammate_columns(
+    player_game_data = player_columns.add_core_teammate_columns(
         player_game_data,
         team_game_data,
         player_games.PLAYER_ID.category_name,
@@ -869,7 +869,7 @@ def build_histories(
     if print_debug:
         print("Rearranging data...")
 
-    player_team_game_data = game_columns.merge_player_team_game_data(
+    player_team_game_data = player_columns.merge_player_team_game_data(
         player_game_data,
         team_game_data,
         team_games.GAME_ID.category_name,
@@ -899,7 +899,7 @@ def build_histories(
         player_games.PLAYER_ID.category_name,
         team_games.GAME_ID.category_name,
         team_games.GAME_DATE.category_name,
-        game_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name,
+        team_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name,
         features.sequence_columns,
         features.static_columns,
         _build_player_info_features(player_info)
@@ -924,7 +924,10 @@ def _read_player_info() -> pd.DataFrame:
         columns=[players.PLAYER_NAME.category_name]
     )
 
-    return player_info.dropna()
+    return player_info.dropna(subset=[
+        players.PLAYER_ID.category_name,
+        players.FROM_YEAR.category_name
+    ])
 
 def _read_team_games(window_start_date: date | None) -> pd.DataFrame:
     """Every team game inside the window, or every one stored where there is no window."""
@@ -973,6 +976,7 @@ def build_league_histories(
 # TRAINING DATA: #
 def get_all_labeled_data(
         features: FeatureSet,
+        training_start_date: datetime,
         validation_split_start_date: datetime,
         test_split_start_date: datetime,
         chunk_step_size: int = 1,
@@ -1000,6 +1004,7 @@ def get_all_labeled_data(
         (validation_split_start_date, test_split_start_date),
         MINIMUM_PAST_GAMES,
         chunk_step_size,
+        training_start_date=training_start_date,
         print_debug=print_debug
     )
 
@@ -1032,70 +1037,6 @@ def _window_start_date(build: FeatureBuild | None, target_game: Game) -> date | 
         return build.window_start_date
 
     return target_game.date - relativedelta(years=HISTORICAL_WINDOW_LENGTH_YEARS)
-
-def _placeholder_game_id(target_game: Game) -> str:
-    """
-    What the game being predicted is filed under, which no played game can collide with.
-
-    A real game id is ten digits and this is the one character naming the season phase, which is how
-    every other game in the data says which phase it belongs to.
-    """
-
-    return game_columns.SEASON_ENCODINGS[target_game.season_type.value]
-
-def _matchup(target_game: Game, team_id: int) -> str:
-    """How the raw data writes which side of a game a row belongs to."""
-
-    return (
-        game_columns.HOME_OR_AWAY_ENCODING[game_columns.HOME]
-        if target_game.is_home(team_id)
-        else game_columns.HOME_OR_AWAY_ENCODING[game_columns.AWAY]
-    )
-
-def _placeholder_player_rows(
-    playing_player_ids: Collection[int],
-    returning_player_ids: Collection[int],
-    team_id: int,
-    target_game: Game
-    ) -> pd.DataFrame:
-    """
-    One row per player expected to play, holding only what is known before the game.
-
-    Minutes stand in for being on the floor at all. A player named as returning is given more than
-    the core cutoff, so the roster columns count them as core in a game nobody has played yet.
-    """
-
-    known = {
-        player_games.TEAM_ID.category_name: team_id,
-        player_games.GAME_DATE.category_name: season.to_date_string(target_game.date),
-        player_games.GAME_ID.category_name: _placeholder_game_id(target_game),
-        player_games.MATCHUP.category_name: _matchup(target_game, team_id)
-    }
-    returning = set(returning_player_ids)
-
-    return pd.DataFrame([
-        {
-            **known,
-            player_games.PLAYER_ID.category_name: player_id,
-            player_games.MINUTES_PLAYED.category_name: (
-                game_columns.CORE_PLAYER_MINUTES_CUTOFF + 1 if player_id in returning else 1
-            )
-        }
-        for player_id in playing_player_ids
-    ])
-
-def _placeholder_team_rows(target_game: Game, team_ids: Iterable[int]) -> pd.DataFrame:
-    """One row per side of the game being predicted, holding only what is known before it."""
-
-    def row(team_id: int) -> dict[str, Any]:
-        return {
-            team_games.TEAM_ID.category_name: team_id,
-            team_games.GAME_DATE.category_name: season.to_date_string(target_game.date),
-            team_games.GAME_ID.category_name: _placeholder_game_id(target_game),
-            team_games.MATCHUP.category_name: _matchup(target_game, team_id)
-        }
-
-    return pd.DataFrame([row(team_id) for team_id in team_ids])
 
 def _recent_team_games(
     team_game_data: pd.DataFrame,
@@ -1143,7 +1084,7 @@ def build_target_game_row(
     Args:
         removed_core_teammate_player_ids are core players from the team's last game who are out for
         this one. added_core_teammate_player_ids are the reverse, players expected back in. Core
-        means the minutes cutoff in game_columns.
+        means the minutes cutoff in player_columns.
         window_start_date is how far back to read, and None reads everything stored. It comes from
         the build the games behind this row came from, so both halves describe the same history.
 
@@ -1155,9 +1096,9 @@ def build_target_game_row(
     if print_debug:
         print("Querying data from databases...")
 
-    # Read now, so a team that is not playing in this game is refused here rather than part way
+    # Asked now, so a team that is not playing in this game is refused here rather than part way
     # through a build.
-    opponent_team_id = target_game.opponent_of(target_player_team_id)
+    target_game.opponent_of(target_player_team_id)
 
     player_info = _read_player_info()
 
@@ -1218,11 +1159,11 @@ def build_target_game_row(
     player_game_data = pd.concat(
         [
             player_game_data,
-            _placeholder_player_rows(
-                playing_player_ids,
-                added_core_teammate_player_ids,
+            placeholders.player_rows(
+                target_game,
                 target_player_team_id,
-                target_game
+                playing_player_ids,
+                added_core_teammate_player_ids
             )
         ],
         ignore_index=True
@@ -1230,7 +1171,7 @@ def build_target_game_row(
     team_game_data = pd.concat(
         [
             team_game_data,
-            _placeholder_team_rows(target_game, (target_player_team_id, opponent_team_id))
+            placeholders.game_rows(target_game)
         ],
         ignore_index=True
     )
@@ -1244,7 +1185,7 @@ def build_target_game_row(
     if history is None:
         raise ValueError(f"The feature build produced no games for player {target_player_id}.")
 
-    found = np.flatnonzero(history.game_ids == _placeholder_game_id(target_game))
+    found = np.flatnonzero(history.game_ids == placeholders.game_id(target_game))
 
     if len(found) != 1:
         raise ValueError(

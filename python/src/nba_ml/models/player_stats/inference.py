@@ -10,7 +10,7 @@ import torch
 
 from nba_ml.entities import Game
 from nba_ml.machine_learning import datasets, trainer
-from nba_ml.models import loading
+from nba_ml.models import loading, requests
 from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.models.outputs import Prediction
 from nba_ml.models.player_stats import features as stat_features
@@ -66,7 +66,12 @@ def predict(
     Args:
         target_player_team_id names the player's team outright. Leave it unset unless they have just
         moved and no game records it yet.
+
+    Raises:
+        PredictionRefused if the game has already been played, or if what is stored cannot answer.
     """
+
+    requests.refuse_a_played_game(target_game)
 
     if target_player_team_id is None:
         target_player_team_id = team_of(target_player_id, target_game)

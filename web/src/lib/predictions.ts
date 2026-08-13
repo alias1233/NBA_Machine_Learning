@@ -73,6 +73,7 @@ const REASONS: Record<string, string> = {
 	missing_player_information: 'Too little is known about this player to predict.',
 	unknown_player_team: 'Say which of the two teams this player is on.',
 	no_team_history: 'This team has no earlier game to read.',
+	game_already_played: 'This game has already been played, so there is nothing to predict.',
 	service_busy: 'The service is answering as many predictions as it can. Try again in a moment.'
 };
 

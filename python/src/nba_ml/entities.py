@@ -38,6 +38,12 @@ class Game():
     away_team_id: int
     season_type: SeasonType = SeasonType.REGULAR_SEASON
 
+    @property
+    def team_ids(self) -> tuple[int, int]:
+        """Both sides, the home team first."""
+
+        return (self.home_team_id, self.away_team_id)
+
     def opponent_of(self, team_id: int) -> int:
         if team_id == self.home_team_id:
             return self.away_team_id
@@ -81,4 +87,4 @@ class ScheduledGame():
 
     @property
     def team_ids(self) -> tuple[int, int]:
-        return (self.game.home_team_id, self.game.away_team_id)
+        return self.game.team_ids

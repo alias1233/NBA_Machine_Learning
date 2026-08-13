@@ -69,6 +69,21 @@ class GameHistory():
 
         return np.concatenate((self.static_subject_values, self.static_values[index]))
 
+    def starting_on(self, start_date: datetime) -> "GameHistory":
+        """The part of this history on or after a training era's first day."""
+
+        start = int(np.searchsorted(self.game_dates, np.datetime64(start_date), side="left"))
+        return GameHistory(
+            self.static_subject_values,
+            self.game_ids[start:],
+            self.game_dates[start:],
+            self.sequence_values[start:],
+            self.static_values[start:],
+            self.opponent_team_ids[start:],
+            self.outputs[start:],
+            self.is_sample_row[start:]
+        )
+
 NO_STATIC_SUBJECT_VALUES = np.empty(0, dtype=np.float32)
 """What a subject the model knows nothing unchanging about carries, such as a team."""
 
@@ -207,6 +222,7 @@ def build_split_samples(
     minimum_past_games: int,
     chunk_step_size: int = 1,
     *,
+    training_start_date: datetime | None = None,
     read_opponent_history: bool = False,
     print_debug: bool = False
     ) -> tuple[GameSequences, list[SequenceInputSamples]]:
@@ -231,6 +247,13 @@ def build_split_samples(
     Returns:
         (the games of every subject, one set of samples per split, oldest split first)
     """
+
+    if training_start_date is not None:
+        histories = {
+            subject_id: history.starting_on(training_start_date)
+            for subject_id, history in histories.items()
+            if history.game_dates[-1] >= np.datetime64(training_start_date)
+        }
 
     boundaries = np.array(list(split_start_dates), dtype='datetime64[ns]')
     static_input_dim = next((len(history.static_input(0)) for history in histories.values()), 0)

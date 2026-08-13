@@ -22,7 +22,7 @@ from typing import Sequence
 
 import pandas as pd
 
-from nba_ml.feature_engineering import game_columns, rolling
+from nba_ml.feature_engineering import game_columns, rolling, season_columns, team_columns
 from nba_ml.feature_engineering.rolling import RollingCategory
 from nba_ml.stores import team_games
 
@@ -61,11 +61,11 @@ OVER_EXPECTED_PREFIX = "OVER_EXPECTED_"
 # further back.
 AGAINST_THIS_OPPONENT = Situation(
     "AGAINST_THIS_OPPONENT",
-    game_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name,
+    team_columns.OPPONENT_PREFIX + team_games.TEAM_ID.category_name,
     10
 )
-IN_THIS_SEASON_TYPE = Situation("IN_THIS_SEASON_TYPE", game_columns.SEASON_TYPE, 20)
-AT_HOME_OR_AWAY = Situation("AT_HOME_OR_AWAY", game_columns.HOME_OR_AWAY, 20)
+IN_THIS_SEASON_TYPE = Situation("IN_THIS_SEASON_TYPE", season_columns.SEASON_TYPE, 20)
+AT_HOME_OR_AWAY = Situation("AT_HOME_OR_AWAY", team_columns.HOME_OR_AWAY, 20)
 
 ALL_SITUATIONS = [AGAINST_THIS_OPPONENT, IN_THIS_SEASON_TYPE, AT_HOME_OR_AWAY]
 """
@@ -94,6 +94,32 @@ def all_columns(
         games_column(situation) for situation in situations
     ]
 
+def _windows_of(
+    situation: Situation,
+    subject_id_column: str,
+    stats: Sequence[SituationalStat]
+    ) -> list[RollingCategory]:
+    """Every column one situation produces: a form reading per statistic, and how many games."""
+
+    return [
+        RollingCategory(
+            form_column(situation, stat),
+            OVER_EXPECTED_PREFIX + stat.name,
+            rolling.MEAN_FUNCTION,
+            situation.window
+        )
+        for stat in stats
+    ] + [
+        # Counted off the subject's own id, which is never blank, so this is simply how many games
+        # of this kind sit behind the row, capped at the window.
+        RollingCategory(
+            games_column(situation),
+            subject_id_column,
+            rolling.COUNT_FUNCTION,
+            situation.window
+        )
+    ]
+
 def add_columns(
     game_data: pd.DataFrame,
     subject_id_column: str,
@@ -106,8 +132,9 @@ def add_columns(
     The frame must be sorted so that each subject's games sit in the order they happened, and must
     already hold each situation's label column and each statistic's value and expectation.
 
-    The working columns each form column is averaged from are left on the frame rather than dropped,
-    because dropping them copies the whole frame for no gain.
+    Every window reads only a handful of columns, so they are worked out on a narrow frame holding
+    just those and attached to the given one in a single step. The given frame is the widest the
+    pipeline builds, and attaching to it once per situation copied all of it each time.
     """
 
     if not situations or not stats:
@@ -117,40 +144,29 @@ def add_columns(
     # zero, so the whole statistic would land in the difference. Left blank, it is skipped by the
     # means below rather than dragging every reading built on it.
     first_game = game_data.groupby(by=subject_id_column, sort=False).cumcount() == 0
-    over_expected = pd.DataFrame(
+    read_by_the_windows = pd.DataFrame(
         {
             OVER_EXPECTED_PREFIX + stat.name: (
                 game_data[stat.value_column] - game_data[stat.expectation_column]
-            )
+            ).astype(game_columns.BUILT_COLUMN_TYPE)
             for stat in stats
         },
         index=game_data.index
     ).mask(first_game)
 
-    game_data = pd.concat([game_data, over_expected], axis=1)
+    for column in dict.fromkeys(
+        [subject_id_column] + [situation.label_column for situation in situations]
+    ):
+        read_by_the_windows[column] = game_data[column]
 
-    for situation in situations:
-        game_data = rolling.add_rolling_function_columns(
-            game_data,
-            [
-                RollingCategory(
-                    form_column(situation, stat),
-                    OVER_EXPECTED_PREFIX + stat.name,
-                    rolling.MEAN_FUNCTION,
-                    situation.window
-                )
-                for stat in stats
-            ] + [
-                # Counted off the subject's own id, which is never blank, so this is simply how many
-                # games of this kind sit behind the row, capped at the window.
-                RollingCategory(
-                    games_column(situation),
-                    subject_id_column,
-                    rolling.COUNT_FUNCTION,
-                    situation.window
-                )
-            ],
+    columns = {
+        window.column_name: rolling.calculate_rolling_function_column(
+            read_by_the_windows,
+            window,
             group_by_column=[subject_id_column, situation.label_column]
         )
+        for situation in situations
+        for window in _windows_of(situation, subject_id_column, stats)
+    }
 
-    return game_data
+    return pd.concat([game_data, pd.DataFrame(columns, index=game_data.index)], axis=1)

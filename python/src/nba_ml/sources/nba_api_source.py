@@ -157,7 +157,7 @@ class NBAApiSource(DataSource):
         date_to: date | None,
         player_or_team: str
         ) -> pd.DataFrame | None:
-        return self._fetch(
+        games = self._fetch(
             lambda: LeagueGameLog(
                 player_or_team_abbreviation=player_or_team,
                 season=season_name(season_year),
@@ -167,3 +167,8 @@ class NBAApiSource(DataSource):
             ).get_data_frames()[0],
             f"the {season_name(season_year)} {season_type.value.lower()}"
         )
+
+        if games is not None:
+            games["SEASON_TYPE"] = season.GAME_ID_PREFIXES[season_type]
+
+        return games

@@ -22,6 +22,9 @@ from nba_ml.season import SeasonType
 
 Fetched = TypeVar("Fetched")
 
+class SourceAuthenticationError(RuntimeError):
+    """The source rejected its API key or the account tier cannot use the endpoint."""
+
 class DataSource(ABC):
     """
     One provider of NBA data. Subclasses implement the fetches, and pacing and retrying are shared
@@ -32,7 +35,7 @@ class DataSource(ABC):
     """How this source is named on the command line."""
 
     oldest_season: int
-    """The oldest season this source has complete box scores for."""
+    """The oldest season this source exposes box scores for."""
 
     request_interval: float
     """Seconds to leave between two requests, which is what keeps a source from refusing to answer."""
@@ -45,8 +48,27 @@ class DataSource(ABC):
             self.request_interval = request_interval
 
         self._next_request_time = 0.0
+        self._progress_reporter: Callable[[str], None] | None = None
 
-    def _fetch(self, fetch: Callable[[], Fetched], description: str) -> Fetched | None:
+    def set_progress_reporter(self, reporter: Callable[[str], None] | None):
+        """Names where a long fetch can report its progress."""
+
+        self._progress_reporter = reporter
+
+    def _report_progress(self, message: str):
+        if self._progress_reporter is not None:
+            self._progress_reporter(message)
+
+    def _pace_request(self):
+        time.sleep(max(0.0, self._next_request_time - time.monotonic()))
+        self._next_request_time = time.monotonic() + self.request_interval
+
+    def _fetch(
+        self,
+        fetch: Callable[[], Fetched],
+        description: str,
+        pace: bool = True
+        ) -> Fetched | None:
         """
         Runs one request against the service, waiting out the rate limit first and retrying a
         request that fails. Returns None once the retries are used up, so a long collection run
@@ -54,11 +76,13 @@ class DataSource(ABC):
         """
 
         for attempt in range(self.retries):
-            time.sleep(max(0.0, self._next_request_time - time.monotonic()))
-            self._next_request_time = time.monotonic() + self.request_interval
+            if pace:
+                self._pace_request()
 
             try:
                 return fetch()
+            except SourceAuthenticationError:
+                raise
             except Exception as error:
                 print(f"Failed to fetch {description}, attempt {attempt + 1} of {self.retries}: {error}")
                 time.sleep(self.retry_interval)
@@ -117,6 +141,20 @@ class DataSource(ABC):
         """The same as player_games, one row per team per game instead of per player."""
 
         pass
+
+    def game_rows(
+        self,
+        season_year: int,
+        season_type: SeasonType,
+        date_from: date | None = None,
+        date_to: date | None = None
+        ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+        """Player and team rows for one phase. Sources may share one response between them."""
+
+        return (
+            self.player_games(season_year, season_type, date_from, date_to),
+            self.team_games(season_year, season_type, date_from, date_to)
+        )
 
     @abstractmethod
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:

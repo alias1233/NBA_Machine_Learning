@@ -76,6 +76,19 @@ def test_a_player_stored_without_a_name_is_named_from_the_service_player_list():
     assert named == 1
     assert players_store.get_player(fake_data.ALL_PLAYERS[0].id) == fake_data.ALL_PLAYERS[0]
 
+def test_missing_career_years_are_derived_from_collected_games():
+    player = fake_data.ALL_PLAYERS[0]
+    player_games.store(fake_data.player_game_frame())
+    source = FakeSource(known_players=[player])
+    info = fake_data.player_info_frame([player]).assign(FROM_YEAR=None, TO_YEAR=None)
+    source.player_info = lambda player_id: info.copy()
+
+    players.collect(source, print_debug=False)
+
+    stored = players_store.get_all_players_info().iloc[0]
+    assert stored[players_store.FROM_YEAR.category_name] == fake_data.SEASON_YEAR
+    assert stored[players_store.TO_YEAR.category_name] == fake_data.SEASON_YEAR
+
 # BOX SCORES: #
 def test_collecting_games_writes_both_stores():
     source = FakeSource()
@@ -101,6 +114,20 @@ def test_a_date_narrows_a_collection_run_to_the_games_inside_it():
 
     assert written == len(stored)
     assert min(days) == "2024-10-30"
+
+def test_collection_does_not_request_seasons_before_the_project_floor():
+    source = FakeSource()
+    source.oldest_season = 1946
+
+    written = games.collect_team_games(
+        source,
+        seasons=[1984, fake_data.SEASON_YEAR],
+        season_types=[SeasonType.REGULAR_SEASON],
+        print_debug=False
+    )
+
+    assert written == ALL_ROWS
+    assert all(f" {fake_data.SEASON_YEAR} " in request for request in source.requests)
 
 def test_an_update_run_asks_only_for_what_is_newer_than_the_newest_game_stored():
     """

@@ -15,7 +15,7 @@ from datetime import datetime
 import pandas as pd
 
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import team_game_rows
+from nba_ml.feature_engineering import placeholders, team_game_rows
 from nba_ml.feature_engineering.samples import (
     GameHistory,
     build_inference_sample,
@@ -48,6 +48,7 @@ def build_feature_set(target: TargetValue) -> FeatureSet:
 # TRAINING DATA: #
 def get_all_labeled_data(
     features: FeatureSet,
+    training_start_date: datetime,
     validation_split_start_date: datetime,
     test_split_start_date: datetime,
     chunk_step_size: int = 1,
@@ -82,6 +83,7 @@ def get_all_labeled_data(
         (validation_split_start_date, test_split_start_date),
         team_game_rows.MINIMUM_PAST_GAMES,
         chunk_step_size,
+        training_start_date=training_start_date,
         read_opponent_history=READS_OPPONENT_HISTORY,
         print_debug=print_debug
     )
@@ -137,7 +139,7 @@ def get_inference_data(
         print("Creating placeholder rows...")
 
     team_game_data = pd.concat(
-        [team_game_data, team_game_rows.placeholder_game_rows(target_game)],
+        [team_game_data, placeholders.game_rows(target_game)],
         ignore_index=True
     )
 

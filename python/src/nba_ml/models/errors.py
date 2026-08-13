@@ -23,6 +23,9 @@ class Refusal(Enum):
     NO_TEAM_HISTORY = "no_team_history"
     """The team has no recorded game before the one being predicted."""
 
+    GAME_ALREADY_PLAYED = "game_already_played"
+    """The game asked about has been played and collected, so it is not a prediction to make."""
+
 class PredictionRefused(ValueError):
     """The request is well formed, and what is stored cannot answer it."""
 

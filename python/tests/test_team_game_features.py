@@ -15,7 +15,7 @@ Three of them are worth more than the rest:
   team's margin.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,14 @@ import pytest
 
 from nba_ml import season
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import game_columns, team_game_rows
+from nba_ml.feature_engineering import (
+    game_columns,
+    placeholders,
+    schedule_columns,
+    season_columns,
+    team_columns,
+    team_game_rows
+)
 from nba_ml.feature_engineering.samples import build_split_samples
 from nba_ml.feature_engineering.team_game_rows import TargetValue
 from nba_ml.models.game_stats import features as game_stat_features
@@ -58,9 +65,9 @@ def test_a_result_is_read_from_the_row_it_belongs_to():
     home = row_of(rows, game.home_team_id, game)
     away = row_of(rows, game.away_team_id, game)
 
-    assert home[game_columns.POINT_DIFFERENTIAL] == game.home_points - game.away_points
-    assert away[game_columns.POINT_DIFFERENTIAL] == game.away_points - game.home_points
-    assert home[game_columns.GAME_TOTAL] == away[game_columns.GAME_TOTAL] == game.home_points + game.away_points
+    assert home[team_columns.POINT_DIFFERENTIAL] == game.home_points - game.away_points
+    assert away[team_columns.POINT_DIFFERENTIAL] == game.away_points - game.home_points
+    assert home[team_columns.GAME_TOTAL] == away[team_columns.GAME_TOTAL] == game.home_points + game.away_points
     assert home[team_game_rows.WIN] == 1
     assert home[team_game_rows.WIN_CATEGORY] == team_game_rows.WON
     assert away[team_game_rows.WIN_CATEGORY] == team_game_rows.LOST
@@ -74,8 +81,8 @@ def test_home_or_away_is_one_for_away_and_the_home_row_is_marked():
     game = fake_data.SEASON_GAMES[0]
     rows = built_rows()
 
-    assert row_of(rows, game.home_team_id, game)[game_columns.HOME_OR_AWAY] == 0
-    assert row_of(rows, game.away_team_id, game)[game_columns.HOME_OR_AWAY] == 1
+    assert row_of(rows, game.home_team_id, game)[team_columns.HOME_OR_AWAY] == 0
+    assert row_of(rows, game.away_team_id, game)[team_columns.HOME_OR_AWAY] == 1
     assert row_of(rows, game.home_team_id, game)[team_game_rows.IS_HOME_ROW]
     assert not row_of(rows, game.away_team_id, game)[team_game_rows.IS_HOME_ROW]
 
@@ -85,13 +92,13 @@ def test_the_other_side_of_the_game_is_carried_onto_each_row():
     home = row_of(rows, game.home_team_id, game)
 
     assert home[team_game_rows.OPPONENT_TEAM_ID] == game.away_team_id
-    assert home[game_columns.OPPONENT_PREFIX + game_columns.POINTS] == game.away_points
+    assert home[team_columns.OPPONENT_PREFIX + game_columns.POINTS] == game.away_points
 
 def test_the_season_phase_is_read_off_the_game_id():
     rows = built_rows()
 
-    assert (rows[game_columns.REGULAR_SEASON] == 1).all()
-    assert (rows[game_columns.PLAYOFFS] == 0).all()
+    assert (rows[season_columns.REGULAR_SEASON] == 1).all()
+    assert (rows[season_columns.PLAYOFFS] == 0).all()
 
 # WHAT CAME BEFORE IT: #
 def test_a_rolling_column_never_reads_its_own_game():
@@ -141,14 +148,14 @@ def test_rest_and_break_length_are_read_off_the_gap_before_a_game():
     # Team 2 opens on the 22nd and plays again on the 23rd, so it arrives on no days off at all.
     back_to_back = row_of(rows, team_id, played[1])
 
-    assert back_to_back[game_columns.REST] == 0
-    assert back_to_back[game_columns.BREAK_LENGTH] == pytest.approx(np.log1p(0))
-    assert back_to_back[game_columns.SEASON_OPENER] == 0
+    assert back_to_back[schedule_columns.REST] == 0
+    assert back_to_back[schedule_columns.BREAK_LENGTH] == pytest.approx(np.log1p(0))
+    assert back_to_back[schedule_columns.SEASON_OPENER] == 0
 
     opener = row_of(rows, team_id, played[0])
 
-    assert opener[game_columns.SEASON_OPENER] == 1
-    assert opener[game_columns.REST] == game_columns.MAX_REST
+    assert opener[schedule_columns.SEASON_OPENER] == 1
+    assert opener[schedule_columns.REST] == schedule_columns.MAX_REST
 
 def test_a_win_percentage_never_counts_the_game_it_is_read_on():
     rows = built_rows()
@@ -156,17 +163,17 @@ def test_a_win_percentage_never_counts_the_game_it_is_read_on():
     played = fake_data.games_of(team_id)
 
     # Team 1 wins its opener and loses its third game, so it arrives at the fourth even.
-    assert row_of(rows, team_id, played[0])[game_columns.TEAM_WIN_PERCENTAGE] == game_columns.EVEN_RECORD
-    assert row_of(rows, team_id, played[0])[game_columns.SEASON_GAME_NUMBER] == 0
-    assert row_of(rows, team_id, played[1])[game_columns.TEAM_WIN_PERCENTAGE] == 1.0
-    assert row_of(rows, team_id, played[3])[game_columns.TEAM_WIN_PERCENTAGE] == pytest.approx(2 / 3)
-    assert row_of(rows, team_id, played[3])[game_columns.SEASON_GAME_NUMBER] == 3
+    assert row_of(rows, team_id, played[0])[season_columns.TEAM_WIN_PERCENTAGE] == season_columns.EVEN_RECORD
+    assert row_of(rows, team_id, played[0])[season_columns.SEASON_GAME_NUMBER] == 0
+    assert row_of(rows, team_id, played[1])[season_columns.TEAM_WIN_PERCENTAGE] == 1.0
+    assert row_of(rows, team_id, played[3])[season_columns.TEAM_WIN_PERCENTAGE] == pytest.approx(2 / 3)
+    assert row_of(rows, team_id, played[3])[season_columns.SEASON_GAME_NUMBER] == 3
 
 def test_the_season_a_column_of_dates_falls_in_matches_the_season_one_date_falls_in():
     """These are two readings of one boundary. They disagreed once, so they are checked together."""
 
     days = [game.day for game in fake_data.SEASON_GAMES]
-    column = game_columns.season_of(pd.Series(pd.to_datetime(days)))
+    column = season_columns.season_of(pd.Series(pd.to_datetime(days)))
 
     assert list(column) == [season.season_of(day) for day in days]
     assert set(column) == {fake_data.SEASON_YEAR}
@@ -229,6 +236,30 @@ def test_a_team_statistic_is_one_sample_per_side_and_a_game_statistic_one_per_ga
         float(game.home_points - game.away_points) for game in answerable
     )
 
+def test_a_training_era_removes_older_games_from_sequences_and_scaling():
+    start = datetime(2024, 10, 30)
+    validation = datetime(2024, 11, 2)
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+
+    sequences, (training, _, _) = build_split_samples(
+        histories,
+        (validation, datetime(2030, 1, 1)),
+        team_game_rows.MINIMUM_PAST_GAMES,
+        training_start_date=start
+    )
+
+    expected_games = [
+        [game for game in fake_data.games_of(team.id) if game.day >= start.date()]
+        for team in fake_data.TEAMS
+    ]
+    assert [len(sequence) for sequence in sequences.sequences] == [
+        len(games) for games in expected_games
+    ]
+    assert list(sequences.training_game_counts) == [
+        sum(game.day <= validation.date() for game in games) for games in expected_games
+    ]
+    assert (training.sequence_end_indices <= sequences.training_game_counts[training.sequence_indices]).all()
+
 # THE GAME BEING PREDICTED: #
 def test_a_prediction_reads_the_home_team_first_and_only_the_games_before_the_one_asked_about():
     team_game_store.store(fake_data.team_game_frame())
@@ -244,8 +275,8 @@ def test_a_prediction_reads_the_home_team_first_and_only_the_games_before_the_on
     assert sample.static_inputs.shape == (1, len(features.static_columns))
 
     # Home or away is left off the game being predicted, because every sample is a home row.
-    assert game_columns.HOME_OR_AWAY not in features.static_columns
-    assert game_columns.HOME_OR_AWAY in features.sequence_columns
+    assert team_columns.HOME_OR_AWAY not in features.static_columns
+    assert team_columns.HOME_OR_AWAY in features.sequence_columns
 
 def test_the_placeholder_row_of_a_game_not_yet_played_is_built_from_the_games_behind_it():
     """
@@ -255,7 +286,7 @@ def test_the_placeholder_row_of_a_game_not_yet_played_is_built_from_the_games_be
 
     target = Game(fake_data.NEXT_GAME_DATE, home_team_id=1, away_team_id=2)
     with_placeholder = pd.concat(
-        [fake_data.team_game_frame(), team_game_rows.placeholder_game_rows(target)],
+        [fake_data.team_game_frame(), placeholders.game_rows(target)],
         ignore_index=True
     )
 
@@ -280,7 +311,7 @@ def test_a_team_with_nothing_behind_the_predicted_game_cannot_be_answered_for():
     first_game = fake_data.SEASON_GAMES[0]
     target = Game(date=first_game.day - timedelta(days=1), home_team_id=1, away_team_id=2)
     with_placeholder = pd.concat(
-        [fake_data.team_game_frame([first_game]), team_game_rows.placeholder_game_rows(target)],
+        [fake_data.team_game_frame([first_game]), placeholders.game_rows(target)],
         ignore_index=True
     )
 

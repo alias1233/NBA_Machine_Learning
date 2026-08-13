@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import feature_store, game_columns
+from nba_ml.feature_engineering import feature_store, game_columns, player_columns
 from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.models.player_stats import features, specifications
 from nba_ml.stores import player_games, players, team_games
@@ -71,11 +71,20 @@ def test_the_league_build_holds_every_player_and_every_game_they_played(collecte
         assert history.game_count == len(played)
         assert list(history.game_ids) == [game.id for game in played]
 
+def test_a_player_without_a_birthdate_remains_in_the_build(collected_league, features_read):
+    player_info = players.get_all_players_info()
+    player_info[players.BIRTHDATE.category_name] = None
+    players.store(player_info)
+
+    histories = features.build_league_histories(features_read)
+
+    assert set(histories) == {player.id for player in fake_data.ALL_PLAYERS}
+
 def test_a_players_own_scoring_reaches_the_build_as_it_was_recorded(collected_league, features_read):
     """A fixed input check. The points a player recorded are the points the build carries."""
 
     history = features.build_league_histories(features_read)[TARGET_PLAYER_ID]
-    column = features_read.sequence_columns.index(game_columns.POINTS + game_columns.PLAYER_SUFFIX)
+    column = features_read.sequence_columns.index(game_columns.POINTS + player_columns.PLAYER_SUFFIX)
 
     for position, game in enumerate(fake_data.games_of(TARGET_TEAM_ID)):
         scored = fake_data.player_points(

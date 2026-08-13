@@ -21,13 +21,24 @@ class SeasonType(Enum):
     PLAY_IN = "PLAY_IN"
 
 # A season is named after the year it starts in, and the next one starts in October. This is the
-# only place that boundary is decided. game_columns.season_of applies the same rule to a column.
+# only place that boundary is decided. season_columns.season_of applies the same rule to a column.
 SEASON_START_MONTH = 10
+
+COLLECTION_START_SEASON = 1985
+"""The oldest season whose box scores are useful to this project's models."""
+
+TRAINING_START_SEASONS = (1985, 1990, 1995, 2000, 2005, 2010, 2013)
+"""NBA eras the training command can compare."""
 
 def season_of(day: date) -> int:
     """The season a date falls in, named after the year that season started."""
 
     return day.year if day.month >= SEASON_START_MONTH else day.year - 1
+
+def season_start_date(season_year: int) -> datetime:
+    """The calendar date a season named by its first year begins."""
+
+    return datetime(season_year, SEASON_START_MONTH, 1)
 
 EASTERN_TIMEZONE = ZoneInfo("America/New_York")
 """

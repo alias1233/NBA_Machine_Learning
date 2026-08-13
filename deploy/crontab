@@ -1,0 +1,17 @@
+# The scheduled half of the deployment. Install with:
+#   crontab deploy/crontab
+# after changing the path below to where the repository was cloned.
+#
+# Each line starts a container that exits when it is finished, so nothing holds memory between runs.
+# Times are the server's clock, which is UTC on a rented box.
+
+NBA_ML=/srv/nba-ml/deploy
+
+# Collect, then rebuild the whole league's features. One line, because the build has to follow the
+# collection: the service answers out of what the build published, so a player whose only games
+# arrived since the last build reads as having none. Cheap enough to run every hour.
+0 * * * * cd $NBA_ML && docker compose run --rm jobs >> /var/log/nba-ml.log 2>&1
+
+# The databases and the model files, which are the only things here that cannot be rebuilt. Nightly,
+# after the hour's collection has finished. Keeps a week.
+20 4 * * * cd $NBA_ML && docker compose run --rm jobs nba-backup >> /var/log/nba-ml.log 2>&1

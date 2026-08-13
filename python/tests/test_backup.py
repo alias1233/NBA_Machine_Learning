@@ -1,0 +1,75 @@
+"""
+The nightly archive of what the server cannot rebuild.
+
+Two things it has to get right. A database has to arrive whole and readable, since a backup that
+cannot be opened is worse than none, and old archives have to go, since nothing else on the server
+removes them.
+"""
+
+import sqlite3
+import tarfile
+
+import pytest
+
+from nba_ml import paths
+from nba_ml.cli import backup
+from nba_ml.data_collection import source_identity
+from nba_ml.stores import player_games, team_games
+
+import fake_data
+
+@pytest.fixture(autouse=True)
+def collected_league():
+    player_games.store(fake_data.player_game_frame())
+    team_games.store(fake_data.team_game_frame())
+
+def published_model_file():
+    """Stands in for a trained model, which is a file the server is never able to make itself."""
+
+    model_file = paths.model_file("player_stats", "points")
+    model_file.parent.mkdir(parents=True, exist_ok=True)
+    model_file.write_bytes(b"weights")
+
+    return model_file
+
+def test_an_archive_holds_the_databases_and_the_model_files():
+    source_identity.MARKER.write_text("balldontlie\n", encoding="utf-8")
+    published_model_file()
+
+    with tarfile.open(backup.back_up()) as archive:
+        held = archive.getnames()
+
+    assert f"{backup.DATABASES}/{player_games.FILEPATH.name}" in held
+    assert f"{backup.DATABASES}/{team_games.FILEPATH.name}" in held
+    assert f"{backup.MODELS}/player_stats/points/model.pth" in held
+    assert source_identity.MARKER.name in held
+
+def test_a_backed_up_database_opens_and_holds_the_rows_it_held(tmp_path):
+    """A copy read as bytes mid write would open and be short. This one is taken through SQLite."""
+
+    with tarfile.open(backup.back_up()) as archive:
+        archive.extractall(tmp_path, filter="data")
+
+    copy = sqlite3.connect(tmp_path / backup.DATABASES / team_games.FILEPATH.name)
+    held = copy.execute(f"SELECT COUNT(*) FROM {team_games.NAME}").fetchone()[0]
+    copy.close()
+
+    assert held == len(fake_data.SEASON_GAMES) * 2
+
+def test_only_the_newest_archives_are_left():
+    """An archive is named after the day it was taken, so the newest names are the ones to keep."""
+
+    paths.BACKUP_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    older = ["20200101-000000", "20200102-000000", "20200103-000000"]
+
+    for taken in older:
+        (paths.BACKUP_DIRECTORY / f"{backup.ARCHIVE_PREFIX}{taken}{backup.ARCHIVE_SUFFIX}").write_bytes(b"old")
+
+    written = backup.back_up(keep=2)
+    left = {path.name for path in paths.BACKUP_DIRECTORY.glob(f"{backup.ARCHIVE_PREFIX}*")}
+
+    assert left == {f"{backup.ARCHIVE_PREFIX}{older[-1]}{backup.ARCHIVE_SUFFIX}", written.name}
+
+def test_a_run_that_leaves_nothing_is_refused():
+    with pytest.raises(ValueError):
+        backup.back_up(keep=0)

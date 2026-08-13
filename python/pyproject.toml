@@ -11,11 +11,10 @@ dependencies = [
     "python-dateutil>=2.9.0",
     "scikit-learn>=1.6.0",
     "scipy>=1.13.0",
-    "jupyter>=1.1.1",
-    "matplotlib",
     "torch>=2.4.0",
 
     "requests>=2.32.3",
+    "python-dotenv>=1.0",
     "nba_api>=1.11.4",
 
     "fastapi[standard]>=0.141.1,<0.142.0",
@@ -25,10 +24,24 @@ dependencies = [
     "tzdata>=2024.1",
 ]
 
+# Only training and the notebooks need these, and neither runs on the server, so the deployed image
+# is built with --no-dev and never installs them.
 [dependency-groups]
 dev = [
     "pytest>=8.3",
+    "jupyter>=1.1.1",
+    "matplotlib",
 ]
+
+# The server has no graphics card and the CUDA build of torch is gigabytes of it. Linux is the
+# server, so only Linux takes the processor-only wheel. Every other platform resolves as before.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [project.scripts]
 nba-collect = "nba_ml.cli.collect:main"
@@ -36,6 +49,7 @@ nba-schedule = "nba_ml.cli.schedule:main"
 nba-build-features = "nba_ml.cli.build_features:main"
 nba-train = "nba_ml.cli.train:main"
 nba-predict = "nba_ml.cli.predict:main"
+nba-backup = "nba_ml.cli.backup:main"
 
 [build-system]
 requires = ["hatchling"]

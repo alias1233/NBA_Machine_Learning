@@ -24,7 +24,7 @@ nba_ml/database.py               the database layer
 ## Running
 
 `python/` holds its own `pyproject.toml` and lock file. `uv sync` installs the package, which puts
-five commands on the path. They work from any directory.
+six commands on the path. They work from any directory.
 
 ```
 uv sync
@@ -32,6 +32,7 @@ uv run nba-collect all                                # fetches everything newer
 uv run nba-build-features                             # builds the whole league's features and publishes them
 uv run nba-schedule list                              # the upcoming games, and whether each is answerable
 uv run nba-train --model points                       # trains one model and writes a report next to it
+uv run nba-backup                                     # archives the databases and the trained models
 uv run nba-predict --model points --player "Luka Doncic" \
     --home LAL --away SAS --date 2026-06-30
 ```
@@ -55,6 +56,8 @@ nba-schedule add-mock --home LAL --away LAC \
     --date 2026-08-08                                 # a made up game, for testing out of season
 nba-schedule clear-mock                               # remove every mock game, leaving the real ones
 
+nba-backup --keep 7                                   # how many archives to leave on disk
+
 nba-train --model rebounds --rebuild-cache            # engineer the features again instead of reusing them
 nba-predict --model points --player "Luka Doncic" \
     --home LAL --away SAS --date 2026-06-30 \
@@ -68,6 +71,7 @@ data/databases/                              the collected SQLite files
 data/feature_builds/<family>/<version>/      the published whole-league features the service reads
 data/models/<family>/<model>/                model.pth, training_report.txt, graphs/
 data/training_cache/<family>/<model>/        the preprocessed training build, disposable
+data/backups/                                dated archives of the databases and the model files
 ```
 
-Set `NBA_ML_DATA_DIR` to put that tree somewhere else.
+Set `NBA_ML_DATA_DIR` to put that tree somewhere else, and `NBA_ML_BACKUP_DIR` for the archives.

@@ -5,8 +5,10 @@ Everything about the run itself is shared, in models/classifier_training.py. Wha
 only this family knows: how its samples are built, and how to describe what one reads.
 """
 
+from datetime import datetime
 from functools import partial
 
+from nba_ml import season
 from nba_ml.feature_engineering import team_game_rows
 from nba_ml.models import classifier_training
 from nba_ml.models.classifier_training import TrainingInputs
@@ -35,6 +37,7 @@ def train(
         save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
+        training_start_date: datetime = season.season_start_date(season.COLLECTION_START_SEASON)
         ) -> classifier_training.TrainingResult:
     """Fits one model spec, saves it, and writes a report of the run next to it."""
 
@@ -45,5 +48,6 @@ def train(
         use_cached_build,
         save_cached_build,
         print_debug,
-        print_all_debug
+        print_all_debug,
+        training_start_date
     )

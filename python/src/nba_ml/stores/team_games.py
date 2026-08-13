@@ -1,6 +1,7 @@
 """One row per team per finished game, straight off the box score."""
 
 from datetime import date
+from typing import Collection
 
 import pandas as pd
 
@@ -12,6 +13,7 @@ ALL_CATEGORIES = Categories()
 TEAM_ID = ALL_CATEGORIES.add_category("TEAM_ID", DataType.INTEGER)
 GAME_ID = ALL_CATEGORIES.add_category("GAME_ID", DataType.INTEGER)
 GAME_DATE = ALL_CATEGORIES.add_category("GAME_DATE", DataType.TEXT)
+SEASON_TYPE = ALL_CATEGORIES.add_category("SEASON_TYPE", DataType.TEXT)
 MATCHUP = ALL_CATEGORIES.add_category("MATCHUP", DataType.TEXT)
 WIN_LOSS = ALL_CATEGORIES.add_category("WL", DataType.TEXT)
 MINUTES_PLAYED = ALL_CATEGORIES.add_category("MIN", DataType.INTEGER)
@@ -84,6 +86,25 @@ def stored_game_ids(date_start: date | None = None) -> set[int]:
         )
 
     return {int(row[0]) for row in rows}
+
+def teams_with_game_on(day: date, team_ids: Collection[int]) -> set[int]:
+    """
+    Which of the named teams already have a box score stored on the given date.
+
+    No team plays twice in a day, so a team named here has played the game being asked about.
+    """
+
+    if not team_ids:
+        return set()
+
+    with DATABASE:
+        rows = DATABASE.query(
+            SQL_condition=f"{GAME_DATE.category_name} = :{GAME_DATE.category_name}",
+            condition_params={GAME_DATE : season.to_date_string(day)},
+            categories=[TEAM_ID]
+        )
+
+    return {int(row[0]) for row in rows} & {int(team_id) for team_id in team_ids}
 
 def latest_game_date() -> date | None:
     """The newest game held, which is where an update run starts from. None when nothing is held."""

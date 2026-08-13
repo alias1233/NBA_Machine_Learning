@@ -17,7 +17,7 @@ import pandas as pd
 
 from nba_ml import season
 from nba_ml.entities import Game, GameStatus, Player, ScheduledGame, Team
-from nba_ml.feature_engineering import game_columns
+from nba_ml.feature_engineering import player_columns, team_columns
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
 from nba_ml.stores import player_games, players, team_games, teams as teams_store
@@ -103,9 +103,9 @@ def opponent_in(game: PlayedGame, team_id: int) -> int:
 def matchup(team_id: int, opponent_team_id: int, home: bool) -> str:
     """How the raw data writes which side of a game a row belongs to."""
 
-    side = game_columns.HOME if home else game_columns.AWAY
+    side = team_columns.HOME if home else team_columns.AWAY
 
-    return f"{ABBREVIATIONS[team_id]} {game_columns.HOME_OR_AWAY_ENCODING[side]} {ABBREVIATIONS[opponent_team_id]}"
+    return f"{ABBREVIATIONS[team_id]} {team_columns.HOME_OR_AWAY_ENCODING[side]} {ABBREVIATIONS[opponent_team_id]}"
 
 def _made_shots(points: int) -> tuple[int, int, int]:
     """
@@ -152,6 +152,7 @@ def team_game_rows(game: PlayedGame) -> list[dict]:
             team_games.TEAM_ID.category_name: team_id,
             team_games.GAME_ID.category_name: game.id,
             team_games.GAME_DATE.category_name: season.to_date_string(game.day),
+            team_games.SEASON_TYPE.category_name: season.GAME_ID_PREFIXES[SeasonType.REGULAR_SEASON],
             team_games.MATCHUP.category_name: matchup(
                 team_id, opponent_team_id, home=team_id == game.home_team_id
             ),
@@ -203,7 +204,7 @@ def player_info_frame(players_to_describe: Sequence[Player] = ALL_PLAYERS) -> pd
             players.TO_YEAR.category_name: SEASON_YEAR,
             players.BIRTHDATE.category_name: f"199{player.id % 8}-04-15T00:00:00",
             players.DRAFT_NUMBER.category_name: (
-                game_columns.UNDRAFTED if player.id % 5 == 0 else str(1 + player.id % 30)
+                player_columns.UNDRAFTED if player.id % 5 == 0 else str(1 + player.id % 30)
             )
         }
         for player in players_to_describe
@@ -232,6 +233,7 @@ def player_game_rows(game: PlayedGame) -> list[dict]:
                 player_games.GAME_ID.category_name: game.id,
                 player_games.TEAM_ID.category_name: team_id,
                 player_games.GAME_DATE.category_name: season.to_date_string(game.day),
+                player_games.SEASON_TYPE.category_name: season.GAME_ID_PREFIXES[SeasonType.REGULAR_SEASON],
                 player_games.MATCHUP.category_name: matchup(
                     team_id, opponent_team_id, home=team_id == game.home_team_id
                 ),

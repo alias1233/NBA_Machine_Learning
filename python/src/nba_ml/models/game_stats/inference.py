@@ -12,7 +12,7 @@ import torch
 
 from nba_ml.entities import Game
 from nba_ml.machine_learning import datasets, trainer
-from nba_ml.models import loading
+from nba_ml.models import loading, requests
 from nba_ml.models.game_stats import features
 from nba_ml.models.game_stats.specifications import MAX_SEQUENCE_LENGTH, GameStatModelSpecification
 from nba_ml.models.outputs import Prediction
@@ -28,7 +28,12 @@ def predict(
 
     The count is the home team's, which is the side the answer is read off. Both sides had to clear
     the same floor for the game to be answerable at all.
+
+    Raises:
+        PredictionRefused if the game has already been played.
     """
+
+    requests.refuse_a_played_game(target_game)
 
     model, parameters_dict = loading.load(model_specs.model_file())
 

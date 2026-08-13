@@ -28,8 +28,27 @@ Have models accessible through a website where users can predict future statisti
 ```
 python/ : the machine learning pipeline: collection, feature engineering, training, inference
 web/    : the website, SvelteKit.
+deploy/ : the Docker Compose stack, the Caddyfile, and the cron entries.
 ```
 
 # Deployment
 
-1. ...
+One rented Linux server.
+
+```sh
+git clone <repository> /srv/nba-ml && cd /srv/nba-ml/deploy
+cp .env.example .env && nano .env            # DOMAIN and ACME_EMAIL
+mkdir -p data/models backups && sudo chown -R 10001:10001 data backups
+docker compose up -d --build                 # caddy, web, api
+docker compose run --rm jobs                 # collect, then build the features
+crontab crontab                              # hourly collect and build, nightly backup
+```
+
+Models are trained on the developer machine and published by copying them in:
+
+```sh
+scp -r python/data/models/* <server>:/srv/nba-ml/deploy/data/models/
+```
+
+Updating is `git pull && docker compose up -d --build`. Both are picked up without a restart: a new
+feature build and a republished model file.

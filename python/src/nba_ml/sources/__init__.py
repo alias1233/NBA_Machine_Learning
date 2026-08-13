@@ -6,13 +6,15 @@ else in the pipeline names a provider.
 """
 
 from nba_ml.sources.base import DataSource
+from nba_ml.sources.balldontlie_source import BallDontLieSource
 from nba_ml.sources.nba_api_source import NBAApiSource
 
 ALL_SOURCES: dict[str, type[DataSource]] = {
+    BallDontLieSource.name: BallDontLieSource,
     NBAApiSource.name: NBAApiSource
 }
 
-DEFAULT_SOURCE = NBAApiSource.name
+DEFAULT_SOURCE = BallDontLieSource.name
 
 def get_source(name: str = DEFAULT_SOURCE, request_interval: float | None = None) -> DataSource:
     """

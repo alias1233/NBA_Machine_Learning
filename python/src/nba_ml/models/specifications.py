@@ -10,10 +10,24 @@ A family adds a subclass naming its category and holding whatever only that fami
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Protocol
 
 from nba_ml import paths
 from nba_ml.models.outputs import ModelOutput
+
+class FeatureColumns(Protocol):
+    """
+    What every family's feature set holds, which is all anything outside a family reads off one.
+
+    A family resolves far more than this, and what it resolves is its own business. These two are
+    named here because a saved model is checked against them. See nba_ml/models/loading.py.
+    """
+
+    sequence_columns: list[str]
+    """Read for each of the subject's past games."""
+
+    static_columns: list[str]
+    """Read once, off the game being predicted."""
 
 class GameSide(StrEnum):
     """One side of a game, which is what an answer belonging to a game names."""
@@ -78,6 +92,16 @@ class ModelSpecification():
         """
 
         return 1
+
+    def get_feature_set(self) -> FeatureColumns:
+        """
+        Which columns this model reads, resolved by the family that owns them.
+
+        Resolve it once per run and pass it down, so that two models being built at the same time
+        never share column state.
+        """
+
+        raise NotImplementedError
 
     def model_file(self) -> Path:
         return paths.model_file(self.model_category, self.name)

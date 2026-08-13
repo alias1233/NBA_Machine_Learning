@@ -5,6 +5,8 @@ from pandas.core.window.ewm import ExponentialMovingWindow
 from typing import Callable
 from dataclasses import dataclass
 
+from nba_ml.feature_engineering import game_columns
+
 @dataclass
 class RollingCategory():
     """One new column, built by running a function over a window of another column."""
@@ -107,7 +109,9 @@ def calculate_rolling_function_column(
     if rolling_param.fill_na_value is not None:
         rolling_column = rolling_column.fillna(rolling_param.fill_na_value)
 
-    return rolling_column
+    # Pandas works every window out in 64 bits whatever it is handed, and these columns are most of
+    # what a build holds, so the result is kept at the width a model reads. See game_columns.py.
+    return rolling_column.astype(game_columns.BUILT_COLUMN_TYPE)
 
 def add_rolling_function_columns(
         dataframe: pd.DataFrame,

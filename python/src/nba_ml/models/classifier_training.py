@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import torch, torch.nn as nn
 
+from nba_ml import season
 from nba_ml.machine_learning import datasets, evaluation, report, serialization, trainer
 from nba_ml.machine_learning.architectures.gru_feed_forward import GRUFeedForward
 from nba_ml.machine_learning.datasets import GameSequences, SequenceGameDataset, SequenceInputSamples
@@ -51,8 +52,8 @@ VALIDATION_LABEL = "Validation set, not held out"
 LabeledData = tuple[GameSequences, SequenceInputSamples, SequenceInputSamples, SequenceInputSamples]
 """Every sample the family holds: the games, then the training, validation and test splits."""
 
-LabeledDataBuilder = Callable[[datetime, datetime, int, bool], LabeledData]
-"""Builds the samples, given (validation start, test start, sample step size, whether to print)."""
+LabeledDataBuilder = Callable[[datetime, datetime, datetime, int, bool], LabeledData]
+"""Builds samples from a training start, split starts, a sample step size and a debug flag."""
 
 @dataclass(frozen=True)
 class TrainingResult():
@@ -86,7 +87,8 @@ class TrainingInputs():
 
 def _describe_build(
     model_specs: ClassifierModelSpecification,
-    inputs: TrainingInputs
+    inputs: TrainingInputs,
+    training_start_date: datetime
     ) -> tuple:
     """
     Everything that decides what a build holds, written as plain data so it can be saved beside one.
@@ -105,7 +107,8 @@ def _describe_build(
         model_specs.output.length,
         model_specs.output.value_step,
         model_specs.output.impossible_value,
-        inputs.build_description
+        inputs.build_description,
+        training_start_date
     )
 
 def _load_cached_build(file_path: Path, description: tuple, print_debug: bool):
@@ -138,7 +141,8 @@ def _build_datasets(
         inputs: TrainingInputs,
         use_cached_build: bool = True,
         save_cached_build: bool = True,
-        print_debug: bool = False
+        print_debug: bool = False,
+        training_start_date: datetime = season.season_start_date(season.COLLECTION_START_SEASON)
         ) -> tuple[SequenceGameDataset, SequenceGameDataset, SequenceGameDataset, dict]:
     """
     Builds the three splits and the scalers fitted on the training one.
@@ -148,7 +152,7 @@ def _build_datasets(
     """
 
     file_path = model_specs.training_cache_file()
-    description = _describe_build(model_specs, inputs)
+    description = _describe_build(model_specs, inputs, training_start_date)
     cached = None
 
     if use_cached_build and file_path.exists():
@@ -159,6 +163,7 @@ def _build_datasets(
 
     if cached is None:
         labeled_data = inputs.build_labeled_data(
+            training_start_date,
             VALIDATION_START_DATE,
             TEST_START_DATE,
             CHUNK_STEP_SIZE,
@@ -218,12 +223,14 @@ def _list_feature_columns(inputs: TrainingInputs) -> str:
 def _describe_data(
     training_dataset: SequenceGameDataset,
     validation_dataset: SequenceGameDataset,
-    test_dataset: SequenceGameDataset
+    test_dataset: SequenceGameDataset,
+    training_start_date: datetime
     ) -> dict:
     return {
         "training samples": len(training_dataset),
         "validation samples": len(validation_dataset),
         "test samples": len(test_dataset),
+        "training starts": training_start_date.date(),
         "validation starts": VALIDATION_START_DATE.date(),
         "test starts": TEST_START_DATE.date(),
         "scored on": VALIDATION_LABEL if EVALUATE_ON_VALIDATION_SET else HELD_OUT_LABEL,
@@ -326,6 +333,7 @@ def train(
         save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
+        training_start_date: datetime = season.season_start_date(season.COLLECTION_START_SEASON)
         ) -> TrainingResult:
     """
     Fits one model spec, saves it, and writes a report of the run next to it.
@@ -353,7 +361,8 @@ def train(
         inputs,
         use_cached_build,
         save_cached_build,
-        print_debug
+        print_debug,
+        training_start_date
     )
 
     evaluation_dataset = validation_dataset if EVALUATE_ON_VALIDATION_SET else test_dataset
@@ -380,7 +389,7 @@ def train(
 
     model_description = report.describe_model(model)
     feature_description = _describe_features(inputs, training_dataset)
-    data_description = _describe_data(training_dataset, validation_dataset, test_dataset)
+    data_description = _describe_data(training_dataset, validation_dataset, test_dataset, training_start_date)
     label_description = datasets.summarize_classification_outputs(
         training_dataset.outputs,
         model_specs.output.length,
@@ -441,10 +450,17 @@ def train(
         for result in training_run.epoch_results
     })
 
+    # The columns are saved beside the weights so that a model fit before a column moved reports as
+    # unpublishable rather than failing at the first matrix multiply. See models/loading.py.
     model_file = model_specs.model_file()
     serialization.save_data_to_file(
         model_file,
-        {**model.get_save_parameters_dict(), **scaler_parameters}
+        {
+            **model.get_save_parameters_dict(),
+            **scaler_parameters,
+            loading.SEQUENCE_COLUMNS: list(inputs.sequence_columns),
+            loading.STATIC_COLUMNS: list(inputs.static_columns)
+        }
     )
 
     scores: dict[str, float] = {}

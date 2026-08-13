@@ -11,6 +11,7 @@ training loop and matplotlib, and the service reads that list.
 import argparse
 from typing import Any, Callable
 
+from nba_ml import season
 from nba_ml.models import families
 from nba_ml.models.game_stats import specifications as game_stat_specifications
 from nba_ml.models.game_stats import training as game_stat_training
@@ -38,6 +39,13 @@ def main():
         required=True,
         choices=families.ALL_MODEL_NAMES,
         help="Which model to train, named as it is in its family's specifications.py."
+    )
+    parser.add_argument(
+        "--training-start-season",
+        type=int,
+        choices=season.TRAINING_START_SEASONS,
+        default=season.COLLECTION_START_SEASON,
+        help="First NBA season used for training. Defaults to 1985."
     )
     parser.add_argument(
         "--skip-evaluations",
@@ -68,6 +76,7 @@ def main():
 
     train(
         specification,
+        training_start_date=season.season_start_date(arguments.training_start_season),
         output_evaluations=not arguments.skip_evaluations,
         use_cached_build=not (arguments.rebuild_cache or arguments.no_cache),
         save_cached_build=not arguments.no_cache,

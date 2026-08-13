@@ -18,6 +18,14 @@ MODELS_DIRECTORY = DATA_DIRECTORY / "models"
 TRAINING_CACHE_DIRECTORY = DATA_DIRECTORY / "training_cache"
 FEATURE_BUILDS_DIRECTORY = DATA_DIRECTORY / "feature_builds"
 
+BACKUP_DIRECTORY = Path(os.environ.get("NBA_ML_BACKUP_DIR", DATA_DIRECTORY / "backups"))
+"""
+Where backups are written, which a deployment points at a directory of its own.
+
+Outside the data directory by default in a deployment, so a backup never holds the backups before
+it. See nba_ml/cli/backup.py.
+"""
+
 def database_file(name: str) -> Path:
     return DATABASE_DIRECTORY / f"{name}.db"
 

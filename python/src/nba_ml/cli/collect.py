@@ -10,6 +10,7 @@ from datetime import date
 
 from nba_ml import season, sources
 from nba_ml.data_collection import games, players, schedule, teams
+from nba_ml.data_collection import source_identity
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
 from nba_ml.stores import player_games
@@ -126,7 +127,9 @@ def main():
 
     arguments = parser.parse_args()
     source = sources.get_source(arguments.source, arguments.wait)
+    source_identity.claim(source.name)
     print_debug = not arguments.quiet
+    source.set_progress_reporter(print if print_debug else None)
 
     match arguments.command:
         case "teams":
@@ -143,8 +146,7 @@ def main():
             # The schedule comes last so that it is read against the box scores just collected.
             rows_written = (
                 teams.collect(source, print_debug)
-                + games.update_player_games(source, print_debug)
-                + games.update_team_games(source, print_debug)
+                + games.update_games(source, print_debug)
                 + players.update(source, print_debug)
                 + schedule.collect(source, print_debug=print_debug)
             )

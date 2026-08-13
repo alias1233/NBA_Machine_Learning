@@ -14,6 +14,7 @@ PLAYER_ID = ALL_CATEGORIES.add_category("PLAYER_ID", DataType.INTEGER)
 GAME_ID = ALL_CATEGORIES.add_category("GAME_ID", DataType.INTEGER)
 TEAM_ID = ALL_CATEGORIES.add_category("TEAM_ID", DataType.INTEGER)
 GAME_DATE = ALL_CATEGORIES.add_category("GAME_DATE", DataType.TEXT)
+SEASON_TYPE = ALL_CATEGORIES.add_category("SEASON_TYPE", DataType.TEXT)
 MATCHUP = ALL_CATEGORIES.add_category("MATCHUP", DataType.TEXT)
 WIN_LOSS = ALL_CATEGORIES.add_category("WL", DataType.TEXT)
 MINUTES_PLAYED = ALL_CATEGORIES.add_category("MIN", DataType.INTEGER)
@@ -202,3 +203,20 @@ def player_ids_since(date_start: date) -> list[int]:
         )
 
     return sorted({int(row[0]) for row in rows})
+
+def career_seasons() -> dict[int, tuple[int, int]]:
+    """The first and last season each stored player appeared in."""
+
+    with DATABASE:
+        rows = DATABASE.cursor.execute(
+            f"SELECT {PLAYER_ID.category_name}, MIN({GAME_DATE.category_name}), "
+            f"MAX({GAME_DATE.category_name}) FROM {NAME} GROUP BY {PLAYER_ID.category_name}"
+        ).fetchall()
+
+    return {
+        int(player_id): (
+            season.season_of(season.from_date_string(first_game).date()),
+            season.season_of(season.from_date_string(last_game).date())
+        )
+        for player_id, first_game, last_game in rows
+    }

@@ -11,7 +11,7 @@ import torch
 
 from nba_ml.entities import Game
 from nba_ml.machine_learning import datasets, trainer
-from nba_ml.models import loading
+from nba_ml.models import loading, requests
 from nba_ml.models.outputs import Prediction
 from nba_ml.models.team_stats import features
 from nba_ml.models.team_stats.specifications import MAX_SEQUENCE_LENGTH, TeamStatModelSpecification
@@ -31,7 +31,10 @@ def predict(
 
     Raises:
         ValueError if the team is not playing in the given game.
+        PredictionRefused if the game has already been played.
     """
+
+    requests.refuse_a_played_game(target_game)
 
     model, parameters_dict = loading.load(model_specs.model_file())
 

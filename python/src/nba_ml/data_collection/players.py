@@ -1,9 +1,26 @@
-"""Collecting a player's own information, one request per player."""
+"""Collecting a player's own information."""
 
 from typing import Iterable
 
 from nba_ml.sources.base import DataSource
+from nba_ml.stores import player_games
 from nba_ml.stores import players as players_store
+
+def _with_career_seasons(player_info, careers, player_id):
+    """Fill provider gaps from the player's collected game history."""
+
+    career = careers.get(player_id)
+    if career is None:
+        return player_info
+
+    first, last = career
+    for column, value in (
+        (players_store.FROM_YEAR.category_name, first),
+        (players_store.TO_YEAR.category_name, last)
+    ):
+        if column not in player_info.columns or player_info[column].isna().all():
+            player_info[column] = value
+    return player_info
 
 def collect(
     source: DataSource,
@@ -14,8 +31,8 @@ def collect(
     """
     Writes one row per player to the store and returns how many were written.
 
-    A run over every player is thousands of requests, so the index of each one is printed and
-    starting_index picks a stopped run back up from where it reached.
+    The index of each player is printed and starting_index picks a stopped run back up from where it
+    reached. A source may cache its player list, so one player does not necessarily mean one request.
 
     Args:
         player_ids defaults to every player the source knows of.
@@ -24,6 +41,7 @@ def collect(
     ids = [player.id for player in source.players()] if player_ids is None else list(player_ids)
 
     rows_written = 0
+    careers = player_games.career_seasons()
     for index in range(starting_index, len(ids)):
         player_id = ids[index]
         player_info = source.player_info(player_id)
@@ -31,6 +49,7 @@ def collect(
         if player_info is None or player_info.empty:
             continue
 
+        player_info = _with_career_seasons(player_info, careers, player_id)
         rows_written += players_store.store(player_info)
 
         if print_debug:

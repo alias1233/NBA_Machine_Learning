@@ -1,8 +1,14 @@
+.env
+
 # Documentation Files
 docs/
-CLAUDE.md
-ARCHITECTURE.md
-RESPONSE.md
+.codex/
 .claude/
+CLAUDE.md
 AGENTS.md
 MEMORY.md
+
+# Deployment secrets, and everything the containers write
+deploy/.env
+deploy/data/
+deploy/backups/

@@ -15,15 +15,21 @@ is what lets a game not yet played be fed through the same build as one already 
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from nba_ml import season
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import game_columns, rolling, situations
+from nba_ml.feature_engineering import (
+    game_columns,
+    placeholders,
+    rolling,
+    schedule_columns,
+    season_columns,
+    situations,
+    team_columns
+)
 from nba_ml.feature_engineering.rolling import RollingCategory
 from nba_ml.feature_engineering.samples import OUTPUT, GameHistory, split_into_histories
 from nba_ml.feature_engineering.situations import SituationalStat
@@ -57,7 +63,7 @@ PAST_SEASON_STD_PREFIX = "PAST_SEASON_STD_"
 TEAM_ID = team_game_store.TEAM_ID.category_name
 GAME_ID = team_game_store.GAME_ID.category_name
 GAME_DATE = team_game_store.GAME_DATE.category_name
-OPPONENT_TEAM_ID = game_columns.OPPONENT_PREFIX + TEAM_ID
+OPPONENT_TEAM_ID = team_columns.OPPONENT_PREFIX + TEAM_ID
 
 # WHAT A GAME HOLDS: #
 WIN = team_game_store.WIN_LOSS.category_name
@@ -111,7 +117,7 @@ BOX_SCORE_STATS = [
 COPIED_FROM_THE_OTHER_SIDE = BOX_SCORE_STATS + [
     game_columns.POINTS,
     game_columns.REBOUNDS,
-    game_columns.POSSESSIONS
+    team_columns.POSSESSIONS
 ]
 """
 What both teams record separately in a game, and what is carried over from one row to the other.
@@ -123,8 +129,8 @@ which is the only defensive reading a box score carries.
 OWN_GAME_STATS = COPIED_FROM_THE_OTHER_SIDE + [
     team_game_store.MINUTES_PLAYED.category_name,
     WIN,
-    game_columns.POINT_DIFFERENTIAL,
-    game_columns.GAME_TOTAL
+    team_columns.POINT_DIFFERENTIAL,
+    team_columns.GAME_TOTAL
 ]
 """
 The same, plus what only reads from the team's own side.
@@ -134,20 +140,20 @@ the two point totals are already both teams together, so neither has an opposing
 """
 
 ALLOWED_GAME_STATS = [
-    game_columns.OPPONENT_PREFIX + stat for stat in COPIED_FROM_THE_OTHER_SIDE
+    team_columns.OPPONENT_PREFIX + stat for stat in COPIED_FROM_THE_OTHER_SIDE
 ]
 """The opposing team's own line in the same game, read as what the team allowed."""
 
 RECENT_FORM_STATS = [
     game_columns.POINTS,
-    game_columns.POSSESSIONS,
-    game_columns.POINT_DIFFERENTIAL,
-    game_columns.GAME_TOTAL,
+    team_columns.POSSESSIONS,
+    team_columns.POINT_DIFFERENTIAL,
+    team_columns.GAME_TOTAL,
     WIN,
     team_game_store.THREE_POINTERS_ATTEMPTED.category_name,
     team_game_store.FREE_THROWS_ATTEMPTED.category_name,
-    game_columns.OPPONENT_PREFIX + game_columns.POINTS,
-    game_columns.OPPONENT_PREFIX + game_columns.POSSESSIONS
+    team_columns.OPPONENT_PREFIX + game_columns.POINTS,
+    team_columns.OPPONENT_PREFIX + team_columns.POSSESSIONS
 ]
 """
 The stats also carried weighted towards the newest games.
@@ -159,10 +165,10 @@ second reading.
 
 SEASON_LEVEL_STATS = [
     game_columns.POINTS,
-    game_columns.OPPONENT_PREFIX + game_columns.POINTS,
-    game_columns.POINT_DIFFERENTIAL,
-    game_columns.GAME_TOTAL,
-    game_columns.POSSESSIONS
+    team_columns.OPPONENT_PREFIX + game_columns.POINTS,
+    team_columns.POINT_DIFFERENTIAL,
+    team_columns.GAME_TOTAL,
+    team_columns.POSSESSIONS
 ]
 """
 What a team's level and its steadiness are read off, over a season length window.
@@ -172,23 +178,23 @@ same across 90 and 130, which is most of what the tails of a distribution are ma
 """
 
 CONTEXT_COLUMNS = [
-    game_columns.HOME_OR_AWAY,
-    game_columns.REST,
-    game_columns.BREAK_LENGTH,
-    game_columns.SEASON_OPENER
+    team_columns.HOME_OR_AWAY,
+    schedule_columns.REST,
+    schedule_columns.BREAK_LENGTH,
+    schedule_columns.SEASON_OPENER
 ] + (
-    game_columns.ALL_SEASON_TYPES
-    + game_columns.ALL_SEASON_CONTEXT_COLUMNS
-    + game_columns.get_recent_game_count_columns()
+    season_columns.ALL_SEASON_TYPES
+    + season_columns.ALL_SEASON_CONTEXT_COLUMNS
+    + schedule_columns.get_recent_game_count_columns()
 )
 """Where a game sits in the schedule and in the season, which is known before it is played."""
 
 OPPONENT_CONTEXT_STATS = [
-    game_columns.REST,
-    game_columns.BREAK_LENGTH,
-    game_columns.SEASON_GAME_NUMBER,
-    game_columns.TEAM_WIN_PERCENTAGE
-] + game_columns.get_recent_game_count_columns()
+    schedule_columns.REST,
+    schedule_columns.BREAK_LENGTH,
+    season_columns.SEASON_GAME_NUMBER,
+    season_columns.TEAM_WIN_PERCENTAGE
+] + schedule_columns.get_recent_game_count_columns()
 """
 The opposing team's own schedule and record, which decide a game as much as the team's own do.
 
@@ -208,9 +214,9 @@ there is little there to read.
 class TargetValue(Enum):
     """Which finished column of this build holds a value a model can be fit against."""
 
-    POINT_DIFFERENTIAL = game_columns.POINT_DIFFERENTIAL
+    POINT_DIFFERENTIAL = team_columns.POINT_DIFFERENTIAL
     TEAM_POINTS = game_columns.POINTS
-    GAME_TOTAL = game_columns.GAME_TOTAL
+    GAME_TOTAL = team_columns.GAME_TOTAL
     RESULT = WIN_CATEGORY
 
 # WHICH COLUMNS A MODEL READS: #
@@ -284,7 +290,7 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
         + OPPONENT_CONTEXT_STATS
     )
     opponent_columns = [
-        game_columns.OPPONENT_PREFIX + column for column in columns_copied_from_opponent
+        team_columns.OPPONENT_PREFIX + column for column in columns_copied_from_opponent
     ]
 
     return FeatureSet(
@@ -296,7 +302,7 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
             OWN_GAME_STATS
             + ALLOWED_GAME_STATS
             + CONTEXT_COLUMNS
-            + [game_columns.OPPONENT_PREFIX + stat for stat in OPPONENT_CONTEXT_STATS]
+            + [team_columns.OPPONENT_PREFIX + stat for stat in OPPONENT_CONTEXT_STATS]
         )),
         static_columns=sorted(
             set(
@@ -339,54 +345,58 @@ def build_rows(features: FeatureSet, team_game_data: pd.DataFrame) -> pd.DataFra
         team_game_store.OFFENSIVE_REBOUNDS.category_name,
         team_game_store.DEFENSIVE_REBOUNDS.category_name
         )
-    team_game_data = game_columns.add_possessions_column(
+    team_game_data = team_columns.add_possessions_column(
         team_game_data,
         team_game_store.FIELD_GOALS_ATTEMPTED.category_name,
         team_game_store.FREE_THROWS_ATTEMPTED.category_name,
         team_game_store.OFFENSIVE_REBOUNDS.category_name,
         team_game_store.TURNOVERS.category_name
         )
-    team_game_data = game_columns.add_encoded_season_type_columns(team_game_data, GAME_ID)
-    team_game_data = game_columns.add_encoded_home_or_away_column(
+    team_game_data = season_columns.add_encoded_season_type_columns(
+        team_game_data,
+        GAME_ID,
+        team_game_store.SEASON_TYPE.category_name
+    )
+    team_game_data = team_columns.add_encoded_home_or_away_column(
         team_game_data,
         team_game_store.MATCHUP.category_name
         )
     # A row whose matchup says neither reads as away, so it simply never anchors a game sample.
     team_game_data[IS_HOME_ROW] = (
-        team_game_data[game_columns.HOME_OR_AWAY].eq(0).fillna(False).astype(bool)
+        team_game_data[team_columns.HOME_OR_AWAY].eq(0).fillna(False).astype(bool)
     )
-    team_game_data = game_columns.encode_win_loss_column_as_integer(team_game_data, WIN)
+    team_game_data = team_columns.encode_win_loss_column_as_integer(team_game_data, WIN)
     team_game_data[WIN_CATEGORY] = np.where(team_game_data[WIN] == 1, WON, LOST)
-    team_game_data = game_columns.add_break_columns(
+    team_game_data = schedule_columns.add_break_columns(
         team_game_data,
         GAME_DATE,
         group_by_column=TEAM_ID
         )
-    team_game_data = game_columns.add_recent_game_count_columns(
+    team_game_data = schedule_columns.add_recent_game_count_columns(
         team_game_data,
         GAME_DATE,
         group_by_column=TEAM_ID
         )
-    team_game_data = game_columns.add_season_standings_columns(
+    team_game_data = season_columns.add_season_standings_columns(
         team_game_data,
         GAME_DATE,
         TEAM_ID,
         WIN,
-        game_columns.REGULAR_SEASON
+        season_columns.REGULAR_SEASON
         )
 
     # The opposing team's own line in each game, which is both what the team allowed and the half of
     # the result it does not record itself.
-    team_game_data = game_columns.add_opponent_stat_columns(
+    team_game_data = team_columns.add_opponent_stat_columns(
         team_game_data,
         GAME_ID,
         TEAM_ID,
         COPIED_FROM_THE_OTHER_SIDE
         )
-    team_game_data = game_columns.add_game_result_columns(
+    team_game_data = team_columns.add_game_result_columns(
         team_game_data,
         game_columns.POINTS,
-        game_columns.OPPONENT_PREFIX + game_columns.POINTS
+        team_columns.OPPONENT_PREFIX + game_columns.POINTS
         )
 
     team_game_data = ordered_by_team_and_date(team_game_data)
@@ -405,7 +415,7 @@ def build_rows(features: FeatureSet, team_game_data: pd.DataFrame) -> pd.DataFra
         )
 
     # Last, because it carries the finished rolling columns over to the row of the team being played.
-    team_game_data = game_columns.add_opponent_stat_columns(
+    team_game_data = team_columns.add_opponent_stat_columns(
         team_game_data,
         GAME_ID,
         TEAM_ID,
@@ -451,41 +461,6 @@ def build_histories(
     )
 
 # THE GAME BEING PREDICTED: #
-def placeholder_game_rows(target_game: Game) -> pd.DataFrame:
-    """
-    The two rows standing for the game being predicted, holding only what is known before it.
-
-    Every other column is left empty and filled by the same build that fills a played game, so rest,
-    break length and both teams' form come from the games in front of it rather than from anything
-    assembled by hand.
-    """
-
-    def row(team_id: int) -> dict[str, Any]:
-        return {
-            TEAM_ID: team_id,
-            GAME_DATE: season.to_date_string(target_game.date),
-            # The season phase is written in the game id, which is how every other game says which
-            # phase it belongs to.
-            GAME_ID: placeholder_game_id(target_game),
-            team_game_store.MATCHUP.category_name: (
-                game_columns.HOME_OR_AWAY_ENCODING[game_columns.HOME]
-                if target_game.is_home(team_id)
-                else game_columns.HOME_OR_AWAY_ENCODING[game_columns.AWAY]
-            )
-        }
-
-    return pd.DataFrame([row(target_game.home_team_id), row(target_game.away_team_id)])
-
-def placeholder_game_id(target_game: Game) -> str:
-    """
-    What the game being predicted is filed under, which no played game can collide with.
-
-    A real game id is ten digits and this is the one character that names the season phase, which is
-    what the build reads the phase off.
-    """
-
-    return game_columns.SEASON_ENCODINGS[target_game.season_type.value]
-
 def read_history_window(target_game: Game) -> pd.DataFrame:
     """Every stored team game near enough to the predicted one to reach any window the build uses."""
 
@@ -514,7 +489,7 @@ def find_target_game(
     if history is None:
         return None
 
-    found = np.flatnonzero(history.game_ids == placeholder_game_id(target_game))
+    found = np.flatnonzero(history.game_ids == placeholders.game_id(target_game))
     if len(found) != 1:
         raise ValueError(
             f"Expected exactly one placeholder game for team {team_id}, found {len(found)}."
