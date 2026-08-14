@@ -1,10 +1,8 @@
 /**
  * What the site calls itself, held in one place so that naming it is one edit.
- *
- * Both values below are the user's to settle. A page still showing `PLACEHOLDER` is not finished.
  */
 
-export const SITE_NAME = 'LarpBall';
+export const SITE_NAME = 'Bazaar Ball';
 
 /** The hero's one description line. 12 words at most, one sentence. */
 export const SITE_DESCRIPTION = 'Predict statistics of upcoming NBA games.';
