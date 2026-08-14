@@ -77,6 +77,14 @@ export type Model = {
 	published: boolean;
 };
 
+/** The explanatory card copy returned only for one family About page. */
+export type FamilyAboutModel = {
+	name: string;
+	title: string;
+	description: string;
+	published: boolean;
+};
+
 /** A game that has not been played and that every model input for it is already held for. */
 export type ScheduledGame = {
 	id: number;

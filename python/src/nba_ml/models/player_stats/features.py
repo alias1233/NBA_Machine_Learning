@@ -763,7 +763,8 @@ def _preprocess_team_game_data(
         )
     team_game_data = season_columns.add_encoded_season_type_columns(
         team_game_data,
-        team_games.GAME_ID.category_name
+        team_games.GAME_ID.category_name,
+        team_games.SEASON_TYPE.category_name
         )
     team_game_data = team_columns.add_encoded_home_or_away_column(
         team_game_data,
@@ -924,10 +925,15 @@ def _read_player_info() -> pd.DataFrame:
         columns=[players.PLAYER_NAME.category_name]
     )
 
-    return player_info.dropna(subset=[
+    player_info = player_info.dropna(subset=[
         players.PLAYER_ID.category_name,
         players.FROM_YEAR.category_name
     ])
+
+    if player_info.empty:
+        raise ValueError("No usable player information is stored. Run nba-collect all before training a player statistic model.")
+
+    return player_info
 
 def _read_team_games(window_start_date: date | None) -> pd.DataFrame:
     """Every team game inside the window, or every one stored where there is no window."""
@@ -937,7 +943,10 @@ def _read_team_games(window_start_date: date | None) -> pd.DataFrame:
         else team_games.get_game_data_after_date(window_start_date)
     )
 
-    return team_game_data.dropna()
+    return season_columns.drop_incomplete_game_rows(
+        team_game_data,
+        team_games.SEASON_TYPE.category_name
+    )
 
 # THE WHOLE LEAGUE: #
 def build_league_histories(
@@ -968,7 +977,10 @@ def build_league_histories(
     return build_histories(
         features,
         _read_player_info(),
-        all_player_game_data.dropna(),
+        season_columns.drop_incomplete_game_rows(
+            all_player_game_data,
+            player_games.SEASON_TYPE.category_name
+        ),
         _read_team_games(window_start_date),
         print_debug
     )
@@ -1128,15 +1140,18 @@ def build_target_game_row(
     roster_player_ids |= set(added_core_teammate_player_ids)
     roster_player_ids.add(target_player_id)
 
-    player_game_data: pd.DataFrame = player_games.get_players_game_data(
-        roster_player_ids,
-        window_start_date
-    ).dropna()
+    player_game_data = season_columns.drop_incomplete_game_rows(
+        player_games.get_players_game_data(roster_player_ids, window_start_date),
+        player_games.SEASON_TYPE.category_name
+    )
 
     # The target player's whole history is read rather than just the window, because their long
     # window columns are model inputs and a slice of a career would not match what training built.
     # The extra games only feed those columns: a game with no team row drops out when the two merge.
-    target_player_game_data = player_games.get_specific_player_game_data(target_player_id).dropna()
+    target_player_game_data = season_columns.drop_incomplete_game_rows(
+        player_games.get_specific_player_game_data(target_player_id),
+        player_games.SEASON_TYPE.category_name
+    )
     player_game_data = pd.concat([player_game_data, target_player_game_data]).drop_duplicates(
         subset=[player_games.PLAYER_ID.category_name, player_games.GAME_ID.category_name]
     )

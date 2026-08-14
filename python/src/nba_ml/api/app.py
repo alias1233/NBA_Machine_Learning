@@ -96,6 +96,21 @@ class ModelResponse(BaseModel):
     published: bool
     """Whether a trained file exists, so a caller can offer the model without every request failing."""
 
+class AboutModelResponse(BaseModel):
+    """The model copy a family About page reads, separate from the prediction-page catalogue."""
+
+    name: str
+    """The stable model identifier."""
+
+    title: str
+    """The short reader-facing name."""
+
+    description: str
+    """The short reader-facing explanation."""
+
+    published: bool
+    """Whether a trained file exists."""
+
 class HealthResponse(BaseModel):
     models: list[str]
     newest_stored_game: date | None
@@ -229,4 +244,22 @@ def all_models() -> list[ModelResponse]:
         )
         for family in ALL_FAMILIES
         for specification in family.specifications.values()
+    ]
+
+@app.get("/models/{family}/about")
+def family_about_models(family: str) -> list[AboutModelResponse]:
+    """The model cards for one family About page, including their explanatory copy."""
+
+    requested = next((candidate for candidate in ALL_FAMILIES if candidate.name == family), None)
+    if requested is None:
+        raise HTTPException(404, f"No model family is named {family}.")
+
+    return [
+        AboutModelResponse(
+            name=specification.name,
+            title=specification.title,
+            description=specification.description,
+            published=requested.is_published(specification)
+        )
+        for specification in requested.specifications.values()
     ]

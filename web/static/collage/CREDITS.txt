@@ -1,5 +1,5 @@
 Collage credits 
 
-Every shipped image needs a row below naming the file, the source, the licence and the author.
-
 Will fill out later once site images are finalized. Currently, all collage images are placeholders.
+
+- File Name: Source: Licence: Author

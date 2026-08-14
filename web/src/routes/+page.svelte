@@ -37,7 +37,7 @@
 	<title>{SITE_NAME}</title>
 	<meta
 		name="description"
-		content="The chance of every points, rebounds and assists total for an NBA player in an upcoming game."
+		content={SITE_DESCRIPTION}
 	/>
 </svelte:head>
 

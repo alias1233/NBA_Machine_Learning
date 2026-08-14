@@ -15,6 +15,7 @@ import { error } from '@sveltejs/kit';
 
 import type {
 	GamePredictionRequest,
+	FamilyAboutModel,
 	Health,
 	Model,
 	Player,
@@ -69,6 +70,10 @@ export const getHealth = () => request<Health>('/health');
 export const getTeams = () => request<Team[]>('/teams');
 
 export const getModels = () => request<Model[]>('/models');
+
+/** The reader-facing model cards for one family About page. */
+export const getFamilyAboutModels = (family: string) =>
+	request<FamilyAboutModel[]>(`/models/${encodeURIComponent(family)}/about`);
 
 export const getPlayer = (id: number) => request<Player>(`/players/${id}`);
 

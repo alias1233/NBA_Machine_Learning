@@ -23,6 +23,12 @@ def _date(text: str) -> date:
 def _season_types(names: list[str]) -> list[SeasonType] | None:
     return [SEASON_TYPES[name] for name in names] if names else None
 
+def _non_negative_int(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be zero or greater")
+    return value
+
 def _add_game_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--since",
@@ -41,20 +47,28 @@ def _add_game_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--season-types", nargs="+", default=[], choices=sorted(SEASON_TYPES))
     parser.add_argument("--all-seasons", action="store_true", help="Collect every season the source has.")
 
-def _collect_games(
-    source: DataSource,
-    arguments: argparse.Namespace,
-    for_teams: bool
-    ) -> int:
-    collect = games.collect_team_games if for_teams else games.collect_player_games
-    update = games.update_team_games if for_teams else games.update_player_games
+def _collect_player_games(source: DataSource, arguments: argparse.Namespace) -> int:
     chose_what_to_collect = arguments.all_seasons or arguments.seasons or arguments.since or arguments.until
 
     if not chose_what_to_collect:
-        return update(source, print_debug=not arguments.quiet)
+        return games.update_player_games(source, print_debug=not arguments.quiet)
 
-    return collect(
+    return games.collect_player_games(
         source,
+        seasons=arguments.seasons,
+        season_types=_season_types(arguments.season_types),
+        date_from=arguments.since,
+        date_to=arguments.until,
+        print_debug=not arguments.quiet
+    )
+
+def _collect_team_games(arguments: argparse.Namespace) -> int:
+    chose_what_to_collect = arguments.all_seasons or arguments.seasons or arguments.since or arguments.until
+
+    if not chose_what_to_collect:
+        return games.update_team_games(print_debug=not arguments.quiet)
+
+    return games.collect_team_games(
         seasons=arguments.seasons,
         season_types=_season_types(arguments.season_types),
         date_from=arguments.since,
@@ -89,7 +103,14 @@ def main():
 
     commands = parser.add_subparsers(dest="command", required=True)
 
-    commands.add_parser("all", help="Collect every team, player and game that is not stored yet.")
+    all_command = commands.add_parser("all", help="Collect every team, player and game that is not stored yet.")
+    all_command.add_argument(
+        "--lookback-days",
+        type=_non_negative_int,
+        default=games.DEFAULT_UPDATE_LOOKBACK_DAYS,
+        metavar="DAYS",
+        help="Refetch this many days before each game store's newest row. Defaults to 1."
+    )
 
     commands.add_parser("teams", help="Collect the thirty teams and their tricodes.")
 
@@ -126,6 +147,12 @@ def main():
     _add_game_arguments(team_games_command)
 
     arguments = parser.parse_args()
+    if arguments.command == "team-games":
+        source_identity.claim(arguments.source)
+        rows_written = _collect_team_games(arguments)
+        print(f"Wrote {rows_written} rows.")
+        return
+
     source = sources.get_source(arguments.source, arguments.wait)
     source_identity.claim(source.name)
     print_debug = not arguments.quiet
@@ -139,15 +166,20 @@ def main():
         case "players":
             rows_written = _collect_players(source, arguments)
         case "player-games":
-            rows_written = _collect_games(source, arguments, for_teams=False)
-        case "team-games":
-            rows_written = _collect_games(source, arguments, for_teams=True)
+            rows_written = _collect_player_games(source, arguments)
         case _:
             # The schedule comes last so that it is read against the box scores just collected.
+            player_update_start = games.update_start_date(
+                player_games.latest_game_date(), arguments.lookback_days
+            )
             rows_written = (
                 teams.collect(source, print_debug)
-                + games.update_games(source, print_debug)
-                + players.update(source, print_debug)
+                + games.update_games(source, arguments.lookback_days, print_debug)
+                + (
+                    players.update(source, print_debug)
+                    if player_update_start is None
+                    else players.update_from_games(source, player_update_start, print_debug)
+                )
                 + schedule.collect(source, print_debug=print_debug)
             )
 

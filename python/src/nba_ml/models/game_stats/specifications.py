@@ -106,6 +106,8 @@ class GameStatModelSpecification(ClassifierModelSpecification):
 
 POINT_DIFFERENTIAL_MODEL = GameStatModelSpecification(
     name="point_differential",
+    title="Point differential",
+    description="The home team's margin, positive for a win and negative for a loss.",
     # -42 to 42 without zero, in threes: -3 to -1, then 1 to 3. Zero falls on a bucket edge, so no
     # bucket mixes a home win with a home loss and the range is the same reach either side.
     output=IntegerDistribution(
@@ -124,6 +126,8 @@ off the line entirely. The first bucket above it is a home win by one, two or th
 
 GAME_TOTAL_MODEL = GameStatModelSpecification(
     name="game_total",
+    title="Game total",
+    description="The points both teams score together.",
     # 171 to 275, in threes. Wider than the other two because a total is two scores added, so it
     # spreads about half as much again. Each end folds in about 1%, against 2.8% in the middle.
     output=IntegerDistribution(minimum_value=171, outcomes=35, bucket_width=3),
@@ -149,6 +153,8 @@ WIN_CATEGORY_SIDES = (GameSide.HOME, GameSide.AWAY)
 
 WIN_PROBABILITY_MODEL = GameStatModelSpecification(
     name="win_probability",
+    title="Win probability",
+    description="The chance of each team winning the game.",
     output=CategoryDistribution(categories=WIN_CATEGORIES),
     target=TargetValue.RESULT,
     predicted="win chances",

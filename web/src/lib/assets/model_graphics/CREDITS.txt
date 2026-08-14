@@ -3,6 +3,6 @@ Model graphic credits
 One image per model family, named after the family: player_stats.jpg, team_stats.png, game_stats.jpg,
 and so on. A family with no file keeps the placeholder.
 
-Every shipped image needs a row below naming the file, the source, the licence and the author.
-
 Will fill out later once site images are finalized. Currently, all collage images are placeholders.
+
+- File Name: Source: Licence: Author

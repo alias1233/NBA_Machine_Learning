@@ -24,10 +24,13 @@ class SeasonType(Enum):
 # only place that boundary is decided. season_columns.season_of applies the same rule to a column.
 SEASON_START_MONTH = 10
 
-COLLECTION_START_SEASON = 1985
-"""The oldest season whose box scores are useful to this project's models."""
+PLAYER_GAME_COLLECTION_START_DATE = date(1996, 11, 1)
+"""The first game date where every required player-model box-score field is available."""
 
-TRAINING_START_SEASONS = (1985, 1990, 1995, 2000, 2005, 2010, 2013)
+COLLECTION_START_SEASON = PLAYER_GAME_COLLECTION_START_DATE.year
+"""The first season whose player games the project collects and trains on."""
+
+TRAINING_START_SEASONS = (COLLECTION_START_SEASON, 2000, 2005, 2010, 2013)
 """NBA eras the training command can compare."""
 
 def season_of(day: date) -> int:

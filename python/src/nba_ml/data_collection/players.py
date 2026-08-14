@@ -1,5 +1,6 @@
 """Collecting a player's own information."""
 
+from datetime import date
 from typing import Iterable
 
 from nba_ml.sources.base import DataSource
@@ -96,3 +97,17 @@ def update(source: DataSource, print_debug: bool = True) -> int:
         collect(source, missing_player_ids(source), print_debug=print_debug)
         + fill_missing_names(source, print_debug)
     )
+
+def update_from_games(source: DataSource, date_start: date, print_debug: bool = True) -> int:
+    """Collects only players first seen in an already collected game window."""
+
+    stored = players_store.stored_player_ids()
+    if not stored:
+        return update(source, print_debug)
+
+    player_ids = [
+        player_id
+        for player_id in player_games.player_ids_since(date_start)
+        if player_id not in stored
+    ]
+    return collect(source, player_ids, print_debug=print_debug)

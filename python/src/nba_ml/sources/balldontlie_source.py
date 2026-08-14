@@ -40,19 +40,21 @@ REQUIRED_PLAYER_STAT_FIELDS = ("min", *STAT_COLUMNS, "plus_minus")
 
 
 def _minutes(value: Any) -> float | None:
-    """Minutes as a number. An empty value means the player did not appear."""
+    """Minutes as a number. An empty or zero value means the player did not appear."""
 
     if value in (None, ""):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        minutes = float(value)
+    else:
+        text = str(value)
+        if ":" not in text:
+            minutes = float(text)
+        else:
+            whole_minutes, seconds = text.split(":", 1)
+            minutes = int(whole_minutes) + int(seconds) / 60
 
-    text = str(value)
-    if ":" not in text:
-        return float(text)
-
-    minutes, seconds = text.split(":", 1)
-    return int(minutes) + int(seconds) / 60
+    return minutes or None
 
 
 def _name(player: dict[str, Any]) -> str:
@@ -167,7 +169,15 @@ class BallDontLieSource(DataSource):
         return [Player(player_id, _name(row)) for player_id, row in self._player_rows().items()]
 
     def player_info(self, player_id: int) -> pd.DataFrame | None:
-        player = self._player_rows().get(player_id)
+        if self._players is None:
+            response = self._fetch(
+                lambda: self._page(f"players/{player_id}", {}),
+                f"player {player_id}"
+            )
+            player = None if response is None else response.get("data")
+        else:
+            player = self._players.get(player_id)
+
         if player is None:
             return None
 
@@ -251,7 +261,7 @@ class BallDontLieSource(DataSource):
                 "WL": result,
                 "MIN": minutes,
                 **{stored: row.get(source) or 0 for source, stored in STAT_COLUMNS.items()},
-                "PLUS_MINUS": row.get("plus_minus") or 0
+                "PLUS_MINUS": row.get("plus_minus")
             })
         return pd.DataFrame(games)
 
@@ -300,42 +310,6 @@ class BallDontLieSource(DataSource):
         ) -> pd.DataFrame | None:
         rows = self._stats(season_year, season_type, date_from, date_to)
         return None if rows is None else self._player_game_rows(rows, season_type)
-
-    @staticmethod
-    def _team_game_rows(players: pd.DataFrame) -> pd.DataFrame:
-        if players.empty:
-            return pd.DataFrame()
-
-        identifiers = ["TEAM_ID", "GAME_ID", "GAME_DATE", "SEASON_TYPE", "MATCHUP", "WL"]
-        totalled = ["MIN", *STAT_COLUMNS.values()]
-        return players.groupby(identifiers, as_index=False, sort=False)[totalled].sum()
-
-    def team_games(
-        self,
-        season_year: int,
-        season_type: SeasonType,
-        date_from: date | None = None,
-        date_to: date | None = None
-        ) -> pd.DataFrame | None:
-        rows = self._stats(season_year, season_type, date_from, date_to)
-        if rows is None:
-            return None
-
-        return self._team_game_rows(self._player_game_rows(rows, season_type))
-
-    def game_rows(
-        self,
-        season_year: int,
-        season_type: SeasonType,
-        date_from: date | None = None,
-        date_to: date | None = None
-        ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-        rows = self._stats(season_year, season_type, date_from, date_to)
-        if rows is None:
-            return (None, None)
-
-        players = self._player_game_rows(rows, season_type)
-        return (players, self._team_game_rows(players))
 
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
         rows = self._fetch(

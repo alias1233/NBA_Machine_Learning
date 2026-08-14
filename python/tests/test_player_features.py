@@ -80,19 +80,28 @@ def test_a_player_without_a_birthdate_remains_in_the_build(collected_league, fea
 
     assert set(histories) == {player.id for player in fake_data.ALL_PLAYERS}
 
-def test_a_players_own_scoring_reaches_the_build_as_it_was_recorded(collected_league, features_read):
-    """A fixed input check. The points a player recorded are the points the build carries."""
+def test_an_empty_player_store_explains_that_training_needs_collection(features_read):
+    with pytest.raises(ValueError, match="No usable player information is stored"):
+        features.build_league_histories(features_read)
+
+def test_a_players_own_scoring_and_plus_minus_reach_the_build_as_recorded(collected_league, features_read):
+    """Fixed input checks for two player box-score values every model reads."""
 
     history = features.build_league_histories(features_read)[TARGET_PLAYER_ID]
-    column = features_read.sequence_columns.index(game_columns.POINTS + player_columns.PLAYER_SUFFIX)
+    points_column = features_read.sequence_columns.index(game_columns.POINTS + player_columns.PLAYER_SUFFIX)
+    plus_minus_column = features_read.sequence_columns.index(player_games.PLUS_MINUS.category_name)
 
     for position, game in enumerate(fake_data.games_of(TARGET_TEAM_ID)):
         scored = fake_data.player_points(
             TARGET_PLAYER_ID,
             fake_data.points_in(game, TARGET_TEAM_ID)
         )
+        plus_minus = fake_data.points_in(game, TARGET_TEAM_ID) - fake_data.points_in(
+            game, fake_data.opponent_in(game, TARGET_TEAM_ID)
+        )
 
-        assert history.sequence_values[position][column] == pytest.approx(scored)
+        assert history.sequence_values[position][points_column] == pytest.approx(scored)
+        assert history.sequence_values[position][plus_minus_column] == pytest.approx(plus_minus)
 
 def test_one_build_covers_every_model_of_the_family(collected_league, features_read):
     """

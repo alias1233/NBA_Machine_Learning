@@ -43,6 +43,18 @@ Which phase a game belongs to, as the one character a game id names it with.
 A label rather than a model input: the columns above are what a model reads, and this is what
 grouping a subject's games by phase needs.
 """
+
+def drop_incomplete_game_rows(
+    game_data: pd.DataFrame,
+    stored_season_type_column: str,
+    optional_columns: tuple[str, ...] = ()
+    ) -> pd.DataFrame:
+    """Drops incomplete rows while keeping legacy rows whose season phase can be inferred."""
+
+    optional = {stored_season_type_column, *optional_columns}
+    required = [column for column in game_data.columns if column not in optional]
+    return game_data.dropna(subset=required)
+
 def add_encoded_season_type_columns(
     team_game_data: pd.DataFrame,
     game_id_column: str,

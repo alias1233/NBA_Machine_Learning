@@ -15,7 +15,7 @@ from datetime import datetime
 import pandas as pd
 
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import placeholders, team_game_rows
+from nba_ml.feature_engineering import placeholders, season_columns, team_game_rows
 from nba_ml.feature_engineering.samples import (
     GameHistory,
     build_inference_sample,
@@ -72,7 +72,10 @@ def get_all_labeled_data(
     if print_debug:
         print("Querying data from databases...")
 
-    all_team_game_data: pd.DataFrame = team_game_store.get_all_team_game_data().dropna()
+    all_team_game_data = season_columns.drop_incomplete_game_rows(
+        team_game_store.get_all_team_game_data(),
+        team_game_store.SEASON_TYPE.category_name
+    )
     histories = team_game_rows.build_histories(features, all_team_game_data, print_debug=print_debug)
 
     if print_debug:

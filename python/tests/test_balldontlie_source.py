@@ -82,7 +82,7 @@ def stat(player_id, team_id, minutes, fgm, turnovers, plus_minus):
     }
 
 
-def test_stats_are_paginated_transformed_once_and_summed_for_teams():
+def test_stats_are_paginated_and_transformed():
     session = Session(
         Response({"data": [stat(10, 1, "20:30", 5, 1, 10), stat(20, 2, "30", 4, 2, -10)],
                   "meta": {"next_cursor": 99, "per_page": 100}}),
@@ -94,17 +94,13 @@ def test_stats_are_paginated_transformed_once_and_summed_for_teams():
     paced = []
     source._pace_request = lambda: paced.append(True)
 
-    players, teams = source.game_rows(2024, SeasonType.REGULAR_SEASON)
+    players = source.player_games(2024, SeasonType.REGULAR_SEASON)
 
     assert len(players) == 4
     assert players["SEASON_TYPE"].unique().tolist() == [GAME_ID_PREFIXES[SeasonType.REGULAR_SEASON]]
     assert players.loc[players["PLAYER_ID"] == 10, "MATCHUP"].item() == "ATL vs. BOS"
     assert players.loc[players["PLAYER_ID"] == 20, "WL"].item() == "L"
 
-    atl = teams.loc[teams["TEAM_ID"] == 1].iloc[0]
-    assert atl["MIN"] == 40
-    assert atl["FGM"] == 12
-    assert atl["TOV"] == 4
     assert len(session.calls) == 3
     assert len(paced) == 3
     assert session.calls[0][1]["params"]["per_page"] == 100
@@ -138,7 +134,24 @@ def test_nonfinal_and_did_not_play_rows_are_not_box_scores():
 
     assert source.player_games(2024, SeasonType.REGULAR_SEASON).empty
 
-def test_a_game_with_a_missing_stat_is_excluded_from_both_stores():
+def test_player_info_fetches_one_player_when_the_directory_is_not_loaded():
+    session = Session(Response({"data": {
+        "id": 10,
+        "first_name": "Ada",
+        "last_name": "Player",
+        "height": "6-4",
+        "weight": "190",
+        "position": "G",
+        "draft_number": 7
+    }}))
+    source = BallDontLieSource(0, api_key="key", session=session)
+
+    player = source.player_info(10)
+
+    assert player["PLAYER_NAME"].item() == "Ada Player"
+    assert session.calls[0][0].endswith("/players/10")
+
+def test_a_game_with_a_missing_stat_is_excluded_from_player_rows():
     incomplete = stat(10, 1, "20", 5, 1, 4)
     incomplete.pop("ast")
     teammate = stat(11, 1, "20", 5, 1, 4)
@@ -148,10 +161,7 @@ def test_a_game_with_a_missing_stat_is_excluded_from_both_stores():
         session=Session(Response({"data": [incomplete, teammate, stat(20, 2, "30", 4, 2, -4)], "meta": {}}))
     )
 
-    players, teams = source.game_rows(2024, SeasonType.REGULAR_SEASON)
-
-    assert players.empty
-    assert teams.empty
+    assert source.player_games(2024, SeasonType.REGULAR_SEASON).empty
 
 def test_a_game_with_only_one_team_is_excluded():
     source = BallDontLieSource(
@@ -161,6 +171,25 @@ def test_a_game_with_only_one_team_is_excluded():
     )
 
     assert source.player_games(2024, SeasonType.REGULAR_SEASON).empty
+
+def test_games_without_plus_minus_are_excluded():
+    participants = [stat(10, 1, "30", 5, 1, None), stat(20, 2, "30", 4, 2, None)]
+    did_not_play = stat(11, 1, "00", 0, 0, None)
+    for field in (*balldontlie_source.STAT_COLUMNS, "plus_minus"):
+        did_not_play.pop(field)
+    for row in (*participants, did_not_play):
+        row["game"].update({"id": 19500001, "date": "1995-11-03", "season": 1995})
+
+    source = BallDontLieSource(
+        0,
+        api_key="key",
+        session=Session(
+            Response({"data": [*participants, did_not_play], "meta": {}}),
+            Response({"data": TEAMS})
+        )
+    )
+
+    assert source.player_games(1995, SeasonType.REGULAR_SEASON).empty
 
 
 def test_play_in_is_collected_with_regular_season_and_unsupported_phases_make_no_request():
@@ -281,7 +310,7 @@ def test_deployment_passes_the_key_only_to_the_balldontlie_job():
     key_lines = [line for line in compose.splitlines() if line.lstrip().startswith("BALL_DONT_LIE_KEY:")]
     assert len(key_lines) == 1
     assert "BALL_DONT_LIE_KEY:" in jobs
-    assert "nba-collect --source balldontlie all" in jobs
+    assert "nba-collect --source balldontlie all --lookback-days 1" in jobs
     assert "BALL_DONT_LIE_KEY=" in (deployment / ".env.example").read_text(encoding="utf-8")
 
 

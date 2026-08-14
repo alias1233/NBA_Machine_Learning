@@ -53,72 +53,96 @@ class PlayerStatModelSpecification(ClassifierModelSpecification):
 # is the room a distribution needs at its tails.
 POINTS_MODEL = PlayerStatModelSpecification(
     name="points",
+    title="Points",
+    description="How many points one player records in a game.",
     output=IntegerDistribution(minimum_value=0, outcomes=60),
     target_stats=(TargetStat.POINTS,)
     )
 
 REBOUNDS_MODEL = PlayerStatModelSpecification(
     name="rebounds",
+    title="Rebounds",
+    description="How many rebounds one player records in a game.",
     output=IntegerDistribution(minimum_value=0, outcomes=25),
     target_stats=(TargetStat.REBOUNDS,)
     )
 
 ASSISTS_MODEL = PlayerStatModelSpecification(
     name="assists",
+    title="Assists",
+    description="How many assists one player records in a game.",
     output=IntegerDistribution(minimum_value=0, outcomes=20),
     target_stats=(TargetStat.ASSISTS,)
     )
 
 THREE_POINTERS_MODEL = PlayerStatModelSpecification(
     name="three_pointers",
+    title="Three-pointers",
+    description="How many three-pointers one player makes in a game.",
     output=IntegerDistribution(minimum_value=0, outcomes=12),
     target_stats=(TargetStat.THREE_POINTERS,)
     )
 
 STEALS_MODEL = PlayerStatModelSpecification(
     name="steals",
+    title="Steals",
+    description="How many steals one player records in a game.",
     output=IntegerDistribution(minimum_value=0, outcomes=10),
     target_stats=(TargetStat.STEALS,)
     )
 
 BLOCKS_MODEL = PlayerStatModelSpecification(
     name="blocks",
+    title="Blocks",
+    description="How many blocks one player records in a game.",
     output=IntegerDistribution(minimum_value=0, outcomes=10),
     target_stats=(TargetStat.BLOCKS,)
     )
 
 TURNOVERS_MODEL = PlayerStatModelSpecification(
     name="turnovers",
+    title="Turnovers",
+    description="How many turnovers one player records in a game.",
     output=IntegerDistribution(minimum_value=0, outcomes=12),
     target_stats=(TargetStat.TURNOVERS,)
     )
 
 POINTS_REBOUNDS_MODEL = PlayerStatModelSpecification(
     name="points_rebounds",
+    title="Points and rebounds",
+    description="The combined points and rebounds one player records.",
     output=IntegerDistribution(minimum_value=0, outcomes=70),
     target_stats=(TargetStat.POINTS, TargetStat.REBOUNDS)
     )
 
 POINTS_ASSISTS_MODEL = PlayerStatModelSpecification(
     name="points_assists",
+    title="Points and assists",
+    description="The combined points and assists one player records.",
     output=IntegerDistribution(minimum_value=0, outcomes=70),
     target_stats=(TargetStat.POINTS, TargetStat.ASSISTS)
     )
 
 REBOUNDS_ASSISTS_MODEL = PlayerStatModelSpecification(
     name="rebounds_assists",
+    title="Rebounds and assists",
+    description="The combined rebounds and assists one player records.",
     output=IntegerDistribution(minimum_value=0, outcomes=35),
     target_stats=(TargetStat.REBOUNDS, TargetStat.ASSISTS)
     )
 
 STEALS_BLOCKS_MODEL = PlayerStatModelSpecification(
     name="steals_blocks",
+    title="Steals and blocks",
+    description="The combined steals and blocks one player records.",
     output=IntegerDistribution(minimum_value=0, outcomes=12),
     target_stats=(TargetStat.STEALS, TargetStat.BLOCKS)
     )
 
 POINTS_REBOUNDS_ASSISTS_MODEL = PlayerStatModelSpecification(
     name="points_rebounds_assists",
+    title="Points, rebounds and assists",
+    description="The combined points, rebounds and assists one player records.",
     output=IntegerDistribution(minimum_value=0, outcomes=80),
     target_stats=(TargetStat.POINTS, TargetStat.REBOUNDS, TargetStat.ASSISTS)
     )
@@ -136,6 +160,8 @@ MILESTONE_OUTPUT = CategoryDistribution(categories=MILESTONE_CATEGORIES)
 
 DOUBLE_DOUBLE_MODEL = PlayerStatModelSpecification(
     name="double_double",
+    title="Double double",
+    description="Whether a player records double figures in two statistics.",
     output=MILESTONE_OUTPUT,
     target_stats=MILESTONE_STATS,
     combination=DoubleFigureMilestone(stats_needed=2, predicted="double double chances")
@@ -143,6 +169,8 @@ DOUBLE_DOUBLE_MODEL = PlayerStatModelSpecification(
 
 TRIPLE_DOUBLE_MODEL = PlayerStatModelSpecification(
     name="triple_double",
+    title="Triple double",
+    description="Whether a player records double figures in three statistics.",
     output=MILESTONE_OUTPUT,
     target_stats=MILESTONE_STATS,
     combination=DoubleFigureMilestone(stats_needed=3, predicted="triple double chances")

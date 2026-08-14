@@ -6,10 +6,9 @@
 	fall out of step with the real thing because it is the real thing. It stands for no family, so it
 	carries no way to one and writes no line into the address bar.
 
-	The terms sit around it and a hairline leader runs from each to the part it names. A leader is the
-	shortest segment from the words of a term to just inside that part, measured off the page rather
-	than drawn by hand, so one rule holds wherever the labels land: in a column either side of the
-	block where there is room for one, and beneath it where there is not.
+	The terms sit around it. On a wide page, a hairline leader runs from each to the part it names. A
+	leader is the shortest segment from the words of a term to just inside that part, measured off the
+	page rather than drawn by hand. On a narrower page, the terms follow the block without leaders.
 
 	A part names itself with `data-explain`, which is the whole of what the real components carry for
 	this. Grep that attribute to find them.
@@ -263,6 +262,7 @@
 	/* Over the block, under the terms, and taking no presses, so the block below works exactly as it
 	   does on a prediction page. */
 	.leaders {
+		display: none;
 		position: absolute;
 		inset: 0;
 		width: 100%;
@@ -287,6 +287,10 @@
 	}
 
 	@media (min-width: 64rem) {
+		.leaders {
+			display: block;
+		}
+
 		.frame {
 			grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 			grid-template-rows: repeat(3, auto);

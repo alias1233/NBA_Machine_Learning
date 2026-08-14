@@ -348,20 +348,6 @@ class FakeSource(DataSource):
             f"player games of {season_year}"
         )
 
-    def team_games(
-        self,
-        season_year: int,
-        season_type: SeasonType,
-        date_from: date | None = None,
-        date_to: date | None = None
-        ) -> pd.DataFrame | None:
-        self.requests.append(f"team_games {season_year} {season_type.value} {date_from} {date_to}")
-
-        return self._fetch(
-            lambda: team_game_frame(self._games_in(season_year, season_type, date_from, date_to)),
-            f"team games of {season_year}"
-        )
-
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
         self.requests.append(f"schedule {season_year}")
 

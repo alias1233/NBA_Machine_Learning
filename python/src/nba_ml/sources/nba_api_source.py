@@ -115,21 +115,6 @@ class NBAApiSource(DataSource):
             PlayerOrTeamAbbreviation.player
         )
 
-    def team_games(
-        self,
-        season_year: int,
-        season_type: SeasonType,
-        date_from: date | None = None,
-        date_to: date | None = None
-        ) -> pd.DataFrame | None:
-        return self._game_log(
-            season_year,
-            season_type,
-            date_from,
-            date_to,
-            PlayerOrTeamAbbreviation.team
-        )
-
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
         """
         One request covers a whole season, played games and unplayed ones alike, so this is cheap

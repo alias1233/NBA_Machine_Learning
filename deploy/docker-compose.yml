@@ -84,7 +84,7 @@ services:
     restart: "no"
     # Collect first, then rebuild. The service answers out of what the build published, so a player
     # whose only games arrived since the last build reads as having none.
-    command: ["sh", "-c", "nba-collect --source balldontlie all && nba-build-features --quiet"]
+    command: ["sh", "-c", "nba-collect --source balldontlie all --lookback-days 1 && nba-build-features --quiet"]
 
 volumes:
   caddy_data:

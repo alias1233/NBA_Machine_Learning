@@ -45,7 +45,7 @@ def main():
         type=int,
         choices=season.TRAINING_START_SEASONS,
         default=season.COLLECTION_START_SEASON,
-        help="First NBA season used for training. Defaults to 1985."
+        help=f"First NBA season used for training. Defaults to {season.COLLECTION_START_SEASON}."
     )
     parser.add_argument(
         "--skip-evaluations",

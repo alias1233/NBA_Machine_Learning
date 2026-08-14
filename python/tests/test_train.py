@@ -22,7 +22,7 @@ def test_the_training_start_season_reaches_the_selected_family(monkeypatch):
 
 
 def test_the_training_start_season_is_limited_to_nba_milestones(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["nba-train", "--model", "team_points", "--training-start-season", "2001"])
+    monkeypatch.setattr(sys, "argv", ["nba-train", "--model", "team_points", "--training-start-season", "1995"])
 
     with pytest.raises(SystemExit):
         train.main()
@@ -32,7 +32,7 @@ def test_a_training_cache_is_not_shared_between_eras():
     inputs = training._training_inputs(specifications.TEAM_POINTS_MODEL)
 
     assert classifier_training._describe_build(
-        specifications.TEAM_POINTS_MODEL, inputs, datetime(1985, 10, 1)
+        specifications.TEAM_POINTS_MODEL, inputs, datetime(1996, 10, 1)
     ) != classifier_training._describe_build(
-        specifications.TEAM_POINTS_MODEL, inputs, datetime(1990, 10, 1)
+        specifications.TEAM_POINTS_MODEL, inputs, datetime(2000, 10, 1)
     )

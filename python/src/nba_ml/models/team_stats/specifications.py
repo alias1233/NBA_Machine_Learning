@@ -96,6 +96,8 @@ class TeamStatModelSpecification(ClassifierModelSpecification):
 
 TEAM_POINTS_MODEL = TeamStatModelSpecification(
     name="team_points",
+    title="Team points",
+    description="How many points one team scores in a game.",
     # 80 to 145, in threes. Measured against every game since 2015, which is the scoring the site is
     # asked about. Each end folds in under 1.5%, against 4.1% in the class the middle carries.
     output=IntegerDistribution(minimum_value=80, outcomes=22, bucket_width=3),

@@ -131,32 +131,6 @@ class DataSource(ABC):
         pass
 
     @abstractmethod
-    def team_games(
-        self,
-        season_year: int,
-        season_type: SeasonType,
-        date_from: date | None = None,
-        date_to: date | None = None
-        ) -> pd.DataFrame | None:
-        """The same as player_games, one row per team per game instead of per player."""
-
-        pass
-
-    def game_rows(
-        self,
-        season_year: int,
-        season_type: SeasonType,
-        date_from: date | None = None,
-        date_to: date | None = None
-        ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-        """Player and team rows for one phase. Sources may share one response between them."""
-
-        return (
-            self.player_games(season_year, season_type, date_from, date_to),
-            self.team_games(season_year, season_type, date_from, date_to)
-        )
-
-    @abstractmethod
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
         """
         Every game of one season, whether or not it has been played.

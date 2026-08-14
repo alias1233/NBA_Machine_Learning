@@ -466,7 +466,10 @@ def read_history_window(target_game: Game) -> pd.DataFrame:
 
     started = target_game.date - relativedelta(years=HISTORICAL_WINDOW_LENGTH_YEARS)
 
-    return team_game_store.get_game_data_after_date(started).dropna()
+    return season_columns.drop_incomplete_game_rows(
+        team_game_store.get_game_data_after_date(started),
+        team_game_store.SEASON_TYPE.category_name
+    )
 
 def find_target_game(
     histories: dict[int, GameHistory],

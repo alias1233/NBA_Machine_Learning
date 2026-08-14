@@ -1,12 +1,11 @@
 """
 Collecting finished box scores.
 
-The player and team stores are the same fetch seen two ways, one row per player and one row per
-team, so they share the loop over seasons.
+Player rows come from the data source. Team rows are totals of the player rows already stored.
 """
 
-from datetime import date
-from typing import Callable, Iterable
+from datetime import date, timedelta
+from typing import Iterable
 
 import pandas as pd
 
@@ -15,8 +14,8 @@ from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
 from nba_ml.stores import player_games, team_games
 
-GameLogFetch = Callable[[int, SeasonType, date | None, date | None], pd.DataFrame | None]
-"""Asks a source for one season phase of box scores. Either DataSource.player_games or .team_games."""
+DEFAULT_UPDATE_LOOKBACK_DAYS = 1
+"""Days before the newest stored game to refetch during an update."""
 
 def _seasons_to_collect(
     source: DataSource,
@@ -33,34 +32,6 @@ def _seasons_to_collect(
         for season_year in requested
         if season_year >= season.COLLECTION_START_SEASON and season_year in available
     ]
-
-def _collect(
-    source: DataSource,
-    fetch: GameLogFetch,
-    store: Callable[[pd.DataFrame], int],
-    label: str,
-    seasons: Iterable[int] | None,
-    season_types: Iterable[SeasonType] | None,
-    date_from: date | None,
-    date_to: date | None,
-    print_debug: bool
-    ) -> int:
-    seasons = _seasons_to_collect(source, seasons, date_from, date_to)
-    season_types = list(SeasonType) if season_types is None else list(season_types)
-
-    rows_written = 0
-    for season_year in seasons:
-        for season_type in season_types:
-            games = fetch(season_year, season_type, date_from, date_to)
-            if games is None or games.empty:
-                continue
-
-            rows_written += store(games)
-
-            if print_debug:
-                print(f"{label}: {season_year} {season_type.value.lower()}, {len(games)} rows")
-
-    return rows_written
 
 def collect_player_games(
     source: DataSource,
@@ -80,39 +51,87 @@ def collect_player_games(
         update asks for.
     """
 
-    return _collect(
-        source,
-        source.player_games,
-        player_games.store,
-        "player games",
-        seasons,
-        season_types,
-        date_from,
-        date_to,
-        print_debug
-    )
+    if date_to is not None and date_to < season.PLAYER_GAME_COLLECTION_START_DATE:
+        return 0
+
+    date_from = max(date_from or season.PLAYER_GAME_COLLECTION_START_DATE, season.PLAYER_GAME_COLLECTION_START_DATE)
+    seasons = _seasons_to_collect(source, seasons, date_from, date_to)
+    season_types = list(SeasonType) if season_types is None else list(season_types)
+    rows_written = 0
+
+    for season_year in seasons:
+        for season_type in season_types:
+            games = source.player_games(season_year, season_type, date_from, date_to)
+            if games is None or games.empty:
+                continue
+
+            rows_written += player_games.store(games)
+            if print_debug:
+                print(f"player games: {season_year} {season_type.value.lower()}, {len(games)} rows")
+
+    return rows_written
 
 def collect_team_games(
-    source: DataSource,
     seasons: Iterable[int] | None = None,
     season_types: Iterable[SeasonType] | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     print_debug: bool = True
     ) -> int:
-    """The same as collect_player_games, one row per team per game instead of per player."""
+    """Builds one team row per game from the player rows already stored."""
 
-    return _collect(
-        source,
-        source.team_games,
-        team_games.store,
-        "team games",
-        seasons,
-        season_types,
-        date_from,
-        date_to,
-        print_debug
+    players = (
+        player_games.get_all_player_game_data()
+        if date_from is None
+        else player_games.get_game_data_after_date(date_from)
     )
+    if players.empty:
+        return 0
+
+    game_dates = pd.to_datetime(players[player_games.GAME_DATE.category_name])
+    if date_to is not None:
+        players = players.loc[game_dates.dt.date <= date_to]
+        game_dates = game_dates.loc[players.index]
+    if seasons is not None:
+        requested_seasons = set(seasons)
+        season_years = game_dates.dt.year - (game_dates.dt.month < season.SEASON_START_MONTH)
+        players = players.loc[season_years.isin(requested_seasons)]
+    if season_types is not None:
+        requested_types = {season.GAME_ID_PREFIXES[season_type] for season_type in season_types}
+        players = players.loc[players[player_games.SEASON_TYPE.category_name].isin(requested_types)]
+    if players.empty:
+        return 0
+
+    identifiers = [
+        team_games.TEAM_ID.category_name,
+        team_games.GAME_ID.category_name,
+        team_games.GAME_DATE.category_name,
+        team_games.SEASON_TYPE.category_name,
+        team_games.MATCHUP.category_name,
+        team_games.WIN_LOSS.category_name
+    ]
+    totalled = [
+        team_games.MINUTES_PLAYED.category_name,
+        team_games.FIELD_GOALS_MADE.category_name,
+        team_games.FIELD_GOALS_ATTEMPTED.category_name,
+        team_games.THREE_POINTERS_MADE.category_name,
+        team_games.THREE_POINTERS_ATTEMPTED.category_name,
+        team_games.FREE_THROWS_MADE.category_name,
+        team_games.FREE_THROWS_ATTEMPTED.category_name,
+        team_games.OFFENSIVE_REBOUNDS.category_name,
+        team_games.DEFENSIVE_REBOUNDS.category_name,
+        team_games.ASSISTS.category_name,
+        team_games.STEALS.category_name,
+        team_games.BLOCKS.category_name,
+        team_games.TURNOVERS.category_name,
+        team_games.PERSONAL_FOULS.category_name
+    ]
+    teams = players.groupby(identifiers, as_index=False, sort=False)[totalled].sum()
+    written = team_games.store(teams)
+    if print_debug:
+        print(f"team games: {written} rows from stored player games")
+
+    return written
 
 def update_player_games(source: DataSource, print_debug: bool = True) -> int:
     """
@@ -122,10 +141,10 @@ def update_player_games(source: DataSource, print_debug: bool = True) -> int:
 
     return collect_player_games(source, date_from=player_games.latest_game_date(), print_debug=print_debug)
 
-def update_team_games(source: DataSource, print_debug: bool = True) -> int:
+def update_team_games(print_debug: bool = True) -> int:
     """The same as update_player_games, for the team store."""
 
-    return collect_team_games(source, date_from=team_games.latest_game_date(), print_debug=print_debug)
+    return collect_team_games(date_from=team_games.latest_game_date(), print_debug=print_debug)
 
 def collect_games(
     source: DataSource,
@@ -135,31 +154,36 @@ def collect_games(
     date_to: date | None = None,
     print_debug: bool = True
     ) -> int:
-    """Collects both stores together, allowing a source to share one response."""
+    """Fetches player rows, then builds team rows from the stored result."""
 
-    seasons = _seasons_to_collect(source, seasons, date_from, date_to)
-    season_types = list(SeasonType) if season_types is None else list(season_types)
-    rows_written = 0
+    seasons = None if seasons is None else tuple(seasons)
+    season_types = None if season_types is None else tuple(season_types)
+    player_count = collect_player_games(
+        source, seasons, season_types, date_from, date_to, print_debug
+    )
+    team_count = collect_team_games(seasons, season_types, date_from, date_to, print_debug)
+    return player_count + team_count
 
-    for season_year in seasons:
-        for season_type in season_types:
-            players, teams = source.game_rows(season_year, season_type, date_from, date_to)
-            player_count = 0 if players is None or players.empty else player_games.store(players)
-            team_count = 0 if teams is None or teams.empty else team_games.store(teams)
-            rows_written += player_count + team_count
+def update_start_date(
+    latest_game_date: date | None,
+    lookback_days: int = DEFAULT_UPDATE_LOOKBACK_DAYS
+    ) -> date | None:
+    """The first date one store needs for an incremental update."""
 
-            if print_debug and (player_count or team_count):
-                print(
-                    f"games: {season_year} {season_type.value.lower()}, "
-                    f"{player_count} player rows, {team_count} team rows"
-                )
+    if lookback_days < 0:
+        raise ValueError("lookback_days cannot be negative.")
 
-    return rows_written
+    return None if latest_game_date is None else latest_game_date - timedelta(days=lookback_days)
 
-def update_games(source: DataSource, print_debug: bool = True) -> int:
-    """Updates both game stores from the oldest point either one still needs."""
+def update_games(
+    source: DataSource,
+    lookback_days: int = DEFAULT_UPDATE_LOOKBACK_DAYS,
+    print_debug: bool = True
+    ) -> int:
+    """Updates each game store from its own newest row."""
 
-    newest_player = player_games.latest_game_date()
-    newest_team = team_games.latest_game_date()
-    date_from = None if newest_player is None or newest_team is None else min(newest_player, newest_team)
-    return collect_games(source, date_from=date_from, print_debug=print_debug)
+    player_date_from = update_start_date(player_games.latest_game_date(), lookback_days)
+    team_date_from = update_start_date(team_games.latest_game_date(), lookback_days)
+    player_count = collect_player_games(source, date_from=player_date_from, print_debug=print_debug)
+    team_count = collect_team_games(date_from=team_date_from, print_debug=print_debug)
+    return player_count + team_count

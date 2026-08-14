@@ -48,6 +48,12 @@ class ModelSpecification():
     """The family this model belongs to. Set once per family, and it names the folder files sit in."""
 
     name: str
+    title: str = field(kw_only=True)
+    """The short reader-facing name used where models are explained."""
+
+    description: str = field(kw_only=True)
+    """The short reader-facing explanation used where this model is explained."""
+
     output: ModelOutput
     """The shape of an answer. See nba_ml/models/outputs.py."""
 

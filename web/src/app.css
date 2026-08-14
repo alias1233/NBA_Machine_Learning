@@ -194,6 +194,7 @@
 	--family-column: 44rem;
 	--control-column: 40rem;
 	--answer-column: 30rem;
+	--model-rail-card: 18rem;
 	/* The widest a data figure can reach, so a readout that changes value moves nothing around it.
 	   Every odds figure and the detailed view's expected figure each sit in one of these, and the
 	   larger box holds a figure set at --type-figure-large. */

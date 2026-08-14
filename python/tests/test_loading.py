@@ -42,7 +42,12 @@ class FakeSpecification(ModelSpecification):
     def get_feature_set(self) -> FakeFeatureSet:
         return self.features
 
-SPECIFICATION = FakeSpecification("saved", IntegerDistribution(minimum_value=0, outcomes=4))
+SPECIFICATION = FakeSpecification(
+    "saved",
+    IntegerDistribution(minimum_value=0, outcomes=4),
+    title="Saved",
+    description="A test model."
+)
 
 def build_model(output_dim: int = 4, sequence_count: int = 1) -> GRUFeedForward:
     return GRUFeedForward(
