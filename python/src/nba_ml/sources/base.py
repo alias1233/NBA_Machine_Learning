@@ -12,7 +12,7 @@ stored, so it lives in the stores and needs no service at all.
 import time
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import Callable, TypeVar
+from typing import Callable, Iterable, TypeVar
 
 import pandas as pd
 
@@ -22,8 +22,14 @@ from nba_ml.season import SeasonType
 
 Fetched = TypeVar("Fetched")
 
+PLAYER_GAME_BATCH_SIZE = 2_500
+"""Maximum player-game rows stored in one transaction."""
+
 class SourceAuthenticationError(RuntimeError):
     """The source rejected its API key or the account tier cannot use the endpoint."""
+
+class SourceDataError(RuntimeError):
+    """The source returned data that cannot safely enter the archive."""
 
 class DataSource(ABC):
     """
@@ -81,7 +87,7 @@ class DataSource(ABC):
 
             try:
                 return fetch()
-            except SourceAuthenticationError:
+            except (SourceAuthenticationError, SourceDataError):
                 raise
             except Exception as error:
                 print(f"Failed to fetch {description}, attempt {attempt + 1} of {self.retries}: {error}")
@@ -129,6 +135,43 @@ class DataSource(ABC):
         """
 
         pass
+
+    def player_game_batches(
+        self,
+        season_year: int,
+        season_type: SeasonType,
+        date_from: date | None = None,
+        date_to: date | None = None
+        ) -> Iterable[pd.DataFrame | None]:
+        """Yields player-game rows in independently storable batches.
+
+        Sources that fetch a season in one response need only implement player_games().
+        """
+
+        games = self.player_games(season_year, season_type, date_from, date_to)
+        if games is None:
+            yield None
+            return
+        if not isinstance(games, pd.DataFrame) or games.empty or "GAME_ID" not in games:
+            yield games
+            return
+
+        batch_parts: list[pd.DataFrame] = []
+        batch_size = 0
+        for game_id, game_rows in games.groupby("GAME_ID", sort=False, dropna=False):
+            if len(game_rows) > PLAYER_GAME_BATCH_SIZE:
+                raise SourceDataError(
+                    f"Player game {game_id} has too many rows for one {PLAYER_GAME_BATCH_SIZE}-row batch."
+                )
+            if batch_size and batch_size + len(game_rows) > PLAYER_GAME_BATCH_SIZE:
+                yield pd.concat(batch_parts, ignore_index=True)
+                batch_parts = []
+                batch_size = 0
+            batch_parts.append(game_rows)
+            batch_size += len(game_rows)
+
+        if batch_parts:
+            yield pd.concat(batch_parts, ignore_index=True)
 
     @abstractmethod
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:

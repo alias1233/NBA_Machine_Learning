@@ -37,7 +37,7 @@ def train(
         save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
-        training_start_date: datetime = season.season_start_date(season.COLLECTION_START_SEASON)
+        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON)
         ) -> classifier_training.TrainingResult:
     """Fits one model spec, saves it, and writes a report of the run next to it."""
 

@@ -44,8 +44,12 @@ def main():
         "--training-start-season",
         type=int,
         choices=season.TRAINING_START_SEASONS,
-        default=season.COLLECTION_START_SEASON,
-        help=f"First NBA season used for training. Defaults to {season.COLLECTION_START_SEASON}."
+        default=season.ARCHIVE_START_SEASON,
+        help=(
+            f"First NBA season used for training. Defaults to {season.ARCHIVE_START_SEASON}, which "
+            f"is everything held. Seasons before {season.COLLECTION_START_SEASON} are only held "
+            "once nba-import-legacy has filled them in."
+        )
     )
     parser.add_argument(
         "--skip-evaluations",

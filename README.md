@@ -38,16 +38,19 @@ One rented Linux server.
 ```sh
 git clone <repository> /srv/nba-ml && cd /srv/nba-ml/deploy
 cp .env.example .env && nano .env            # DOMAIN and ACME_EMAIL
-mkdir -p data/models backups && sudo chown -R 10001:10001 data backups
+mkdir -p data backups logs && sudo chown -R 10001:10001 data backups
+docker compose build jobs
+docker compose run --rm -v /srv/nba-ml/nba-serving-data.tar.gz:/release.tar.gz:ro jobs nba-serving-data load /release.tar.gz
+docker compose run --rm jobs nba-build-features --quiet
 docker compose up -d --build                 # caddy, web, api
-docker compose run --rm jobs                 # collect, then build the features
 crontab crontab                              # hourly collect and build, nightly backup
 ```
 
-Models are trained on the developer machine and published by copying them in:
+Create `nba-serving-data.tar.gz` on the developer machine after training and collection:
 
 ```sh
-scp -r python/data/models/* <server>:/srv/nba-ml/deploy/data/models/
+cd python && uv run nba-serving-data pack ../nba-serving-data.tar.gz
+scp nba-serving-data.tar.gz <server>:/srv/nba-ml/
 ```
 
 Updating is `git pull && docker compose up -d --build`. Both are picked up without a restart: a new

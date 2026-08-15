@@ -9,11 +9,15 @@ is run, and what happens when the service refuses to answer. See tests/fake_data
 import sys
 from datetime import date, timedelta
 
+import pandas as pd
+import pytest
+
 from nba_ml import season
 from nba_ml.cli import collect as collect_command
 from nba_ml.data_collection import games, players, schedule, teams
 from nba_ml.entities import GameStatus
 from nba_ml.season import SeasonType
+from nba_ml.sources.base import PLAYER_GAME_BATCH_SIZE, SourceAuthenticationError, SourceDataError
 from nba_ml.stores import (
     player_games,
     players as players_store,
@@ -72,6 +76,36 @@ def test_recent_player_update_does_not_fetch_the_full_player_directory():
     assert written == 1
     assert "players" not in source.requests
     assert sum(request.startswith("player_info") for request in source.requests) == 1
+
+def test_a_player_whose_information_did_not_arrive_is_asked_for_again(monkeypatch):
+    """
+    A player with no information row has every one of their games dropped from the feature build,
+    so a failed request has to be retried rather than waiting on the day they next play.
+    """
+
+    missed = fake_data.ALL_PLAYERS[-1]
+    rows = fake_data.player_game_frame()
+    # They stopped playing well before the hourly run's own lookback, which is what makes a window
+    # that narrow never ask about them again.
+    sat_out = (rows[player_games.GAME_DATE.category_name] >= "2024-11-02") & (
+        rows[player_games.PLAYER_ID.category_name] == missed.id
+    )
+    player_games.store(rows[~sat_out])
+    players.collect(FakeSource(known_players=fake_data.ALL_PLAYERS[:-1]), print_debug=False)
+
+    assert missed.id not in player_games.player_ids_since(
+        games.update_start_date(player_games.latest_game_date())
+    )
+
+    source = FakeSource()
+    monkeypatch.setattr(collect_command.teams, "collect", lambda *_: 0)
+    monkeypatch.setattr(collect_command.games, "update_games", lambda *_: 0)
+
+    collect_command.collect_all(source, refresh_schedule=False, print_debug=False)
+
+    assert f"player_info {missed.id}" in source.requests
+    assert players_store.get_player(missed.id) == missed
+
 
 def test_a_player_stored_without_a_name_is_named_from_the_service_player_list():
     """
@@ -158,6 +192,8 @@ def test_player_collection_does_not_request_a_date_range_before_its_floor():
     assert source.requests == []
 
 def test_player_collection_starts_the_first_legal_season_on_its_exact_floor():
+    assert season.PLAYER_GAME_COLLECTION_START_DATE == date(2019, 10, 22)
+
     source = FakeSource()
     source.oldest_season = 1946
 
@@ -189,6 +225,51 @@ def test_team_games_are_built_from_stored_player_rows_without_a_source_request()
     assert first[team_games.FIELD_GOALS_MADE.category_name] == same_team_game[
         player_games.FIELD_GOALS_MADE.category_name
     ].sum()
+
+def test_a_team_row_holds_its_whole_box_score_when_its_players_are_labelled_inconsistently():
+    """
+    Measured in the nba.com archive on 2026-08-15: 37 team games label one team's own players two
+    different ways. Summing over the label as well as the key would split that team's box score in
+    two and store whichever half was written last, silently short.
+    """
+
+    rows = fake_data.player_game_frame()
+    first_team_game = (
+        (rows[player_games.GAME_ID.category_name] == fake_data.SEASON_GAMES[0].id)
+        & (rows[player_games.TEAM_ID.category_name] == fake_data.SEASON_GAMES[0].home_team_id)
+    )
+    disagreeing = rows[first_team_game].index[0]
+    rows.loc[disagreeing, player_games.MATCHUP.category_name] = "ANC vs. XXX"
+    player_games.store(rows)
+
+    games.collect_team_games(print_debug=False)
+
+    stored = team_games.get_all_team_game_data()
+    summed = stored[
+        (stored[team_games.GAME_ID.category_name] == fake_data.SEASON_GAMES[0].id)
+        & (stored[team_games.TEAM_ID.category_name] == fake_data.SEASON_GAMES[0].home_team_id)
+    ]
+
+    assert len(stored) == ALL_ROWS
+    assert len(summed) == 1
+    assert summed[team_games.FIELD_GOALS_MADE.category_name].item() == rows.loc[
+        first_team_game, player_games.FIELD_GOALS_MADE.category_name
+    ].sum()
+    assert summed[team_games.MATCHUP.category_name].item() == "ANC vs. BRK"
+
+
+def test_team_rows_are_built_from_player_rows_that_name_no_season_phase():
+    """An archive collected before the phase was stored explicitly leaves the column empty."""
+
+    rows = fake_data.player_game_frame()
+    rows[player_games.SEASON_TYPE.category_name] = None
+    player_games.store(rows)
+
+    written = games.collect_team_games(print_debug=False)
+
+    assert written == ALL_ROWS
+    assert team_games.get_all_team_game_data()[team_games.SEASON_TYPE.category_name].isna().all()
+
 
 def test_team_game_command_does_not_create_a_data_source(monkeypatch):
     def fail_if_called(*_):
@@ -256,6 +337,43 @@ def test_all_command_keeps_player_collection_at_its_own_lookback(monkeypatch):
     )
     assert len(team_games.get_all_team_game_data()) == ALL_ROWS
 
+
+def test_all_command_from_start_rescans_without_clearing_existing_rows(monkeypatch):
+    player_games.store(fake_data.player_game_frame())
+    source = FakeSource()
+
+    monkeypatch.setattr(collect_command.sources, "get_source", lambda *_: source)
+    monkeypatch.setattr(collect_command.source_identity, "claim", lambda _: None)
+    monkeypatch.setattr(collect_command.teams, "collect", lambda *_: 0)
+    monkeypatch.setattr(collect_command.players, "update", lambda *_: 0)
+    monkeypatch.setattr(collect_command.schedule, "collect", lambda *_, **__: 0)
+    monkeypatch.setattr(sys, "argv", ["nba-collect", "--quiet", "all", "--from-start"])
+
+    collect_command.main()
+
+    assert any(
+        str(season.PLAYER_GAME_COLLECTION_START_DATE) in request
+        for request in source.requests
+        if request.startswith("player_games")
+    )
+    assert len(player_games.get_all_player_game_data()) == ALL_ROWS * fake_data.PLAYERS_PER_TEAM
+
+
+def test_all_command_refuses_an_existing_empty_player_archive(monkeypatch):
+    with player_games.DATABASE:
+        pass
+
+    monkeypatch.setattr(
+        collect_command.sources,
+        "get_source",
+        lambda *_: (_ for _ in ()).throw(AssertionError("A source was created."))
+    )
+    monkeypatch.setattr(collect_command.source_identity, "claim", lambda _: None)
+    monkeypatch.setattr(sys, "argv", ["nba-collect", "--quiet", "all"])
+
+    with pytest.raises(RuntimeError, match="--from-start"):
+        collect_command.main()
+
 def test_collecting_the_same_games_twice_rewrites_them_rather_than_duplicating_them():
     player_games.store(fake_data.player_game_frame())
 
@@ -278,6 +396,116 @@ def test_a_season_the_service_refuses_is_skipped_and_the_rest_of_the_run_carries
 
     assert written == ALL_ROWS * fake_data.PLAYERS_PER_TEAM
     assert len(player_games.get_all_player_game_data()) == ALL_ROWS * fake_data.PLAYERS_PER_TEAM
+
+
+def test_player_collection_does_not_claim_storage_when_the_store_fails(monkeypatch, capsys):
+    source = FakeSource()
+
+    def fail_store(_):
+        raise RuntimeError("disk write failed")
+
+    monkeypatch.setattr(player_games, "store", fail_store)
+
+    with pytest.raises(RuntimeError, match="disk write failed"):
+        games.collect_player_games(source)
+
+    assert "stored" not in capsys.readouterr().out
+
+
+def test_player_collection_keeps_stored_batches_when_a_later_batch_fails():
+    rows = fake_data.player_game_frame()
+    rows_per_game = fake_data.PLAYERS_PER_TEAM * 2
+    first_batch = rows.iloc[:rows_per_game * 2]
+    second_batch = rows.iloc[rows_per_game * 2:rows_per_game * 4]
+
+    class InterruptedSource(FakeSource):
+        def player_game_batches(self, *_):
+            yield first_batch
+            yield second_batch
+            raise RuntimeError("connection lost")
+
+    with pytest.raises(RuntimeError, match="connection lost"):
+        games.collect_player_games(
+            InterruptedSource(),
+            seasons=[fake_data.SEASON_YEAR],
+            season_types=[SeasonType.REGULAR_SEASON],
+            print_debug=False
+        )
+
+    stored = player_games.get_all_player_game_data()
+    assert len(stored) == len(first_batch) + len(second_batch)
+    assert set(stored[player_games.GAME_ID.category_name]) == {
+        fake_data.SEASON_GAMES[0].id,
+        fake_data.SEASON_GAMES[1].id,
+        fake_data.SEASON_GAMES[2].id,
+        fake_data.SEASON_GAMES[3].id
+    }
+
+
+def test_legacy_player_game_source_batches_whole_games_at_the_shared_limit():
+    game_id = PLAYER_GAME_BATCH_SIZE - 1
+    rows = pd.DataFrame({
+        player_games.GAME_ID.category_name: [*range(game_id), game_id, game_id]
+    })
+
+    class LegacySource(FakeSource):
+        def player_games(self, *_):
+            return rows
+
+    batches = list(LegacySource().player_game_batches(fake_data.SEASON_YEAR, SeasonType.REGULAR_SEASON))
+
+    assert all(len(batch) <= PLAYER_GAME_BATCH_SIZE for batch in batches)
+    assert pd.concat(batches, ignore_index=True).equals(rows)
+    assert [len(batch) for batch in batches] == [PLAYER_GAME_BATCH_SIZE - 1, 2]
+    matching = [
+        batch for batch in batches if (batch[player_games.GAME_ID.category_name] == game_id).any()
+    ]
+    assert len(matching) == 1
+    assert (matching[0][player_games.GAME_ID.category_name] == game_id).sum() == 2
+
+
+def test_an_authentication_failure_keeps_completed_player_games_and_their_resume_date():
+    player_games.store(fake_data.player_game_frame())
+    requested_dates = []
+
+    class RejectedSource(FakeSource):
+        def player_games(self, season_year, season_type, date_from=None, date_to=None):
+            requested_dates.append(date_from)
+            raise SourceAuthenticationError("access ended")
+
+    with pytest.raises(SourceAuthenticationError, match="access ended"):
+        games.update_games(RejectedSource(), print_debug=False)
+
+    assert len(player_games.get_all_player_game_data()) == ALL_ROWS * fake_data.PLAYERS_PER_TEAM
+    assert player_games.latest_game_date() == fake_data.SEASON_GAMES[-1].day
+    assert requested_dates == [fake_data.SEASON_GAMES[-1].day - timedelta(days=1)]
+
+
+def test_an_exhausted_fetch_stops_the_run_without_advancing_the_resume_date():
+    player_games.store(fake_data.player_game_frame())
+
+    class UnavailableSource(FakeSource):
+        def player_games(self, *_):
+            return None
+
+    with pytest.raises(SourceDataError, match="could not be fetched"):
+        games.update_games(UnavailableSource(), print_debug=False)
+
+    assert player_games.latest_game_date() == fake_data.SEASON_GAMES[-1].day
+
+
+def test_a_malformed_source_row_stops_before_any_of_its_batch_is_stored():
+    rows = fake_data.player_game_frame().iloc[:2].copy()
+    rows.loc[rows.index[0], player_games.PLUS_MINUS.category_name] = None
+
+    class MalformedSource(FakeSource):
+        def player_games(self, *_):
+            return rows
+
+    with pytest.raises(SourceDataError, match="player .* game"):
+        games.collect_player_games(MalformedSource(), print_debug=False)
+
+    assert player_games.get_all_player_game_data().empty
 
 def test_the_seasons_a_source_covers_are_the_ones_it_has_and_no_others():
     source = FakeSource()
@@ -333,3 +561,12 @@ def test_recollecting_the_schedule_replaces_a_game_that_has_moved():
 
     assert len(stored) == 1
     assert stored[0].game.date == postponed.day
+
+
+def test_a_failed_schedule_fetch_stops_the_update():
+    class UnavailableSource(FakeSource):
+        def schedule(self, _):
+            return None
+
+    with pytest.raises(SourceDataError, match="schedule could not be fetched"):
+        schedule.collect(UnavailableSource(), seasons=[fake_data.SEASON_YEAR], print_debug=False)

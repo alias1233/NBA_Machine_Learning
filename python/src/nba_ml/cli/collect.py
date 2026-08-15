@@ -90,6 +90,36 @@ def _collect_players(source: DataSource, arguments: argparse.Namespace) -> int:
 
     return players.collect(source, player_ids, arguments.start_index, print_debug)
 
+
+def collect_all(
+    source: DataSource,
+    lookback_days: int = games.DEFAULT_UPDATE_LOOKBACK_DAYS,
+    from_start: bool = False,
+    print_debug: bool = True,
+    refresh_schedule: bool = True
+    ) -> int:
+    """Collect the stores a serving update needs, then refresh the schedule."""
+
+    # Read before anything is collected, because collecting is what stops the archive being empty.
+    collect_every_player = from_start or player_games.latest_game_date() is None
+
+    return (
+        teams.collect(source, print_debug)
+        + (
+            games.collect_games(source, print_debug=print_debug)
+            if from_start
+            else games.update_games(source, lookback_days, print_debug)
+        )
+        + (
+            players.update(source, print_debug)
+            if collect_every_player
+            else players.update_from_games(
+                source, season.PLAYER_GAME_COLLECTION_START_DATE, print_debug
+            )
+        )
+        + (schedule.collect(source, print_debug=print_debug) if refresh_schedule else 0)
+    )
+
 def main():
     parser = argparse.ArgumentParser(description="Collects NBA data into the local stores.")
     parser.add_argument("--source", default=sources.DEFAULT_SOURCE, choices=sorted(sources.ALL_SOURCES))
@@ -104,12 +134,18 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
 
     all_command = commands.add_parser("all", help="Collect every team, player and game that is not stored yet.")
-    all_command.add_argument(
+    all_game_range = all_command.add_mutually_exclusive_group()
+    all_game_range.add_argument(
         "--lookback-days",
         type=_non_negative_int,
         default=games.DEFAULT_UPDATE_LOOKBACK_DAYS,
         metavar="DAYS",
         help="Refetch this many days before each game store's newest row. Defaults to 1."
+    )
+    all_game_range.add_argument(
+        "--from-start",
+        action="store_true",
+        help="Rescan every supported game without clearing the stored archive. Use after a reported bad batch."
     )
 
     commands.add_parser("teams", help="Collect the thirty teams and their tricodes.")
@@ -153,6 +189,9 @@ def main():
         print(f"Wrote {rows_written} rows.")
         return
 
+    if arguments.command == "all" and not arguments.from_start:
+        games.require_resumable_player_archive()
+
     source = sources.get_source(arguments.source, arguments.wait)
     source_identity.claim(source.name)
     print_debug = not arguments.quiet
@@ -168,19 +207,11 @@ def main():
         case "player-games":
             rows_written = _collect_player_games(source, arguments)
         case _:
-            # The schedule comes last so that it is read against the box scores just collected.
-            player_update_start = games.update_start_date(
-                player_games.latest_game_date(), arguments.lookback_days
-            )
-            rows_written = (
-                teams.collect(source, print_debug)
-                + games.update_games(source, arguments.lookback_days, print_debug)
-                + (
-                    players.update(source, print_debug)
-                    if player_update_start is None
-                    else players.update_from_games(source, player_update_start, print_debug)
-                )
-                + schedule.collect(source, print_debug=print_debug)
+            rows_written = collect_all(
+                source,
+                arguments.lookback_days,
+                arguments.from_start,
+                print_debug
             )
 
     print(f"Wrote {rows_written} rows.")

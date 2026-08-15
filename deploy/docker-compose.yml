@@ -82,9 +82,8 @@ services:
     profiles:
       - jobs
     restart: "no"
-    # Collect first, then rebuild. The service answers out of what the build published, so a player
-    # whose only games arrived since the last build reads as having none.
-    command: ["sh", "-c", "nba-collect --source balldontlie all --lookback-days 1 && nba-build-features --quiet"]
+    # A host cron job starts this only when the stored schedule says box scores can have finalized.
+    command: ["nba-update-serving"]
 
 volumes:
   caddy_data:

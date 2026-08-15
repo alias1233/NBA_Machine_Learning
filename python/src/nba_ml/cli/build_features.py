@@ -18,6 +18,28 @@ from nba_ml import season
 from nba_ml.feature_engineering import feature_store
 from nba_ml.models.player_stats import features, specifications
 
+
+def build(
+    window_years: int = features.HISTORICAL_WINDOW_LENGTH_YEARS,
+    everything_stored: bool = False,
+    print_debug: bool = True
+    ):
+    """Build and publish the feature cache the prediction service reads."""
+
+    window_start_date = (
+        None if everything_stored
+        else season.today() - relativedelta(years=window_years)
+    )
+    feature_set = specifications.union_feature_set()
+    histories = features.build_league_histories(feature_set, window_start_date, print_debug)
+    feature_build = feature_store.from_histories(histories, feature_set.sequence_columns, window_start_date)
+    written_to = feature_store.publish(features.BUILD_NAME, feature_build)
+    print(
+        f"Published {feature_build.game_count} games of {len(feature_build.subjects)} players over "
+        f"{len(feature_build.sequence_columns)} columns to {written_to}."
+    )
+    return written_to
+
 def main():
     parser = argparse.ArgumentParser(
         description="Builds the whole league's features and publishes them for the service to read."
@@ -37,21 +59,7 @@ def main():
     parser.add_argument("--quiet", action="store_true", help="Only print where the build was written.")
     arguments = parser.parse_args()
 
-    print_debug = not arguments.quiet
-    window_start_date = (
-        None if arguments.everything_stored
-        else season.today() - relativedelta(years=arguments.window_years)
-    )
-
-    feature_set = specifications.union_feature_set()
-    histories = features.build_league_histories(feature_set, window_start_date, print_debug)
-    build = feature_store.from_histories(histories, feature_set.sequence_columns, window_start_date)
-    written_to = feature_store.publish(features.BUILD_NAME, build)
-
-    print(
-        f"Published {build.game_count} games of {len(build.subjects)} players over "
-        f"{len(build.sequence_columns)} columns to {written_to}."
-    )
+    build(arguments.window_years, arguments.everything_stored, not arguments.quiet)
 
 if __name__ == "__main__":
     main()

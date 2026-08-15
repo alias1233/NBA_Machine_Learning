@@ -17,7 +17,7 @@
 	<title>{pageTitle('About')}</title>
 	<meta
 		name="description"
-		content="What this site is, how to read a prediction, how it works, and its limitations"
+		content="What this site is, how to read a prediction, how it works, and disclaimers."
 	/>
 </svelte:head>
 
@@ -31,20 +31,18 @@
 			is a collection of machine learning models that predict statistics of future NBA games.
 		</p>
 		<p>
-			Each model outputs a probability distribution over the range of possible outcomes for a targeted statistic,
-			allowing for precise post-prediction calculations of the
+			Each model outputs a probability distribution over the range of possible outcomes for 
+			a targeted statistic, allowing for precise calculations of the predicted
 			<b class="under">under</b>,
 			<b class="push">push</b>,
 			and
 			<b class="over">over</b>
-			values for a
-			specified line.
+			values for a specified line.
 		</p>
 		<p>
 			Head to the
 			<a href={MODELS_PATH}>Models</a>
-			section to select from the available model types.
-			Visit a specific model type's
+			section to select from the available model types. Visit a specific model type's
 			<em>About</em>
 			page to learn more about what each model predicts.
 		</p>
@@ -58,45 +56,58 @@
 
 	<section id="how">
 		<h2>How it works</h2>
-		<h3>What is machine learning?</h3>
+
+		<h3><em>What is machine learning?</em></h3>
 		<p>
 			...
 		</p>
-		<h3>How are models trained?</h3>
 		<p>
-			Historical NBA game logs containing player and team box scores are collected from
-			<a href="https://www.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE</a>,
-			spanning 35,000 NBA games played since 1996.
+			...
+		</p>
+
+		<h3><em>How are models trained?</em></h3>
+		<p>
+			Historical NBA game logs containing player and team box scores are first collected from 
+			our data provider,
+			<a href="https://www.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE</a>.
+			The raw game logs are then processed by removing redundant data points and engineering
+			new features.
 		</p>
 		<p>
-			To train a model, the raw game logs are first processed, removing redundant data points and feature
-			engineering new ones.
-			Then, the dataset is split by date into training, validation, and test splits.
-			The training set is used to adjust the model weights. After the training epochs have elapsed, the
-			weights that produces the least error when inferencing on the validation dataset is kept.
-			Evaluation metrics are then calculated based on a final pass of the trained model on the test split.
+			The dataset is partitioned by date into training, validation, and test splits.
+			During the learning phase, the model makes predictions on the training dataset, and 
+			its internal weights are adjusted based on the result. After the training epochs have 
+			elapsed, the weights that produced the least error when inferencing on the validation 
+			dataset are kept. Evaluation metrics are then calculated based on a final pass of the 
+			trained model on the test split.
 		</p>
 		<p>
-			Each model has a unique data processing step and tailored hyperparameters, each chosen to maximize the
-			accuracy of predictions. More information on the engineered features and evaluation scores of a model
-			is outlined within their category's
+			Each model has a unique data processing step and tailored hyperparameters, each chosen 
+			to maximize the accuracy of predictions. More information detailing the engineered features 
+			and evaluation scores of a model is outlined within their category's
 			<em>About</em>
 			page.
 		</p>
 	</section>
 
-	<section id="limitations">
-		<h2>Limitations</h2>
+	<section id="disclaimers">
+		<h2>Disclaimers</h2>
+
+		<h3><em>Prediction limitations</em></h3>
 		<p>
-			<em>MACHINE LEARNING IS NOT MAGIC.</em>
+			This site is for informational and entertainment purposes only. Predictions are 
+			<em>not</em> 
+			betting advice.
 		</p>
 		<p>
-			While it is a powerful tool, at its core, the models on this site are nothing more than a
-			series of matrix multiplications, activation functions, normalizations, and other mathematical
-			operations. 
+			At their core, the models on this site are nothing more than a structured series of matrix 
+			multiplications, activation functions, normalizations, and other mathematical operations.
+			The predicted outcomes are not guaranteed nor always correct. Do not interpret them as such. 
 		</p>
+
+		<h3><em>Affiliation</em></h3>
 		<p>
-			The predicted values are not guaranteed nor always correct. Do not interpret them as such. 
+			This site is not affiliated with, endorsed by, or sponsored by the National Basketball Association.
 		</p>
 	</section>
 </div>

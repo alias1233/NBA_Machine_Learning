@@ -24,13 +24,22 @@ class SeasonType(Enum):
 # only place that boundary is decided. season_columns.season_of applies the same rule to a column.
 SEASON_START_MONTH = 10
 
-PLAYER_GAME_COLLECTION_START_DATE = date(1996, 11, 1)
-"""The first game date where every required player-model box-score field is available."""
+PLAYER_GAME_COLLECTION_START_DATE = date(2019, 10, 22)
+"""The first game date whose box scores from the data source carry every player-model input."""
 
 COLLECTION_START_SEASON = PLAYER_GAME_COLLECTION_START_DATE.year
-"""The first season whose player games the project collects and trains on."""
+"""The first season whose player games the project collects from a data source."""
 
-TRAINING_START_SEASONS = (COLLECTION_START_SEASON, 2000, 2005, 2010, 2013)
+ARCHIVE_START_SEASON = 1996
+"""
+The oldest season the archive can hold, which is the oldest nba.com publishes a player box score for.
+
+Seasons before COLLECTION_START_SEASON reach the archive only through
+nba_ml/data_collection/legacy_archive.py, which fills the years in front of the source's own floor
+from an nba.com archive collected earlier.
+"""
+
+TRAINING_START_SEASONS = (ARCHIVE_START_SEASON, COLLECTION_START_SEASON)
 """NBA eras the training command can compare."""
 
 def season_of(day: date) -> int:

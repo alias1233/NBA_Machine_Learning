@@ -142,7 +142,7 @@ def _build_datasets(
         use_cached_build: bool = True,
         save_cached_build: bool = True,
         print_debug: bool = False,
-        training_start_date: datetime = season.season_start_date(season.COLLECTION_START_SEASON)
+        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON)
         ) -> tuple[SequenceGameDataset, SequenceGameDataset, SequenceGameDataset, dict]:
     """
     Builds the three splits and the scalers fitted on the training one.
@@ -333,7 +333,7 @@ def train(
         save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
-        training_start_date: datetime = season.season_start_date(season.COLLECTION_START_SEASON)
+        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON)
         ) -> TrainingResult:
     """
     Fits one model spec, saves it, and writes a report of the run next to it.

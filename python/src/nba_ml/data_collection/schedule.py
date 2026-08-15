@@ -8,7 +8,7 @@ out what changed. That is also what keeps a postponed game's new date correct.
 from typing import Iterable
 
 from nba_ml import season
-from nba_ml.sources.base import DataSource
+from nba_ml.sources.base import DataSource, SourceDataError
 from nba_ml.stores import schedule as schedule_store
 
 def collect(
@@ -30,6 +30,8 @@ def collect(
     rows_written = 0
     for season_year in seasons:
         games = source.schedule(season_year)
+        if games is None:
+            raise SourceDataError(f"The {season_year} schedule could not be fetched. No schedule rows were stored.")
         if not games:
             continue
 

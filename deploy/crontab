@@ -7,11 +7,14 @@
 
 NBA_ML=/srv/nba-ml/deploy
 
-# Collect, then rebuild the whole league's features. One line, because the build has to follow the
-# collection: the service answers out of what the build published, so a player whose only games
-# arrived since the last build reads as having none. Cheap enough to run every hour.
-0 * * * * cd $NBA_ML && docker compose run --rm jobs >> /var/log/nba-ml.log 2>&1
+# Refresh the locally stored schedule once a day. The hourly job reads it, so it does no provider
+# work or feature build on days without games.
+15 12 * * * flock -n $NBA_ML/.jobs.lock sh -c 'cd $NBA_ML && docker compose run --rm jobs nba-collect --source balldontlie schedule' >> $NBA_ML/logs/nba-ml.log 2>&1
+
+# Collect and rebuild only while the schedule covers today or yesterday. A nonblocking lock keeps a
+# slow provider response from overlapping the next hour's write.
+0 * * * * flock -n $NBA_ML/.jobs.lock sh -c 'cd $NBA_ML && docker compose run --rm jobs' >> $NBA_ML/logs/nba-ml.log 2>&1
 
 # The databases and the model files, which are the only things here that cannot be rebuilt. Nightly,
 # after the hour's collection has finished. Keeps a week.
-20 4 * * * cd $NBA_ML && docker compose run --rm jobs nba-backup >> /var/log/nba-ml.log 2>&1
+20 4 * * * flock -w 3600 $NBA_ML/.jobs.lock sh -c 'cd $NBA_ML && docker compose run --rm jobs nba-backup' >> $NBA_ML/logs/nba-ml.log 2>&1

@@ -11,11 +11,59 @@ import pandas as pd
 
 from nba_ml import season
 from nba_ml.season import SeasonType
-from nba_ml.sources.base import DataSource
+from nba_ml.sources.base import DataSource, SourceDataError
 from nba_ml.stores import player_games, team_games
 
 DEFAULT_UPDATE_LOOKBACK_DAYS = 1
 """Days before the newest stored game to refetch during an update."""
+
+AGREEING_ROWS = "AGREEING_ROWS"
+"""How many of a team's player rows carry one set of labels, which is what decides the team's."""
+
+
+def require_resumable_player_archive():
+    """Refuse to mistake an emptied archive for a new one."""
+
+    if player_games.FILEPATH.exists() and player_games.latest_game_date() is None:
+        raise RuntimeError(
+            "The player-game database exists but has no rows. Refusing to start a full backfill over "
+            "an emptied archive. Restore it, or use `nba-collect all --from-start` only to intentionally "
+            "recollect it."
+        )
+
+
+def _validate_player_game_rows(rows: pd.DataFrame, season_year: int, season_type: SeasonType):
+    """Reject source rows that SQLite would otherwise accept and feature building would later skip."""
+
+    phase = season_type.value.lower().replace("_", " ")
+    if not isinstance(rows, pd.DataFrame):
+        raise SourceDataError(f"{season_year} {phase} player games are not a table of rows.")
+
+    required = player_games.DATABASE.category_names
+    missing = [column for column in required if column not in rows]
+    if missing:
+        raise SourceDataError(
+            f"{season_year} {phase} player games are missing required columns: {', '.join(missing)}."
+        )
+
+    malformed = rows[rows[required].isna().any(axis=1)]
+    if not malformed.empty:
+        identifiers = [player_games.PLAYER_ID.category_name, player_games.GAME_ID.category_name]
+        found = ", ".join(
+            f"player {row[identifiers[0]]}, game {row[identifiers[1]]}"
+            for _, row in malformed[identifiers].head(5).iterrows()
+        )
+        raise SourceDataError(
+            f"{season_year} {phase} player games contain {len(malformed)} malformed row(s): {found}."
+        )
+
+    identifiers = [player_games.PLAYER_ID.category_name, player_games.GAME_ID.category_name]
+    duplicated = rows.duplicated(identifiers, keep=False)
+    if duplicated.any():
+        raise SourceDataError(
+            f"{season_year} {phase} player games repeat {int(duplicated.sum())} player-game row(s)."
+        )
+
 
 def _seasons_to_collect(
     source: DataSource,
@@ -61,13 +109,21 @@ def collect_player_games(
 
     for season_year in seasons:
         for season_type in season_types:
-            games = source.player_games(season_year, season_type, date_from, date_to)
-            if games is None or games.empty:
-                continue
+            for batch in source.player_game_batches(season_year, season_type, date_from, date_to):
+                if batch is None:
+                    phase = season_type.value.lower().replace("_", " ")
+                    raise SourceDataError(
+                        f"{season_year} {phase} player games could not be fetched."
+                    )
+                if batch.empty:
+                    continue
+                _validate_player_game_rows(batch, season_year, season_type)
 
-            rows_written += player_games.store(games)
-            if print_debug:
-                print(f"player games: {season_year} {season_type.value.lower()}, {len(games)} rows")
+                stored = player_games.store(batch)
+                rows_written += stored
+                if print_debug:
+                    phase = season_type.value.lower().replace("_", " ")
+                    print(f"player games: {season_year} {phase}, stored {stored} rows")
 
     return rows_written
 
@@ -104,7 +160,9 @@ def collect_team_games(
 
     identifiers = [
         team_games.TEAM_ID.category_name,
-        team_games.GAME_ID.category_name,
+        team_games.GAME_ID.category_name
+    ]
+    labels = [
         team_games.GAME_DATE.category_name,
         team_games.SEASON_TYPE.category_name,
         team_games.MATCHUP.category_name,
@@ -126,8 +184,19 @@ def collect_team_games(
         team_games.TURNOVERS.category_name,
         team_games.PERSONAL_FOULS.category_name
     ]
-    teams = players.groupby(identifiers, as_index=False, sort=False)[totalled].sum()
-    written = team_games.store(teams)
+    # A team row is summed over the key it is stored under and nothing else. Old archives label a
+    # handful of games inconsistently between one team's own players, and grouping by the label as
+    # well would split that team's box score in two and store whichever half was written last. The
+    # label most of its players carry is the team's, and an empty one is a label like any other.
+    described = (
+        players.groupby(identifiers + labels, sort=False, dropna=False).size()
+        .reset_index(name=AGREEING_ROWS)
+        .sort_values(AGREEING_ROWS, ascending=False, kind="stable")
+        .drop_duplicates(identifiers)
+        .drop(columns=AGREEING_ROWS)
+    )
+    totals = players.groupby(identifiers, as_index=False, sort=False)[totalled].sum()
+    written = team_games.store(totals.merge(described, on=identifiers))
     if print_debug:
         print(f"team games: {written} rows from stored player games")
 

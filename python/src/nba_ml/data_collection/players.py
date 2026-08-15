@@ -90,6 +90,34 @@ def fill_missing_names(source: DataSource, print_debug: bool = True) -> int:
 
     return rows_written
 
+def refresh_career_seasons(print_debug: bool = True) -> int:
+    """
+    Rewrites every held player's first and last season from the games now stored.
+
+    Collection works these out from a player's own games, because the chosen provider publishes
+    neither a birth date nor a debut year. Filling the archive with older seasons moves both, so
+    this applies that same rule again once the games behind it have changed.
+    """
+
+    careers = player_games.career_seasons()
+    held = players_store.get_all_players_info()
+    if held.empty or not careers:
+        return 0
+
+    known = held[players_store.PLAYER_ID.category_name].map(careers).dropna()
+    if known.empty:
+        return 0
+
+    refreshed = held.loc[known.index].copy()
+    refreshed[players_store.FROM_YEAR.category_name] = [first for first, _ in known]
+    refreshed[players_store.TO_YEAR.category_name] = [last for _, last in known]
+    rows_written = players_store.store(refreshed)
+
+    if print_debug:
+        print(f"players: refreshed the career years of {rows_written} players")
+
+    return rows_written
+
 def update(source: DataSource, print_debug: bool = True) -> int:
     """Collects the players that are not held yet, then names any held player still without one."""
 
@@ -99,7 +127,15 @@ def update(source: DataSource, print_debug: bool = True) -> int:
     )
 
 def update_from_games(source: DataSource, date_start: date, print_debug: bool = True) -> int:
-    """Collects only players first seen in an already collected game window."""
+    """
+    Collects the players who have a stored game since date_start and no information row yet.
+
+    An hourly run passes the first date its source covers rather than its own lookback, because a
+    player with no information row has every one of their games dropped from the feature build, and
+    a narrow window would only ever retry them on the day they next play. Reading the stored games
+    rather than the source's whole player list still keeps a normal run to one request per genuinely
+    new player, and to none at all once every player is described.
+    """
 
     stored = players_store.stored_player_ids()
     if not stored:

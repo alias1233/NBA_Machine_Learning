@@ -45,11 +45,14 @@ explicit = true
 
 [project.scripts]
 nba-collect = "nba_ml.cli.collect:main"
+nba-import-legacy = "nba_ml.cli.import_legacy:main"
 nba-schedule = "nba_ml.cli.schedule:main"
 nba-build-features = "nba_ml.cli.build_features:main"
 nba-train = "nba_ml.cli.train:main"
 nba-predict = "nba_ml.cli.predict:main"
 nba-backup = "nba_ml.cli.backup:main"
+nba-update-serving = "nba_ml.cli.update_serving:main"
+nba-serving-data = "nba_ml.cli.serving_data:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -199,7 +199,9 @@ def _write(directory: Path, build: FeatureBuild):
         ),
         opponent_team_ids=joined([subject.opponent_team_ids for subject in subjects], (0,))
     )
-    (directory / DESCRIPTION_FILE).write_text(json.dumps(_description(build), indent=2))
+    (directory / DESCRIPTION_FILE).write_text(
+        json.dumps(_description(build), indent=2), encoding="utf-8"
+    )
 
 def publish(name: str, build: FeatureBuild) -> Path:
     """
@@ -224,7 +226,7 @@ def publish(name: str, build: FeatureBuild) -> Path:
 
     pointer = directory / POINTER_FILE
     written_pointer = directory / (POINTER_FILE + ".new")
-    written_pointer.write_text(build.version)
+    written_pointer.write_text(build.version, encoding="utf-8")
     os.replace(written_pointer, pointer)
 
     _remove_old_versions(name)
@@ -274,7 +276,7 @@ def _newest_version(name: str) -> Path | None:
         return None
 
     pointer = paths.feature_build_directory(name) / POINTER_FILE
-    pointed_at = pointer.read_text().strip() if pointer.is_file() else ""
+    pointed_at = pointer.read_text(encoding="utf-8").strip() if pointer.is_file() else ""
 
     return next(
         (version for version in versions if version.name == pointed_at),
@@ -284,7 +286,7 @@ def _newest_version(name: str) -> Path | None:
 def _read(version: Path) -> FeatureBuild:
     """One build off disk. Every subject's games are views into one array rather than copies."""
 
-    described = json.loads((version / DESCRIPTION_FILE).read_text())
+    described = json.loads((version / DESCRIPTION_FILE).read_text(encoding="utf-8"))
     window_start_date = described["window_start_date"]
 
     with np.load(version / SEQUENCES_FILE) as values:

@@ -11,11 +11,14 @@ the schedule and season columns are read off.
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Iterable, Sequence
+from pathlib import Path
+from types import ModuleType
+from typing import Collection, Iterable, Sequence
 
 import pandas as pd
 
-from nba_ml import season
+from nba_ml import paths, season
+from nba_ml.database import Database
 from nba_ml.entities import Game, GameStatus, Player, ScheduledGame, Team
 from nba_ml.feature_engineering import player_columns, team_columns
 from nba_ml.season import SeasonType
@@ -254,6 +257,90 @@ def player_game_rows(game: PlayedGame) -> list[dict]:
 
 def player_game_frame(games: Sequence[PlayedGame] = SEASON_GAMES) -> pd.DataFrame:
     return pd.DataFrame([row for game in games for row in player_game_rows(game)])
+
+# THE OLDER ARCHIVE: #
+# The same league as above, written the way a data directory collected through a different service
+# holds it. Every identifier differs and every box score line agrees, which is the situation the
+# legacy import has to work out on its own. See nba_ml/data_collection/legacy_archive.py.
+LEGACY_TEAM_IDS = {team.id: 900 + team.id for team in TEAMS}
+LEGACY_PLAYER_IDS = {player.id: 50_000 + player.id for player in ALL_PLAYERS}
+LEGACY_GAME_NUMBER_OFFSET = 500
+"""Keeps the phase in the first character of a legacy game id while changing the game it names."""
+
+RETIRED_PLAYER_IDS = {player.id: 60_000 + player.id for player in ALL_PLAYERS}
+"""A second identifier per player, standing for somebody who stopped playing before the cutoff."""
+
+def legacy_teams_frame() -> pd.DataFrame:
+    """The four teams under the older archive's ids, keeping the tricode that identifies them."""
+
+    frame = teams_frame()
+    frame[teams_store.TEAM_ID.category_name] = frame[teams_store.TEAM_ID.category_name].map(LEGACY_TEAM_IDS)
+
+    return frame
+
+def legacy_player_game_frame(
+    games: Sequence[PlayedGame] = SEASON_GAMES,
+    retired: Collection[int] = (),
+    season_type: SeasonType = SeasonType.REGULAR_SEASON
+    ) -> pd.DataFrame:
+    """
+    The given games under the older archive's ids, with the season phase left empty as it left it.
+
+    Args:
+        retired names the players to write under a second identifier, standing for a career that
+        ended before the current archive begins.
+    """
+
+    rows = player_game_frame(games)
+    player_ids = {
+        player.id: (RETIRED_PLAYER_IDS if player.id in retired else LEGACY_PLAYER_IDS)[player.id]
+        for player in ALL_PLAYERS
+    }
+    rows[player_games.PLAYER_ID.category_name] = rows[player_games.PLAYER_ID.category_name].map(player_ids)
+    rows[player_games.TEAM_ID.category_name] = rows[player_games.TEAM_ID.category_name].map(LEGACY_TEAM_IDS)
+    rows[player_games.GAME_ID.category_name] = rows[player_games.GAME_ID.category_name].map({
+        game.id: game_id(game.number + LEGACY_GAME_NUMBER_OFFSET, season_type) for game in games
+    })
+    rows[player_games.SEASON_TYPE.category_name] = None
+
+    return rows
+
+def legacy_player_info_frame(described: Sequence[Player] = ALL_PLAYERS) -> pd.DataFrame:
+    """One row per player under both of the older archive's identifiers for them."""
+
+    return pd.concat(
+        [
+            player_info_frame(described).assign(**{
+                players.PLAYER_ID.category_name: [ids[player.id] for player in described]
+            })
+            for ids in (LEGACY_PLAYER_IDS, RETIRED_PLAYER_IDS)
+        ],
+        ignore_index=True
+    )
+
+def _write_table(directory: Path, store: ModuleType, rows: pd.DataFrame):
+    database = Database(
+        directory / paths.DATABASE_DIRECTORY.name / store.FILEPATH.name,
+        store.NAME,
+        store.ALL_CATEGORIES.get_categories(),
+        store.DATA_CONFLICT_HANDLER,
+        store.PRIMARY_KEYS
+    )
+    with database:
+        database.add_dataframe(rows)
+
+def write_legacy_archive(
+    directory: Path,
+    player_rows: pd.DataFrame,
+    described: Sequence[Player] = ALL_PLAYERS
+    ) -> Path:
+    """A data directory holding the three tables an import reads, and nothing else."""
+
+    _write_table(directory, teams_store, legacy_teams_frame())
+    _write_table(directory, player_games, player_rows)
+    _write_table(directory, players, legacy_player_info_frame(described))
+
+    return directory
 
 # THE SCHEDULE: #
 def scheduled_game(

@@ -42,7 +42,16 @@ PRIMARY_KEYS = [
 ]
 DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 
-DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
+# A date narrows almost every read here, and a roster read names a team and its games. The primary
+# key covers neither, so without these the whole archive is scanned each time.
+INDEXES = [
+    [GAME_DATE],
+    [TEAM_ID, GAME_ID]
+]
+
+DATABASE = Database(
+    FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS, INDEXES
+)
 
 # Writing
 def store(player_game_data: pd.DataFrame) -> int:
@@ -125,7 +134,8 @@ def player_ids_in_games(team_id: int, game_ids: Collection[int]) -> set[int]:
                 f"{TEAM_ID.category_name} = :{TEAM_ID.category_name} AND {_held_in(GAME_ID, game_ids)}"
             ),
             condition_params={TEAM_ID : team_id},
-            categories=[PLAYER_ID]
+            categories=[PLAYER_ID],
+            distinct=True
         )
 
     return {int(row[0]) for row in rows}
@@ -199,10 +209,11 @@ def player_ids_since(date_start: date) -> list[int]:
         rows = DATABASE.query(
             SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",
             condition_params={GAME_DATE : season.to_date_string(date_start)},
-            categories=[PLAYER_ID]
+            categories=[PLAYER_ID],
+            distinct=True
         )
 
-    return sorted({int(row[0]) for row in rows})
+    return sorted(int(row[0]) for row in rows)
 
 def career_seasons() -> dict[int, tuple[int, int]]:
     """The first and last season each stored player appeared in."""

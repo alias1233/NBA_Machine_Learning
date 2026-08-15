@@ -40,7 +40,12 @@ PRIMARY_KEYS = [
 ]
 DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 
-DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
+# Every read here but one filters on the date, which the primary key does not cover.
+INDEXES = [[GAME_DATE]]
+
+DATABASE = Database(
+    FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS, INDEXES
+)
 
 # Writing
 def store(team_game_data: pd.DataFrame) -> int:
@@ -82,7 +87,8 @@ def stored_game_ids(date_start: date | None = None) -> set[int]:
         rows = DATABASE.query(
             SQL_condition=SQL_condition,
             condition_params=condition_params,
-            categories=[GAME_ID]
+            categories=[GAME_ID],
+            distinct=True
         )
 
     return {int(row[0]) for row in rows}
