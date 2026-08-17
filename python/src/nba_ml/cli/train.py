@@ -9,10 +9,12 @@ training loop and matplotlib, and the service reads that list.
 """
 
 import argparse
+from dataclasses import replace
+from datetime import datetime
 from typing import Any, Callable
 
 from nba_ml import season
-from nba_ml.models import families
+from nba_ml.models import classifier_training, families
 from nba_ml.models.game_stats import specifications as game_stat_specifications
 from nba_ml.models.game_stats import training as game_stat_training
 from nba_ml.models.player_stats import specifications as player_stat_specifications
@@ -52,6 +54,26 @@ def main():
         )
     )
     parser.add_argument(
+        "--evaluation-start",
+        type=datetime.fromisoformat,
+        metavar="YYYY-MM-DD",
+        help=(
+            "First day of the games held back for validation and testing. Defaults to a year back "
+            "from today. Pin it to score several models on exactly the same games across more than "
+            "one day."
+        )
+    )
+    parser.add_argument(
+        "--validation-fraction",
+        type=float,
+        default=classifier_training.VALIDATION_FRACTION,
+        metavar="SHARE",
+        help=(
+            "How much of the held-back period picks the stopping epoch, the rest being the held-out "
+            f"test set. Defaults to {classifier_training.VALIDATION_FRACTION}."
+        )
+    )
+    parser.add_argument(
         "--skip-evaluations",
         action="store_true",
         help="Train and save without scoring the finished model or writing graphs."
@@ -78,13 +100,25 @@ def main():
     if train is None:
         raise SystemExit(f"The {specification.model_category} family has no training module yet.")
 
+    default_split = classifier_training.default_evaluation_split()
+
+    try:
+        evaluation_split = replace(
+            default_split,
+            start_date=arguments.evaluation_start or default_split.start_date,
+            validation_fraction=arguments.validation_fraction
+        )
+    except ValueError as error:
+        raise SystemExit(str(error))
+
     train(
         specification,
         training_start_date=season.season_start_date(arguments.training_start_season),
         output_evaluations=not arguments.skip_evaluations,
         use_cached_build=not (arguments.rebuild_cache or arguments.no_cache),
         save_cached_build=not arguments.no_cache,
-        print_debug=not arguments.quiet
+        print_debug=not arguments.quiet,
+        evaluation_split=evaluation_split
     )
 
 if __name__ == '__main__':

@@ -233,12 +233,12 @@
 		gap: var(--space-4) var(--space-5);
 	}
 
-	/* Square, like a game card, so a family reads in the same language as everything it leads to. The
+	/* Square, so the picture is read as a mark for the family rather than as a crop of something. The
 	   picture fills it, so the surface is the ground and nothing else. */
 	.graphic {
 		grid-area: graphic;
 		width: var(--card-graphic);
-		aspect-ratio: var(--card-ratio);
+		aspect-ratio: var(--graphic-ratio);
 		padding: 0;
 	}
 

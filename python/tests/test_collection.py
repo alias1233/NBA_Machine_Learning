@@ -306,6 +306,24 @@ def test_an_update_run_uses_each_store_own_lookback_date():
     assert written == 4 * fake_data.PLAYERS_PER_TEAM + 18
     assert len(team_games.get_all_team_game_data()) == ALL_ROWS
 
+def test_games_backfilled_behind_the_team_store_still_get_team_rows():
+    """
+    A team row is a total of player rows, so the team store can only follow the player one while
+    games arrive newest first. A backfill writes games older than anything the team store holds, and
+    a rebuild starting at its own newest row would step straight over them. Those games would then
+    sit in the archive and reach no model, because a player row whose game has no team row is
+    dropped where the two frames meet.
+    """
+
+    newest = fake_data.SEASON_GAMES[-2:]
+    player_games.store(fake_data.player_game_frame(newest))
+    team_games.store(fake_data.team_game_frame(newest))
+
+    player_games.store(fake_data.player_game_frame(fake_data.SEASON_GAMES[:-2]))
+    games.update_team_games(print_debug=False)
+
+    assert team_games.stored_game_ids() == {game.id for game in fake_data.SEASON_GAMES}
+
 def test_an_empty_team_store_rebuilds_from_all_stored_player_games():
     player_games.store(fake_data.player_game_frame())
     source = FakeSource()

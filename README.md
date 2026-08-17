@@ -15,13 +15,11 @@ Implemented capabilities:
 
 Working models:
 
-- Player game statistics: predicts what a player does in a future game. Points, rebounds, assists,
+- Player Stat Models: predicts what a player does in a future game. Points, rebounds, assists,
   three pointers, steals, blocks and turnovers, the pairs and the trio of them added together, and
   whether they record a double double or a triple double.
-
-## Future
-
-Have models accessible through a website where users can predict future statistics.
+- Team Stat Models: predicts a specific team's stat total.
+- Game Stat Models: predicts statistics of a game.
 
 ## Layout
 

@@ -17,6 +17,7 @@ import pandas as pd
 from nba_ml.entities import Game
 from nba_ml.feature_engineering import placeholders, season_columns, team_game_rows
 from nba_ml.feature_engineering.samples import (
+    EvaluationSplit,
     GameHistory,
     build_inference_sample,
     build_split_samples,
@@ -49,8 +50,7 @@ def build_feature_set(target: TargetValue) -> FeatureSet:
 def get_all_labeled_data(
     features: FeatureSet,
     training_start_date: datetime,
-    validation_split_start_date: datetime,
-    test_split_start_date: datetime,
+    evaluation_split: EvaluationSplit,
     chunk_step_size: int = 1,
     print_debug: bool = False
     ) -> tuple[
@@ -60,7 +60,7 @@ def get_all_labeled_data(
         SequenceInputSamples
         ]:
     """
-    Builds every labeled sample the league holds, split into training, validation and test by date.
+    Builds every labeled sample the league holds, split into training, validation and test.
 
     Both sides of a game become a sample, one per team, because a model reads a game from the side it
     is asked about.
@@ -83,9 +83,11 @@ def get_all_labeled_data(
 
     team_game_sequences, (training, validation, test) = build_split_samples(
         histories,
-        (validation_split_start_date, test_split_start_date),
+        evaluation_split,
         team_game_rows.MINIMUM_PAST_GAMES,
         chunk_step_size,
+        sequence_columns=features.sequence_columns,
+        static_columns=features.static_columns,
         training_start_date=training_start_date,
         read_opponent_history=READS_OPPONENT_HISTORY,
         print_debug=print_debug

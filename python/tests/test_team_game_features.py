@@ -31,7 +31,7 @@ from nba_ml.feature_engineering import (
     team_columns,
     team_game_rows
 )
-from nba_ml.feature_engineering.samples import build_split_samples
+from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey, build_split_samples
 from nba_ml.feature_engineering.team_game_rows import TargetValue
 from nba_ml.models.game_stats import features as game_stat_features
 from nba_ml.stores import team_games as team_game_store
@@ -40,6 +40,15 @@ import fake_data
 from fake_data import PlayedGame
 
 FEATURES = team_game_rows.build_feature_set(TargetValue.POINT_DIFFERENTIAL)
+
+BUILD_COLUMNS = {
+    "sequence_columns": FEATURES.sequence_columns,
+    "static_columns": FEATURES.static_columns
+}
+"""What the histories below hold, which build_split_samples needs to name a column that came out blank."""
+
+EVERYTHING_TRAINS = EvaluationSplit(start_date=datetime(2030, 1, 1))
+"""A split whose evaluation period starts after the made up league ends, so every game trains."""
 
 def built_rows(games=fake_data.SEASON_GAMES) -> pd.DataFrame:
     """Every engineered row of the given games, indexed by team and game so a test can name one."""
@@ -205,19 +214,20 @@ def test_a_team_statistic_is_one_sample_per_side_and_a_game_statistic_one_per_ga
     statistic belongs to the game, so only the home row is, and it reads both teams.
     """
 
-    boundaries = [pd.Timestamp("2030-01-01")]
     games = fake_data.team_game_frame()
 
-    _, (per_side, _) = build_split_samples(
+    _, (per_side, _, _) = build_split_samples(
         team_game_rows.build_histories(FEATURES, games),
-        boundaries,
-        team_game_rows.MINIMUM_PAST_GAMES
-    )
-    _, (per_game, _) = build_split_samples(
-        team_game_rows.build_histories(FEATURES, games, sample_row_column=team_game_rows.IS_HOME_ROW),
-        boundaries,
+        EVERYTHING_TRAINS,
         team_game_rows.MINIMUM_PAST_GAMES,
-        read_opponent_history=True
+        **BUILD_COLUMNS
+    )
+    _, (per_game, _, _) = build_split_samples(
+        team_game_rows.build_histories(FEATURES, games, sample_row_column=team_game_rows.IS_HOME_ROW),
+        EVERYTHING_TRAINS,
+        team_game_rows.MINIMUM_PAST_GAMES,
+        read_opponent_history=True,
+        **BUILD_COLUMNS
     )
 
     # Every team's first game has nothing behind it, so it is no sample.
@@ -236,16 +246,38 @@ def test_a_team_statistic_is_one_sample_per_side_and_a_game_statistic_one_per_ga
         float(game.home_points - game.away_points) for game in answerable
     )
 
+def test_a_blank_left_in_a_column_stops_training_and_names_the_column():
+    """
+    A blank reaching a model is reported as a loss of nan rather than as an error, which is a whole
+    training run spent before anyone finds out. It is caught here instead, where the build still
+    knows which column did it.
+    """
+
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+    blank_column = FEATURES.sequence_columns.index(game_columns.POINTS)
+
+    for history in histories.values():
+        history.sequence_values[0, blank_column] = np.nan
+
+    with pytest.raises(ValueError, match=f"{game_columns.POINTS} "):
+        build_split_samples(
+            histories,
+            EVERYTHING_TRAINS,
+            team_game_rows.MINIMUM_PAST_GAMES,
+            **BUILD_COLUMNS
+        )
+
 def test_a_training_era_removes_older_games_from_sequences_and_scaling():
     start = datetime(2024, 10, 30)
-    validation = datetime(2024, 11, 2)
+    evaluation_starts = datetime(2024, 11, 3)
     histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
 
     sequences, (training, _, _) = build_split_samples(
         histories,
-        (validation, datetime(2030, 1, 1)),
+        EvaluationSplit(start_date=evaluation_starts),
         team_game_rows.MINIMUM_PAST_GAMES,
-        training_start_date=start
+        training_start_date=start,
+        **BUILD_COLUMNS
     )
 
     expected_games = [
@@ -256,9 +288,82 @@ def test_a_training_era_removes_older_games_from_sequences_and_scaling():
         len(games) for games in expected_games
     ]
     assert list(sequences.training_game_counts) == [
-        sum(game.day <= validation.date() for game in games) for games in expected_games
+        sum(game.day < evaluation_starts.date() for game in games) for games in expected_games
     ]
     assert (training.sequence_end_indices <= sequences.training_game_counts[training.sequence_indices]).all()
+
+# HOW THE SPLITS ARE DRAWN: #
+def test_validation_and_test_span_the_same_days_and_share_no_game():
+    """
+    What the whole split system is for. Both sets have to hold games from every part of a season,
+    which cutting the calendar a second time cannot do, and neither may hold a game the other does.
+    """
+
+    evaluation_starts = datetime(2024, 10, 25)
+    histories = team_game_rows.build_histories(
+        FEATURES, fake_data.team_game_frame(), sample_row_column=team_game_rows.IS_HOME_ROW
+    )
+
+    _, (training, validation, test) = build_split_samples(
+        histories,
+        EvaluationSplit(start_date=evaluation_starts, split_on=SplitKey.GAME),
+        team_game_rows.MINIMUM_PAST_GAMES,
+        read_opponent_history=True,
+        **BUILD_COLUMNS
+    )
+
+    def days(samples) -> set:
+        return set(samples.game_dates.astype("datetime64[D]").tolist())
+
+    assert days(training) and days(validation) and days(test)
+
+    # Nothing a model learns from is played on or after the day the evaluation period opens.
+    assert max(days(training)) < evaluation_starts.date()
+    assert min(days(validation) | days(test)) >= evaluation_starts.date()
+
+    # The point of the whole arrangement: neither set is the tail end of the other's calendar.
+    assert min(days(validation)) < max(days(test))
+    assert min(days(test)) < max(days(validation))
+
+def test_the_two_evaluation_splits_hold_the_games_of_different_subjects():
+    """A team is only ever in one of the two, where a family splits on the subject."""
+
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+
+    _, (_, validation, test) = build_split_samples(
+        histories,
+        EvaluationSplit(start_date=datetime(2024, 10, 25), split_on=SplitKey.SUBJECT),
+        team_game_rows.MINIMUM_PAST_GAMES,
+        **BUILD_COLUMNS
+    )
+
+    assert not set(validation.sequence_indices.flatten()) & set(test.sequence_indices.flatten())
+
+def test_the_validation_fraction_decides_which_way_a_whole_split_leans():
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+    evaluation_starts = datetime(2024, 10, 25)
+
+    def sizes(validation_fraction: float) -> tuple[int, int]:
+        _, (_, validation, test) = build_split_samples(
+            histories,
+            EvaluationSplit(
+                start_date=evaluation_starts,
+                validation_fraction=validation_fraction,
+                split_on=SplitKey.GAME
+            ),
+            team_game_rows.MINIMUM_PAST_GAMES,
+            **BUILD_COLUMNS
+        )
+
+        return (len(validation.outputs), len(test.outputs))
+
+    assert sizes(1.0)[1] == 0
+    assert sizes(0.0)[0] == 0
+    assert sum(sizes(0.5)) == sum(sizes(1.0))
+
+def test_a_validation_fraction_outside_a_share_is_refused():
+    with pytest.raises(ValueError, match="validation fraction"):
+        EvaluationSplit(start_date=datetime(2024, 10, 25), validation_fraction=1.5)
 
 # THE GAME BEING PREDICTED: #
 def test_a_prediction_reads_the_home_team_first_and_only_the_games_before_the_one_asked_about():

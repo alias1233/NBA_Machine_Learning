@@ -80,6 +80,32 @@ def test_a_player_without_a_birthdate_remains_in_the_build(collected_league, fea
 
     assert set(histories) == {player.id for player in fake_data.ALL_PLAYERS}
 
+def test_a_player_with_no_draft_record_reads_as_undrafted_rather_than_as_a_blank(
+    collected_league,
+    features_read
+    ):
+    """
+    The data source writes the word for a player it holds no draft record of, and the older nba.com
+    archive leaves the column empty for one. Both have to reach a model as the same thing, because
+    an empty one used to arrive as a blank and turn every training loss into nan.
+    """
+
+    written = fake_data.player_info_frame()
+    written[players.DRAFT_NUMBER.category_name] = None
+    players.store(written)
+
+    read = player_columns.encode_undrafted(
+        players.get_all_players_info(),
+        players.DRAFT_NUMBER.category_name
+    )
+
+    assert (read[player_columns.UNDRAFTED] == 1).all()
+    assert (read[players.DRAFT_NUMBER.category_name] == 0).all()
+
+    histories = features.build_league_histories(features_read)
+
+    assert np.isfinite([history.static_subject_values for history in histories.values()]).all()
+
 def test_an_empty_player_store_explains_that_training_needs_collection(features_read):
     with pytest.raises(ValueError, match="No usable player information is stored"):
         features.build_league_histories(features_read)

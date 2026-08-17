@@ -47,7 +47,7 @@ src/routes/+page.svelte        the home page: the hero, then the Models section 
 src/routes/models/             a redirect to the models, then one folder per family
 src/routes/about/              how the models work
 src/routes/privacy/            required before ads can run
-src/routes/api/                player search and rosters
+src/routes/api/                player search, rosters, and a model's held-out figures
 static/collage/                the hero images
 static/fonts/                  Instrument Serif, Inter Tight and JetBrains Mono, Latin only
 ```

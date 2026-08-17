@@ -38,10 +38,12 @@ from nba_ml.feature_engineering.rolling import RollingCategory
 from nba_ml.feature_engineering.situations import SituationalStat
 from nba_ml.feature_engineering.samples import (
     OUTPUT,
+    EvaluationSplit,
     GameHistory,
     SequenceToRead,
     build_inference_sample,
     build_split_samples,
+    check_columns_are_finite,
     split_into_histories
 )
 from nba_ml.machine_learning.datasets import GameSequences, SequenceInputSamples
@@ -631,6 +633,9 @@ def _build_player_info_features(
     player_ids = player_info[players.PLAYER_ID.category_name].to_numpy()
     values = features.to_numpy(dtype=np.float32)
 
+    # Checked here rather than in samples.py, because these columns never reach the frame it reads.
+    check_columns_are_finite(values, list(features.columns), "player information columns")
+
     return {int(player_id): values[position] for position, player_id in enumerate(player_ids)}
 
 def _preprocess_player_info(player_info: pd.DataFrame) -> pd.DataFrame:
@@ -989,8 +994,7 @@ def build_league_histories(
 def get_all_labeled_data(
         features: FeatureSet,
         training_start_date: datetime,
-        validation_split_start_date: datetime,
-        test_split_start_date: datetime,
+        evaluation_split: EvaluationSplit,
         chunk_step_size: int = 1,
         print_debug: bool = False
         ) -> tuple[
@@ -1000,7 +1004,7 @@ def get_all_labeled_data(
             SequenceInputSamples
             ]:
     """
-    Builds every labeled sample the league holds, split into training, validation and test by date.
+    Builds every labeled sample the league holds, split into training, validation and test.
 
     Returns:
         (games of every player, training samples, validation samples, test samples)
@@ -1013,9 +1017,11 @@ def get_all_labeled_data(
 
     player_game_sequences, (training, validation, test) = build_split_samples(
         histories,
-        (validation_split_start_date, test_split_start_date),
+        evaluation_split,
         MINIMUM_PAST_GAMES,
         chunk_step_size,
+        sequence_columns=features.sequence_columns,
+        static_columns=features.static_columns,
         training_start_date=training_start_date,
         print_debug=print_debug
     )

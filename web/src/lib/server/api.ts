@@ -18,6 +18,7 @@ import type {
 	FamilyAboutModel,
 	Health,
 	Model,
+	ModelEvaluation,
 	Player,
 	PlayerPredictionRequest,
 	Prediction,
@@ -71,9 +72,15 @@ export const getTeams = () => request<Team[]>('/teams');
 
 export const getModels = () => request<Model[]>('/models');
 
-/** The reader-facing model cards for one family About page. */
+/** The reader-facing model cards for one family About page, without their figures. */
 export const getFamilyAboutModels = (family: string) =>
 	request<FamilyAboutModel[]>(`/models/${encodeURIComponent(family)}/about`);
+
+/** What one model measured, asked for only when a reader opens that model. Null where unscored. */
+export const getModelEvaluation = (family: string, model: string) =>
+	request<ModelEvaluation | null>(
+		`/models/${encodeURIComponent(family)}/about/${encodeURIComponent(model)}/evaluation`
+	);
 
 export const getPlayer = (id: number) => request<Player>(`/players/${id}`);
 

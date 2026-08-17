@@ -93,6 +93,24 @@ def stored_game_ids(date_start: date | None = None) -> set[int]:
 
     return {int(row[0]) for row in rows}
 
+def team_ids_with_game_since(date_start: date) -> set[int]:
+    """
+    Which teams have a box score stored on or after the given date.
+
+    This is what says a team is still playing. The archive holds franchises that folded and overseas
+    opponents from preseason tours, and neither can be named in a prediction.
+    """
+
+    with DATABASE:
+        rows = DATABASE.query(
+            SQL_condition=f"{GAME_DATE.category_name} >= :{GAME_DATE.category_name}",
+            condition_params={GAME_DATE : season.to_date_string(date_start)},
+            categories=[TEAM_ID],
+            distinct=True
+        )
+
+    return {int(row[0]) for row in rows}
+
 def teams_with_game_on(day: date, team_ids: Collection[int]) -> set[int]:
     """
     Which of the named teams already have a box score stored on the given date.

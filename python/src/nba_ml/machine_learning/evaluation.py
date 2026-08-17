@@ -2,13 +2,41 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from scipy import special
-import matplotlib.pyplot as plt
-from sklearn.calibration import calibration_curve
 import math
 from pathlib import Path
 
 from .trainer import MetricFunction
+
+# Matplotlib and the calibration curve are pulled in inside the two functions that draw, the way
+# trainer.graph_loss_progress does. The names below are read by the service to describe a saved
+# score, and it has no business loading a plotting stack to do that.
+
+# What a scored figure is called. These names are written into a saved evaluation file and read back
+# by anything reporting one, so they are identifiers rather than wording. What a reader is shown is
+# decided in nba_ml/models/metrics.py, which can be reworded without retraining anything.
+LOSS = "loss"
+CROSS_ENTROPY = "cross_entropy"
+ACCURACY = "accuracy"
+PROBABILITY_OF_ACTUAL = "probability_of_actual"
+BRIER_SCORE = "brier_score"
+CALIBRATION_ERROR = "calibration_error"
+CLASSWISE_CALIBRATION_ERROR = "classwise_calibration_error"
+RANKED_PROBABILITY_SCORE = "ranked_probability_score"
+LINE_RANKED_PROBABILITY_SCORE = "line_ranked_probability_score"
+EXPECTED_VALUE_MAE = "expected_value_mae"
+EXPECTED_VALUE_RMSE = "expected_value_rmse"
+EXPECTED_VALUE_MEDIAN_ERROR = "expected_value_median_error"
+HIGHEST_PROBABILITY_MAE = "highest_probability_mae"
+HIGHEST_PROBABILITY_RMSE = "highest_probability_rmse"
+CENTRAL_INTERVAL_COVERAGE = "central_interval_coverage"
+
+CENTRAL_INTERVAL = 0.8
+"""
+How much of an answer the covered middle holds, for the coverage figure below.
+
+Eight tenths leaves a tenth in each tail, which is wide enough that a season of games says something
+about it and narrow enough that a model claiming more certainty than it has is caught.
+"""
 
 @dataclass(frozen=True)
 class ValueScale():
@@ -48,6 +76,17 @@ class ValueScale():
             return lines
 
         return np.where(lines >= self.impossible_value, lines + 1, lines)
+
+    def spread_over_values(self, predicted_probabilities: np.ndarray) -> np.ndarray:
+        """
+        The answer read as a probability per whole number rather than per class.
+
+        A class covering a run of numbers claims nothing about where inside it the outcome sits, so
+        it is read as spread evenly across them. That is how the site reads one, which is what makes
+        every figure worked out from this comparable between models whose classes differ in width.
+        """
+
+        return np.repeat(predicted_probabilities, self.value_step, axis=1) / self.value_step
 
 # Metrics scored during training, on batches of logits still held as tensors.
 
@@ -160,14 +199,53 @@ def calculate_line_ranked_probability_score(
     """
 
     classes = predicted_probabilities.shape[1]
-    per_value = np.repeat(predicted_probabilities, values.value_step, axis=1) / values.value_step
     lines = values.lines(classes)
 
     # The chance of landing at or below each line, against whether it actually did.
-    predicted_cumulative = np.cumsum(per_value, axis=1)
+    predicted_cumulative = np.cumsum(values.spread_over_values(predicted_probabilities), axis=1)
     happened = (values.actual_values[:, None] <= lines).astype(np.float64)
 
     return float(np.mean(np.sum((predicted_cumulative - happened) ** 2, axis=1)))
+
+def calculate_central_interval_coverage(
+    predicted_probabilities: np.ndarray,
+    values: ValueScale,
+    interval: float = CENTRAL_INTERVAL
+    ) -> float:
+    """
+    How often the outcome landed inside the middle of the answer, which is what says whether a
+    distribution is as wide as it should be.
+
+    A model that is right on average can still be wrong about how sure it is. This reads the middle
+    `interval` of each answer as a range of whole numbers and counts how often the real result was
+    in it. A perfectly calibrated model scores exactly `interval`. Below it the answers are too
+    narrow, above it too wide.
+    """
+
+    classes = predicted_probabilities.shape[1]
+    lines = values.lines(classes)
+    cumulative = np.cumsum(values.spread_over_values(predicted_probabilities), axis=1)
+
+    tail = (1.0 - interval) / 2.0
+    lowest = lines[np.argmax(cumulative >= tail, axis=1)]
+    highest = lines[np.argmax(cumulative >= 1.0 - tail, axis=1)]
+
+    inside = (values.actual_values >= lowest) & (values.actual_values <= highest)
+
+    return float(np.mean(inside))
+
+def class_prior(outputs: np.ndarray, classes: int) -> np.ndarray:
+    """
+    How often each class happened, which is the best answer a model that reads nothing can give.
+
+    Scoring this on the same games gives every figure below a floor to be read against, so a reader
+    is told what the model is worth rather than only what it scored.
+    """
+
+    counts = np.bincount(np.asarray(outputs, dtype=np.int64), minlength=classes).astype(np.float64)
+    total = counts.sum()
+
+    return counts / total if total else np.full(classes, 1.0 / classes)
 
 def calculate_binary_ece(
     confidences: np.ndarray,
@@ -261,6 +339,9 @@ def plot_calibration(
         rows_columns is how many graphs fit across and down one page.
     """
 
+    import matplotlib.pyplot as plt
+    from sklearn.calibration import calibration_curve
+
     occurrences = np.bincount(actuals, minlength=predicted_probabilities.shape[1])
     drawn = [
         position for position, count in enumerate(occurrences)
@@ -336,7 +417,6 @@ def plot_calibration(
 
 def calculate_classification_ordinal_errors(
         predicted_probabilities: np.ndarray,
-        actuals: np.ndarray,
         values: ValueScale
     ) -> dict[str, float]:
     """
@@ -359,12 +439,13 @@ def calculate_classification_ordinal_errors(
     )
 
     return {
-        "highest probability MAE": float(highest_probability_mae[0]),
-        "highest probability RMSE": float(highest_probability_rmse[0]),
-        "expected value MAE": float(expected_value_mae[0]),
-        "expected value RMSE": float(expected_value_rmse[0]),
-        "expected calibration error top label": expected_calibration_error_top_label(predicted_probabilities, actuals),
-        "expected calibration error classwise": expected_calibration_error_classwise(predicted_probabilities, actuals)
+        HIGHEST_PROBABILITY_MAE: float(highest_probability_mae[0]),
+        HIGHEST_PROBABILITY_RMSE: float(highest_probability_rmse[0]),
+        EXPECTED_VALUE_MAE: float(expected_value_mae[0]),
+        EXPECTED_VALUE_RMSE: float(expected_value_rmse[0]),
+        # The average miss is pulled up by the games nothing could have called. The middle one says
+        # what an ordinary answer is worth, which is the reading a person actually wants.
+        EXPECTED_VALUE_MEDIAN_ERROR: float(np.median(np.abs(expected_values - values.actual_values)))
     }
 
 def _plot_predicted_distributions(
@@ -384,6 +465,8 @@ def _plot_predicted_distributions(
         categories. A category set has no number line, so nothing is averaged across one and no
         expected value is marked.
     """
+
+    import matplotlib.pyplot as plt
 
     sample_size = min(output_size, len(predicted_probabilities))
     indices = np.random.choice(len(predicted_probabilities), size=sample_size, replace=False)
@@ -446,53 +529,75 @@ def _plot_predicted_distributions(
 
         plt.close(figure)
 
-def output_test_evaluation_classification(
-        predictions: np.ndarray,
+def score_classification(
+        predicted_probabilities: np.ndarray,
+        actuals: np.ndarray,
+        values: ValueScale | None = None
+    ) -> dict[str, float]:
+    """
+    Every figure a set of finished answers can be scored on, keyed by the names at the top of this
+    module.
+
+    The figures that need no number line are worked out over positions in the array, which is where
+    the model answers. Everything else is read in the statistic's own units, because a report is read
+    by somebody who knows the statistic and not the array.
+
+    Nothing here knows where the answers came from, so the same call scores a trained model and the
+    floor it is read against.
+
+    Args:
+        predicted_probabilities is shaped (samples, classes) and already normalized. actuals holds
+        the class that happened.
+        values is the number line the classes sit on, or None when the positions are named
+        categories rather than a run of values. Several of the figures read the positions as a line,
+        so they are only scored when there is one.
+    """
+
+    metrics: dict[str, float] = {
+        ACCURACY: float(np.mean(np.argmax(predicted_probabilities, axis=1) == actuals)),
+        PROBABILITY_OF_ACTUAL: float(
+            np.mean(predicted_probabilities[np.arange(len(actuals)), actuals])
+        ),
+        BRIER_SCORE: calculate_brier_score(predicted_probabilities, actuals),
+        CALIBRATION_ERROR: expected_calibration_error_top_label(predicted_probabilities, actuals),
+        CLASSWISE_CALIBRATION_ERROR: expected_calibration_error_classwise(
+            predicted_probabilities, actuals
+        )
+    }
+
+    # These read the classes as a line, so none of them says anything about named categories.
+    if values is not None:
+        metrics[RANKED_PROBABILITY_SCORE] = calculate_ranked_probability_score(
+            predicted_probabilities, actuals
+        )
+        metrics[LINE_RANKED_PROBABILITY_SCORE] = calculate_line_ranked_probability_score(
+            predicted_probabilities, values
+        )
+        metrics[CENTRAL_INTERVAL_COVERAGE] = calculate_central_interval_coverage(
+            predicted_probabilities, values
+        )
+        metrics.update(calculate_classification_ordinal_errors(predicted_probabilities, values))
+
+    return metrics
+
+def graph_classification(
+        predicted_probabilities: np.ndarray,
         actuals: np.ndarray,
         label: str,
         class_labels: list[str],
         values: ValueScale | None = None,
         output_size: int = 5,
         save_graph_directory_path: Path | None = None
-    ) -> dict[str, float]:
+    ):
     """
-    Scores a finished model's predictions and graphs them.
-
-    The figures that need no number line are worked out over positions in the array, which is where
-    the model answers. Everything else is read in the statistic's own units, because a report is read
-    by somebody who knows the statistic and not the array. The graphs are drawn the same way.
+    Draws a handful of finished answers and one reliability diagram per outcome.
 
     Args:
-        predictions are the model's logits, and actuals the class that happened.
-        class_labels names what each position stands for.
-        values is the number line the classes sit on, or None when the positions are named
-        categories rather than a run of values. Several of the metrics read the positions as a line,
-        so they are only scored when there is one.
+        class_labels names what each position stands for, so a graph is titled with the outcome
+        rather than with its position, which are not the same wherever a range does not start at
+        zero.
         save_graph_directory_path saves the graphs there instead of showing them.
-
-    Returns:
-        Every metric that was scored, so it can be recorded alongside the model.
     """
-
-    predicted_probabilities = special.softmax(predictions, axis=1)
-
-    metrics: dict[str, float] = {
-        "accuracy": float(np.mean(np.argmax(predicted_probabilities, axis=1) == actuals)),
-        "mean probability of correct class": float(np.mean(predicted_probabilities[np.arange(len(actuals)), actuals])),
-        "brier score": calculate_brier_score(predicted_probabilities, actuals)
-    }
-
-    # These read the classes as a line, so none of them says anything about named categories.
-    if values is not None:
-        metrics["ranked probability score"] = calculate_ranked_probability_score(predicted_probabilities, actuals)
-        metrics["ranked probability score over lines"] = calculate_line_ranked_probability_score(
-            predicted_probabilities, values
-        )
-        metrics.update(calculate_classification_ordinal_errors(predicted_probabilities, actuals, values))
-
-    print(f"\n===== SCORES FOR {label.upper()} =====")
-    for name, value in metrics.items():
-        print(f"{name}: {value:.6f}")
 
     _plot_predicted_distributions(
         predicted_probabilities,
@@ -511,5 +616,3 @@ def output_test_evaluation_classification(
         class_labels,
         save_graph_directory_path=save_graph_directory_path
         )
-
-    return metrics

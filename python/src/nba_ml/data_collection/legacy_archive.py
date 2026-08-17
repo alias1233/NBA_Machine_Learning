@@ -33,7 +33,7 @@ from nba_ml.season import SeasonType
 from nba_ml.sources.base import PLAYER_GAME_BATCH_SIZE
 from nba_ml.stores import player_games, players, team_games, teams
 
-LEGACY_PLAYER_ID_BASE = 1_000_000_000
+LEGACY_PLAYER_ID_BASE = 10_000_000_000_000
 """
 Where the identifiers of players only the legacy archive knows start.
 
@@ -41,7 +41,7 @@ Far above any identifier either service issues, so a made up one can never be mi
 one, and an imported archive can be told from a collected one by reading a number.
 """
 
-LEGACY_GAME_ID_BASE = 1_000_000_000_000
+LEGACY_GAME_ID_BASE = 10_000_000_000_000
 """The same, for games. Every imported game is given one, because no provider game answers to it."""
 
 MINIMUM_MATCHING_GAMES = 3

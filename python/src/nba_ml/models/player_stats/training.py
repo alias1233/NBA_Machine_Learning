@@ -9,6 +9,7 @@ from datetime import datetime
 from functools import partial
 
 from nba_ml import season
+from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey
 from nba_ml.models import classifier_training
 from nba_ml.models.classifier_training import TrainingInputs
 from nba_ml.models.player_stats import features as stat_features
@@ -26,7 +27,10 @@ def _training_inputs(model_specs: PlayerStatModelSpecification) -> TrainingInput
         sequence_columns=feature_set.sequence_columns,
         static_columns=feature_set.static_columns,
         minimum_past_games=stat_features.MINIMUM_PAST_GAMES,
-        max_sequence_length=MAX_SEQUENCE_LENGTH
+        max_sequence_length=MAX_SEQUENCE_LENGTH,
+        # A thousand players halve cleanly, so validation and test share nobody and the epoch a run
+        # stops on cannot have been picked on the players it is then scored against.
+        split_on=SplitKey.SUBJECT
     )
 
 def train(
@@ -36,7 +40,8 @@ def train(
         save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
-        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON)
+        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON),
+        evaluation_split: EvaluationSplit | None = None
         ) -> classifier_training.TrainingResult:
     """Fits one model spec, saves it, and writes a report of the run next to it."""
 
@@ -48,5 +53,6 @@ def train(
         save_cached_build,
         print_debug,
         print_all_debug,
-        training_start_date
+        training_start_date,
+        evaluation_split
     )

@@ -69,7 +69,7 @@ Everything generated is stored in `python/data/`, which is not in the repository
 ```
 data/databases/                              the collected SQLite files
 data/feature_builds/<family>/<version>/      the published whole-league features the service reads
-data/models/<family>/<model>/                model.pth, training_report.txt, graphs/
+data/models/<family>/<model>/                model.pth, training_report.txt, evaluation.json, graphs/
 data/training_cache/<family>/<model>/        the preprocessed training build, disposable
 data/backups/                                dated archives of the databases and the model files
 ```

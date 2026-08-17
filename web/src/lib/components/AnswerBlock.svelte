@@ -12,6 +12,7 @@
 	import CategoryReading from '$lib/components/CategoryReading.svelte';
 	import DistributionReading from '$lib/components/DistributionReading.svelte';
 	import { CATEGORY_DECIMALS, expectedValue, figureText, sharePercentages } from '$lib/odds';
+	import { READING_PATH } from '$lib/site';
 
 	import type { Answer } from '$lib/odds';
 	import type { ModelOutput } from '$lib/types';
@@ -50,12 +51,11 @@
 		subheading: string;
 		/** The line the address bar already names, if it names one. */
 		openOn: number | null;
-		/** The family's own page, so a reader can get from the number to how it was reached. */
-		aboutHref?: string;
 		/**
 		 * True where the block stands for an answer rather than being one, which is the About page's
 		 * annotated block. It is not a prediction, so the line the reader drags is theirs alone and is
-		 * not written into the address bar.
+		 * not written into the address bar, and it carries no footer because it already stands in the
+		 * section its footer would lead to.
 		 */
 		example?: boolean;
 		/** Whether this answer was asked for with a changed roster. */
@@ -75,7 +75,6 @@
 		categoryNames = null,
 		subheading,
 		openOn,
-		aboutHref,
 		example = false,
 		customRoster,
 		pastGames
@@ -184,9 +183,17 @@
 		<p><span class="tag micro">Custom roster</span></p>
 	{/if}
 
-	<!-- From the number to how it was reached. A block standing for no model has nowhere to send. -->
-	{#if aboutHref}
-		<p class="about-link small"><a href={aboutHref}>How this model works</a></p>
+	<!-- The one way out, and what the block is not. A new tab, because everything the reader asked
+	     for is in the address bar of the one they are on. Both stand before an answer as well, so the
+	     block does not change size when one lands. -->
+	{#if !example}
+		<footer>
+			<p class="small muted">A model's estimate, not betting advice. It is not always right.</p>
+
+			<a class="button button--quiet" href={READING_PATH} target="_blank" rel="noopener">
+				How to read this<span class="visually-hidden">, opens in a new tab</span>
+			</a>
+		</footer>
 	{/if}
 </section>
 
@@ -223,11 +230,13 @@
 		row-gap: var(--space-1);
 	}
 
-	/* The way out of the block is a finger wide, like every other way out on the site. */
-	.about-link a {
-		display: inline-flex;
-		align-items: center;
-		min-height: var(--tap-target);
+	/* What the block is not, then the one way out of it. The line reads first because it is about the
+	   figure above it. */
+	footer {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-3);
 	}
 
 	/* Reserved space on a block. The page's sunken tone would read as a bright bar here, so a

@@ -29,7 +29,7 @@
 
 	let { data } = $props();
 
-	const TITLE = 'Team statistics';
+	const TITLE = 'Team stat models';
 	const ABOUT = '/models/team-stats/about';
 
 	/**
@@ -289,7 +289,6 @@
 						heading={shown.heading}
 						subheading={shown.subheading}
 						openOn={data.line}
-						aboutHref={ABOUT}
 						customRoster={false}
 						pastGames={data.prediction?.past_games ?? null}
 					/>

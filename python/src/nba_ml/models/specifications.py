@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import ClassVar, Protocol
 
 from nba_ml import paths
+from nba_ml.models import metrics
 from nba_ml.models.outputs import ModelOutput
 
 class FeatureColumns(Protocol):
@@ -75,7 +76,24 @@ class ModelSpecification():
     side, which is every yes or no answer.
     """
 
+    published_metrics: tuple[str, ...] | None = field(default=None, kw_only=True)
+    """
+    Which measured figures a reader is shown, in the order they are shown, headline first.
+
+    None takes what the shape of the answer suggests, which is right for most models. Set it where a
+    figure that usually means something means nothing here: accuracy on an outcome happening in half
+    a percent of games is 99.5% however bad the model is, so a model like that names the readings
+    that separate it from a bad one instead. Every name has to be in metrics.ALL_METRICS.
+    """
+
     def __post_init__(self):
+        unknown = sorted(set(self.published_metrics or ()) - set(metrics.ALL_METRICS))
+        if unknown:
+            raise ValueError(
+                f"{self.name} publishes figures nothing describes: {', '.join(unknown)}. "
+                "Add them to metrics.ALL_METRICS or name them the way it does."
+            )
+
         if self.category_sides is not None and len(self.category_sides) != self.output.length:
             raise ValueError(
                 "Naming the side of each category takes one side per category, because the two are "
@@ -87,6 +105,15 @@ class ModelSpecification():
         """What this model answers about, in the words a reader sees."""
 
         raise NotImplementedError
+
+    @property
+    def reported_metrics(self) -> tuple[str, ...]:
+        """The figures this model publishes, resolved from its own choice or from its answer shape."""
+
+        if self.published_metrics is not None:
+            return self.published_metrics
+
+        return metrics.default_published_metrics(self.output)
 
     @property
     def sequences_read(self) -> int:
@@ -114,6 +141,9 @@ class ModelSpecification():
 
     def training_report_file(self) -> Path:
         return paths.training_report_file(self.model_category, self.name)
+
+    def evaluation_file(self) -> Path:
+        return paths.evaluation_file(self.model_category, self.name)
 
     def training_cache_file(self) -> Path:
         return paths.training_cache_file(self.model_category, self.name)

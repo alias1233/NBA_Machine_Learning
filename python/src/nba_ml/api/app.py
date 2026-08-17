@@ -22,12 +22,13 @@ from nba_ml.api.schemas import PlayerResponse, TeamResponse, team_id
 from nba_ml.entities import ScheduledGame
 from nba_ml.feature_engineering import feature_store
 from nba_ml.models.errors import PredictionRefused
+from nba_ml.models import metrics
 from nba_ml.models.families import ALL_FAMILIES, ALL_MODEL_NAMES
 from nba_ml.models.outputs import DISCRIMINATOR, ModelOutput
 from nba_ml.models.player_stats import features as player_stat_features
-from nba_ml.models.specifications import GameSide
+from nba_ml.models.specifications import GameSide, ModelSpecification
 from nba_ml.season import SeasonType
-from nba_ml.stores import player_games, players, teams
+from nba_ml.stores import player_games, players, team_games, teams
 
 app = FastAPI(
     title="NBA Machine Learning",
@@ -44,6 +45,11 @@ for family_router in FAMILY_ROUTERS:
 # How far back a team's players are read from. Long enough that the answer survives an off season,
 # since who last played for a team is the only roster this project holds.
 ROSTER_WINDOW = timedelta(days=365)
+
+# How recently a team has to have played to be offered as a side of a game. Measured back from the
+# newest game held rather than from today, so an archive that has fallen behind still names thirty
+# teams instead of none. A year covers an off season, which is the longest gap in the calendar.
+ACTIVE_TEAM_WINDOW = timedelta(days=365)
 
 # Answers
 class ScheduledGameResponse(BaseModel):
@@ -95,6 +101,45 @@ class ModelResponse(BaseModel):
 
     published: bool
     """Whether a trained file exists, so a caller can offer the model without every request failing."""
+
+class MetricResponse(BaseModel):
+    """One measured figure, with everything a caller needs to write it down and read it."""
+
+    key: str
+    """The stable name of the figure, so a caller can single one out without matching on wording."""
+
+    label: str
+    description: str
+    """One sentence saying what the figure means, for a reader who knows nothing about the model."""
+
+    value: float
+    floor: float | None
+    """
+    What answering with the season's own spread of outcomes scores on the same games.
+
+    Null where that floor cannot be scored on this figure. A caller showing one says what it is, so
+    a reader can see what the model is worth rather than only what it scored.
+    """
+
+    unit: metrics.MetricUnit
+    """How to write the number: an amount in the statistic's own units, a probability, or a score."""
+
+    higher_is_better: bool
+
+class ModelEvaluationResponse(BaseModel):
+    """How one model scored on games it never saw while it was being fitted."""
+
+    scored_on: str
+    """Which split produced these figures. Only a held-out one is published."""
+
+    samples: int
+    first_game: date
+    last_game: date
+    """The stretch of calendar the scored games cover."""
+
+    evaluated: datetime
+    metrics: list[MetricResponse]
+    """The figures this model chose to publish, headline first."""
 
 class AboutModelResponse(BaseModel):
     """The model copy a family About page reads, separate from the prediction-page catalogue."""
@@ -164,9 +209,31 @@ def health() -> HealthResponse:
 
 @app.get("/teams")
 def all_teams() -> list[TeamResponse]:
+    """
+    Every team a game can be described with, one to an abbreviation.
+
+    Only teams still playing are offered. The archive reaches back to franchises that folded and out
+    to the overseas sides they toured against, and no prediction can name either.
+
+    A tricode is how a request names a side, and the collected history holds franchises that share
+    one. Only the first of them can ever be resolved back, so only that one is offered.
+    """
+
+    newest = team_games.latest_game_date()
+    playing = (
+        set() if newest is None
+        else team_games.team_ids_with_game_since(newest - ACTIVE_TEAM_WINDOW)
+    )
+
+    named: dict[str, str] = {}
+
+    for team in teams.all_teams():
+        if team.id in playing:
+            named.setdefault(team.abbreviation, team.name)
+
     return [
-        TeamResponse(abbreviation=team.abbreviation, name=team.name)
-        for team in sorted(teams.all_teams(), key=lambda team: team.abbreviation)
+        TeamResponse(abbreviation=abbreviation, name=named[abbreviation])
+        for abbreviation in sorted(named)
     ]
 
 @app.get("/teams/{abbreviation}/players")
@@ -246,13 +313,65 @@ def all_models() -> list[ModelResponse]:
         for specification in family.specifications.values()
     ]
 
-@app.get("/models/{family}/about")
-def family_about_models(family: str) -> list[AboutModelResponse]:
-    """The model cards for one family About page, including their explanatory copy."""
+def _model_evaluation(specification: ModelSpecification) -> ModelEvaluationResponse | None:
+    """
+    What one model measured, narrowed to the figures it chose to publish and in that order.
+
+    A figure the model asked for that the run did not score is left out rather than sent as a blank,
+    which is what happens to a model whose answer shape gained a figure after it was last fitted.
+    A model with nothing left to show reports no evaluation at all.
+    """
+
+    scored = metrics.read(specification.evaluation_file())
+    if scored is None:
+        return None
+
+    shown = [
+        MetricResponse(
+            key=key,
+            label=metrics.ALL_METRICS[key].label,
+            description=metrics.ALL_METRICS[key].description,
+            value=scored.metrics[key],
+            floor=scored.floor.get(key),
+            unit=metrics.ALL_METRICS[key].unit,
+            higher_is_better=metrics.ALL_METRICS[key].higher_is_better
+        )
+        for key in specification.reported_metrics
+        if key in scored.metrics and key in metrics.ALL_METRICS
+    ]
+
+    if not shown:
+        return None
+
+    return ModelEvaluationResponse(
+        scored_on=scored.scored_on,
+        samples=scored.samples,
+        first_game=date.fromisoformat(scored.first_game),
+        last_game=date.fromisoformat(scored.last_game),
+        evaluated=datetime.fromisoformat(scored.evaluated),
+        metrics=shown
+    )
+
+def _family(family: str):
+    """The family a caller named, or a 404 saying no such family is offered."""
 
     requested = next((candidate for candidate in ALL_FAMILIES if candidate.name == family), None)
     if requested is None:
         raise HTTPException(404, f"No model family is named {family}.")
+
+    return requested
+
+@app.get("/models/{family}/about")
+def family_about_models(family: str) -> list[AboutModelResponse]:
+    """
+    The model cards for one family About page, with their explanatory copy and nothing measured.
+
+    One request rather than one per model, because the page draws the whole family at once. The
+    figures are not in it: they are read per model, when a reader opens one, so drawing the page
+    costs no scored file it may never show.
+    """
+
+    requested = _family(family)
 
     return [
         AboutModelResponse(
@@ -263,3 +382,21 @@ def family_about_models(family: str) -> list[AboutModelResponse]:
         )
         for specification in requested.specifications.values()
     ]
+
+@app.get("/models/{family}/about/{model}/evaluation")
+def model_evaluation(family: str, model: str) -> ModelEvaluationResponse | None:
+    """
+    What one model measured on its held-out games, asked for only when a reader opens that model.
+
+    Null where it has never been scored, which is normal rather than an error: a model can be
+    specified before it is fitted, and a run can be told to skip scoring. A caller shows the card
+    without figures rather than hiding the model.
+    """
+
+    requested = _family(family)
+
+    specification = requested.specifications.get(model)
+    if specification is None:
+        raise HTTPException(404, f"No model named {model} is in the {family} family.")
+
+    return _model_evaluation(specification)

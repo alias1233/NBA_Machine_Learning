@@ -9,8 +9,17 @@
 -->
 <script lang="ts">
 	import AnnotatedAnswer from '$lib/components/AnnotatedAnswer.svelte';
+	import Faq from '$lib/components/Faq.svelte';
 	import { pageTitle, SITE_NAME } from '$lib/site';
 	import { MODELS_PATH } from '$lib/models';
+
+	/** Placeholders. The wording is the user's to settle, so each one reads as unwritten. */
+	const QUESTIONS = [
+		{ question: 'First question, not written yet', answer: 'This answer is not written yet.' },
+		{ question: 'Second question, not written yet', answer: 'This answer is not written yet.' },
+		{ question: 'Third question, not written yet', answer: 'This answer is not written yet.' },
+		{ question: 'Fourth question, not written yet', answer: 'This answer is not written yet.' }
+	];
 </script>
 
 <svelte:head>
@@ -109,6 +118,12 @@
 		<p>
 			This site is not affiliated with, endorsed by, or sponsored by the National Basketball Association.
 		</p>
+	</section>
+
+	<section id="questions">
+		<h2>Common questions</h2>
+
+		<Faq questions={QUESTIONS} name="about" />
 	</section>
 </div>
 

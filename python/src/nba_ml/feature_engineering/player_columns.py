@@ -12,11 +12,7 @@ model wants.
 import numpy as np
 import pandas as pd
 
-from nba_ml.feature_engineering.game_columns import (
-    BUILT_COLUMN_TYPE,
-    column_or_grouped_column,
-    encode_equality_as_integer
-)
+from nba_ml.feature_engineering.game_columns import BUILT_COLUMN_TYPE, column_or_grouped_column
 from nba_ml.feature_engineering.schedule_columns import TEAM_GAME_NUMBER, number_team_games
 
 CHANGED_TEAM = 'CHANGED_TEAM'
@@ -299,7 +295,16 @@ def encode_undrafted(
     player_info: pd.DataFrame,
     draft_number_column: str,
     ) -> pd.DataFrame:
-    draft_number = player_info[draft_number_column]
-    player_info[UNDRAFTED] = encode_equality_as_integer(draft_number, UNDRAFTED)
-    player_info[draft_number_column] = pd.to_numeric(player_info[draft_number_column].replace(UNDRAFTED, '0'))
+    """
+    Makes the draft number a number, with a flag beside it for a player who was not drafted.
+
+    Anything that is not a draft position reads as undrafted, whichever way it was written. The data
+    source writes the word for a player it holds no draft record of, and the older nba.com archive
+    leaves the column empty for one, so both eras have to say the same thing about the same player.
+    Left as it was, an empty one reached a model as a blank and turned every loss into nan.
+    """
+
+    draft_number = pd.to_numeric(player_info[draft_number_column], errors='coerce')
+    player_info[UNDRAFTED] = draft_number.isna().astype(int)
+    player_info[draft_number_column] = draft_number.fillna(0)
     return player_info

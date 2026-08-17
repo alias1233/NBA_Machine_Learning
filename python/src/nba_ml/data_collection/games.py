@@ -211,9 +211,9 @@ def update_player_games(source: DataSource, print_debug: bool = True) -> int:
     return collect_player_games(source, date_from=player_games.latest_game_date(), print_debug=print_debug)
 
 def update_team_games(print_debug: bool = True) -> int:
-    """The same as update_player_games, for the team store."""
+    """The same as update_player_games, for the team store. See team_rebuild_start_date."""
 
-    return collect_team_games(date_from=team_games.latest_game_date(), print_debug=print_debug)
+    return collect_team_games(date_from=team_rebuild_start_date(), print_debug=print_debug)
 
 def collect_games(
     source: DataSource,
@@ -244,15 +244,43 @@ def update_start_date(
 
     return None if latest_game_date is None else latest_game_date - timedelta(days=lookback_days)
 
+def team_rebuild_start_date(lookback_days: int = 0) -> date | None:
+    """
+    How far back a rebuild of the team store has to reach to leave no stored game without a team row.
+
+    Normally this is the overlap behind the newest team row, because player rows arrive newest first
+    and team rows follow them. A backfill breaks that. It writes games older than anything the team
+    store holds, so starting from the team store's own newest row steps straight over them. A player
+    row whose game has no team row is dropped where the two frames meet, which would leave those
+    games in the archive, out of every model, and reported by nothing.
+
+    Returns None only where neither store holds anything, which rebuilds the lot.
+    """
+
+    starts = [
+        start for start in (
+            player_games.oldest_game_date_outside(team_games.stored_game_ids()),
+            update_start_date(team_games.latest_game_date(), lookback_days)
+        )
+        if start is not None
+    ]
+
+    return min(starts) if starts else None
+
 def update_games(
     source: DataSource,
     lookback_days: int = DEFAULT_UPDATE_LOOKBACK_DAYS,
     print_debug: bool = True
     ) -> int:
-    """Updates each game store from its own newest row."""
+    """
+    Updates the player store from its own newest row, then the team store from whatever it is short
+    of. See team_rebuild_start_date for why the two are not asked the same question.
+    """
 
     player_date_from = update_start_date(player_games.latest_game_date(), lookback_days)
-    team_date_from = update_start_date(team_games.latest_game_date(), lookback_days)
     player_count = collect_player_games(source, date_from=player_date_from, print_debug=print_debug)
-    team_count = collect_team_games(date_from=team_date_from, print_debug=print_debug)
+
+    # Asked after the player rows are written, so the games this run just stored are among the ones
+    # it looks for.
+    team_count = collect_team_games(date_from=team_rebuild_start_date(lookback_days), print_debug=print_debug)
     return player_count + team_count

@@ -10,6 +10,7 @@ from functools import partial
 
 from nba_ml import season
 from nba_ml.feature_engineering import team_game_rows
+from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey
 from nba_ml.models import classifier_training
 from nba_ml.models.classifier_training import TrainingInputs
 from nba_ml.models.game_stats import features
@@ -25,6 +26,9 @@ def _training_inputs(model_specs: GameStatModelSpecification) -> TrainingInputs:
         static_columns=feature_set.static_columns,
         minimum_past_games=team_game_rows.MINIMUM_PAST_GAMES,
         max_sequence_length=MAX_SEQUENCE_LENGTH,
+        # A sample names no team, so the game is the only thing to split on. Thirty teams could not
+        # be halved without the two halves differing anyway.
+        split_on=SplitKey.GAME,
         # One sample per game reading both sides, which no column name says, so a build made any
         # other way has to be rebuilt rather than reused.
         build_description=("home rows only", features.SEQUENCES_READ)
@@ -37,7 +41,8 @@ def train(
         save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
-        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON)
+        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON),
+        evaluation_split: EvaluationSplit | None = None
         ) -> classifier_training.TrainingResult:
     """Fits one model spec, saves it, and writes a report of the run next to it."""
 
@@ -49,5 +54,6 @@ def train(
         save_cached_build,
         print_debug,
         print_all_debug,
-        training_start_date
+        training_start_date,
+        evaluation_split
     )

@@ -65,7 +65,7 @@
 	   and nothing else, because the card sizes itself. */
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, var(--card-max)));
+		grid-template-columns: repeat(4, minmax(0, var(--card-max)));
 		gap: var(--space-4);
 		padding: 0;
 		list-style: none;
@@ -154,7 +154,7 @@
 
 	@media (min-width: 64rem) {
 		.cards {
-			grid-template-columns: repeat(4, minmax(0, var(--card-max)));
+			grid-template-columns: repeat(5, minmax(0, var(--card-max)));
 		}
 	}
 </style>

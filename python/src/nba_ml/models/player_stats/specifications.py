@@ -9,6 +9,7 @@ features.py.
 from dataclasses import dataclass
 from typing import ClassVar
 
+from nba_ml.machine_learning import evaluation
 from nba_ml.models.classifiers import ClassifierModelSpecification
 from nba_ml.models.outputs import CategoryDistribution, IntegerDistribution
 from nba_ml.models.player_stats.features import (
@@ -158,13 +159,28 @@ MILESTONE_STATS = (
 
 MILESTONE_OUTPUT = CategoryDistribution(categories=MILESTONE_CATEGORIES)
 
+MILESTONE_METRICS = (
+    evaluation.PROBABILITY_OF_ACTUAL,
+    evaluation.BRIER_SCORE,
+    evaluation.CALIBRATION_ERROR
+)
+"""
+What a rare yes or no answer is judged on, in place of the usual set.
+
+Accuracy is left out on purpose. A triple double happens in about half a percent of games, so always
+answering no scores 99.5% and a model that has learned nothing looks perfect. What separates a good
+model from that one is the chance it puts on what actually happened, and whether that chance means
+what it says.
+"""
+
 DOUBLE_DOUBLE_MODEL = PlayerStatModelSpecification(
     name="double_double",
     title="Double double",
     description="Whether a player records double figures in two statistics.",
     output=MILESTONE_OUTPUT,
     target_stats=MILESTONE_STATS,
-    combination=DoubleFigureMilestone(stats_needed=2, predicted="double double chances")
+    combination=DoubleFigureMilestone(stats_needed=2, predicted="double double chances"),
+    published_metrics=MILESTONE_METRICS
     )
 
 TRIPLE_DOUBLE_MODEL = PlayerStatModelSpecification(
@@ -173,7 +189,8 @@ TRIPLE_DOUBLE_MODEL = PlayerStatModelSpecification(
     description="Whether a player records double figures in three statistics.",
     output=MILESTONE_OUTPUT,
     target_stats=MILESTONE_STATS,
-    combination=DoubleFigureMilestone(stats_needed=3, predicted="triple double chances")
+    combination=DoubleFigureMilestone(stats_needed=3, predicted="triple double chances"),
+    published_metrics=MILESTONE_METRICS
     )
 
 ALL_MODEL_SPECIFICATIONS = {

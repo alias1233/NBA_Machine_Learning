@@ -157,6 +157,27 @@ def latest_game_date() -> date | None:
 
     return None if newest is None else season.from_date_string(newest).date()
 
+def oldest_game_date_outside(game_ids: Collection[int]) -> date | None:
+    """
+    The date of the oldest game held here that is not among the given ones, or None when every one
+    of them is.
+
+    A team row is a total of these rows, so this is what says how far back a rebuild of the team
+    store has to reach to leave no stored game without one. See data_collection/games.py.
+    """
+
+    held = {int(game_id) for game_id in game_ids}
+
+    with DATABASE:
+        rows = DATABASE.cursor.execute(
+            f"SELECT {GAME_ID.category_name}, MIN({GAME_DATE.category_name}) "
+            f"FROM {NAME} GROUP BY {GAME_ID.category_name}"
+        ).fetchall()
+
+    outside = [game_date for game_id, game_date in rows if int(game_id) not in held]
+
+    return season.from_date_string(min(outside)).date() if outside else None
+
 def latest_team_id(player_id: int, before: date | None = None) -> int | None:
     """
     The team a player last played for, which is the team they are on unless they have just moved.

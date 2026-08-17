@@ -2,11 +2,14 @@
 
 # Documentation Files
 docs/
+.agents/
 .codex/
 .claude/
+.impeccable/
 CLAUDE.md
 AGENTS.md
 MEMORY.md
+PRODUCT.md
 
 # Deployment secrets, and everything the containers write
 deploy/.env

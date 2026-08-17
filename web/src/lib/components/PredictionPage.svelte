@@ -7,8 +7,8 @@
 	closes.
 
 	What differs between families is what the reader has to choose and how the answer names itself, so
-	those arrive as the two snippets. Everything here is the layout the design document sets, which is
-	the same for all of them.
+	those arrive as the two snippets. Everything here is the shared layout, which is the same for all
+	of them.
 -->
 <script lang="ts">
 	import { tick } from 'svelte';

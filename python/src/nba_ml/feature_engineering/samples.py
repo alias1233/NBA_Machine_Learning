@@ -13,9 +13,11 @@ The frame this reads must already hold one row per subject per game, sorted by s
 date, with every column already engineered.
 """
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable, Mapping, Sequence
+from enum import StrEnum
+from typing import Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -28,6 +30,100 @@ OUTPUT = "OUTPUT"
 TRAINING_SPLIT = 0
 VALIDATION_SPLIT = 1
 TEST_SPLIT = 2
+SPLIT_NAMES = ("training", "validation", "test")
+"""What each split is called, in the order build_split_samples returns them."""
+
+class SplitKey(StrEnum):
+    """What decides which of the two evaluation splits a sample lands in."""
+
+    SUBJECT = "subject"
+    """
+    Whoever the sample is about, so nobody appears in both splits.
+
+    The right choice where there are enough subjects to halve, which is a league of players.
+    """
+
+    GAME = "game"
+    """
+    The game being predicted, so both rows of a game stay together and every subject is in both.
+
+    The right choice where there are too few subjects to halve without the two halves differing.
+    Thirty teams split in two would measure a team model on fifteen of them, and the fifteen that
+    landed in the test split would decide the figure as much as the model does.
+    """
+
+@dataclass(frozen=True)
+class EvaluationSplit():
+    """
+    How the games a model is scored on are held back, and how they are then divided in two.
+
+    Everything before start_date trains the model. Everything on or after it is evaluated, and is
+    divided between validation and test by something other than the date, so both splits span the
+    same stretch of calendar. That is what puts the opening weeks, the closing weeks and the
+    playoffs in both, which a split made by cutting the calendar again cannot do.
+
+    Validation picks the stopping epoch. Test is never read until the finished model is scored, so
+    it is the only figure worth publishing.
+    """
+
+    start_date: datetime
+    """The first day of the evaluation period. A game on it is evaluated rather than trained on."""
+
+    validation_fraction: float = 0.5
+    """
+    The share of the evaluation period that goes to validation, the rest going to test.
+
+    A half leaves the two the same size. It is a share of the keys, so the share of samples lands
+    near it rather than exactly on it.
+    """
+
+    split_on: SplitKey = SplitKey.SUBJECT
+    seed: int = 0
+    """Changes which keys land where, without changing how many. Two runs sharing one are identical."""
+
+    def __post_init__(self):
+        if not 0.0 <= self.validation_fraction <= 1.0:
+            raise ValueError(
+                f"A validation fraction is a share of the evaluation period. Got {self.validation_fraction}."
+            )
+
+    def _share_of(self, key: int) -> float:
+        """
+        Where one key falls in the unit interval, spread evenly and decided by the key alone.
+
+        Hashed rather than drawn, so the answer does not depend on how many keys came before it or
+        on the order a build met them. The same key lands in the same split every run.
+        """
+
+        digest = hashlib.blake2b(f"{self.seed}:{key}".encode(), digest_size=8).digest()
+
+        return int.from_bytes(digest, "big") / float(1 << 64)
+
+    def split_of(self, key: int) -> int:
+        """Which evaluation split one key belongs to."""
+
+        return VALIDATION_SPLIT if self._share_of(key) < self.validation_fraction else TEST_SPLIT
+
+    def splits_of(
+        self,
+        subject_id: int,
+        game_ids: np.ndarray,
+        game_dates: np.ndarray
+        ) -> np.ndarray:
+        """Which split each of one subject's games belongs to, in the order they are given."""
+
+        splits = np.full(len(game_dates), TRAINING_SPLIT, dtype=np.int64)
+        evaluated = np.flatnonzero(game_dates >= np.datetime64(self.start_date))
+
+        if len(evaluated) == 0:
+            return splits
+
+        if self.split_on is SplitKey.SUBJECT:
+            splits[evaluated] = self.split_of(subject_id)
+        else:
+            splits[evaluated] = [self.split_of(int(game_id)) for game_id in game_ids[evaluated]]
+
+        return splits
 
 @dataclass(frozen=True)
 class GameHistory():
@@ -86,6 +182,28 @@ class GameHistory():
 
 NO_STATIC_SUBJECT_VALUES = np.empty(0, dtype=np.float32)
 """What a subject the model knows nothing unchanging about carries, such as a team."""
+
+def check_columns_are_finite(values: np.ndarray, columns: Sequence[str], described: str):
+    """
+    Stops a build that left a blank or an infinity in something a model reads.
+
+    One blank spreads through the whole network, and a training run reports what comes back as a
+    loss of nan rather than as an error, so it is caught while the column that did it can still be
+    named.
+
+    Args:
+        values is shaped (rows, columns), matching the given column names.
+        described names what the columns belong to, which is what a reader is told to go and look at.
+    """
+
+    non_finite = (~np.isfinite(values)).sum(axis=0)
+    named = [f"{column} ({count:,} rows)" for column, count in zip(columns, non_finite) if count]
+
+    if named:
+        raise ValueError(
+            f"The {described} hold values a model cannot read, so the build is unusable: "
+            + ", ".join(named)
+        )
 
 def split_into_histories(
     game_data: pd.DataFrame,
@@ -170,18 +288,21 @@ class _SampleAccumulator():
         self.opponent_team_ids: list[list[int]] = []
         self.static_inputs: list[np.ndarray] = []
         self.outputs: list[float] = []
+        self.game_dates: list[np.datetime64] = []
 
     def add(
         self,
         reads: Sequence[SequenceRead],
         static_input: np.ndarray,
-        output: float
+        output: float,
+        game_date: np.datetime64
         ):
         self.sequence_indices.append([read.sequence_index for read in reads])
         self.sequence_end_indices.append([read.end_index for read in reads])
         self.opponent_team_ids.append([read.opponent_team_id for read in reads])
         self.static_inputs.append(static_input)
         self.outputs.append(output)
+        self.game_dates.append(game_date)
 
     def to_samples(self, static_input_dim: int, sequence_count: int) -> SequenceInputSamples:
         def indices(values: list[list[int]]) -> np.ndarray:
@@ -195,7 +316,8 @@ class _SampleAccumulator():
             indices(self.sequence_end_indices),
             indices(self.opponent_team_ids),
             np.stack(self.static_inputs) if self.static_inputs else np.empty((0, static_input_dim), dtype=np.float32),
-            np.array(self.outputs, dtype=np.float64)
+            np.array(self.outputs, dtype=np.float64),
+            np.array(self.game_dates, dtype='datetime64[ns]')
         )
 
 def _print_progress(count: int):
@@ -218,16 +340,18 @@ def _game_positions(histories: Mapping[int, GameHistory]) -> dict[tuple[int, int
 
 def build_split_samples(
     histories: Mapping[int, GameHistory],
-    split_start_dates: Iterable[datetime],
+    evaluation_split: EvaluationSplit,
     minimum_past_games: int,
     chunk_step_size: int = 1,
     *,
+    sequence_columns: Sequence[str],
+    static_columns: Sequence[str],
     training_start_date: datetime | None = None,
     read_opponent_history: bool = False,
     print_debug: bool = False
     ) -> tuple[GameSequences, list[SequenceInputSamples]]:
     """
-    Builds every labeled sample the histories hold, split by date.
+    Builds every labeled sample the histories hold, split into training, validation and test.
 
     Each subject's games are kept once and the samples only hold where in them to read, so that a
     sample can look back over a long history without storing its own copy of it.
@@ -236,16 +360,20 @@ def build_split_samples(
     sample is kept even when the subject has rarely faced them.
 
     Args:
-        split_start_dates are the boundaries between splits, oldest first. A game on a boundary
-        stays in the earlier split, so a model is only ever scored on games played after the ones it
-        learned from.
+        evaluation_split says where the training era ends and how the games after it are divided
+        between validation and test. See EvaluationSplit.
         minimum_past_games is how many games must sit behind one before it can be a sample. Every
         history a sample reads has to clear it.
+        sequence_columns and static_columns name what the histories hold, in the order they hold it,
+        so that a build that left a blank behind can say which column did it.
         read_opponent_history adds the opposing team's own games as a second sequence. Only a family
         whose subjects are teams can ask for this.
 
     Returns:
-        (the games of every subject, one set of samples per split, oldest split first)
+        (the games of every subject, the training, validation and test samples)
+
+    Raises:
+        ValueError where a column a model reads holds a blank or an infinity.
     """
 
     if training_start_date is not None:
@@ -255,7 +383,16 @@ def build_split_samples(
             if history.game_dates[-1] >= np.datetime64(training_start_date)
         }
 
-    boundaries = np.array(list(split_start_dates), dtype='datetime64[ns]')
+    # After the era is cut, so a blank in a season nothing is fit on stops nothing. Only training
+    # gets here, and every one of its rows is a game that was played, unlike the row a prediction
+    # adds for the game it is about, whose box score is blank because nobody has recorded one yet.
+    for history in histories.values():
+        check_columns_are_finite(history.sequence_values, sequence_columns, "past game columns")
+        check_columns_are_finite(history.static_values, static_columns, "predicted game columns")
+        check_columns_are_finite(
+            history.outputs.reshape(-1, 1), [OUTPUT], "values a model is fit against"
+        )
+
     static_input_dim = next((len(history.static_input(0)) for history in histories.values()), 0)
     sequence_count = 2 if read_opponent_history else 1
     positions = _game_positions(histories) if read_opponent_history else {}
@@ -263,17 +400,17 @@ def build_split_samples(
     sequences: list[np.ndarray] = []
     sequence_opponent_team_ids: list[np.ndarray] = []
     training_game_counts: list[int] = []
-    all_samples = [_SampleAccumulator() for _ in range(len(boundaries) + 1)]
+    all_samples = [_SampleAccumulator() for _ in SPLIT_NAMES]
 
     count: int = 0
-    for sequence_index, history in enumerate(histories.values()):
+    for sequence_index, (subject_id, history) in enumerate(histories.items()):
         sequences.append(history.sequence_values)
         sequence_opponent_team_ids.append(history.opponent_team_ids)
 
-        splits = np.searchsorted(boundaries, history.game_dates, side='left')
+        splits = evaluation_split.splits_of(subject_id, history.game_ids, history.game_dates)
 
-        # Only the oldest games are visible to the training split, so the scalers can be fit without
-        # seeing validation or test games.
+        # Only the games before the evaluation period are visible to the training split, so the
+        # scalers can be fit without seeing a game either evaluation split is scored on.
         training_game_counts.append(int((splits == TRAINING_SPLIT).sum()))
 
         for index in range(minimum_past_games, history.game_count, chunk_step_size):
@@ -300,7 +437,8 @@ def build_split_samples(
             all_samples[splits[index]].add(
                 reads,
                 history.static_input(index),
-                history.outputs[index]
+                history.outputs[index],
+                history.game_dates[index]
             )
 
     if print_debug:

@@ -40,7 +40,7 @@
 
 	let { data } = $props();
 
-	const TITLE = 'Game statistics';
+	const TITLE = 'Game stat models';
 	const ABOUT = '/models/game-stats/about';
 
 	/**
@@ -286,7 +286,6 @@
 						categoryNames={shown.categoryNames}
 						subheading={shown.subheading}
 						openOn={data.line}
-						aboutHref={ABOUT}
 						customRoster={false}
 						pastGames={data.prediction?.past_games ?? null}
 					/>

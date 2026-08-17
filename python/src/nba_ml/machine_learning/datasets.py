@@ -114,6 +114,15 @@ class SequenceInputSamples():
     outputs: np.ndarray
     """What the model is fit against, which a classification build rewrites as the class that happened."""
 
+    game_dates: np.ndarray | None = None
+    """
+    When each predicted game was played, shaped (samples,).
+
+    Carried so a finished split can say which stretch of calendar it covers, and so a naive floor
+    can be worked out from the training games nearest the ones being scored. A prediction carries
+    none, because there is nothing to report about a single sample.
+    """
+
     values: np.ndarray | None = None
     """
     What actually happened, kept as it was recorded.

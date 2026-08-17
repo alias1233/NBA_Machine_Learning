@@ -26,6 +26,16 @@
 		homeTeam = $bindable(),
 		teams
 	}: Props = $props();
+
+	// A game names its sides by abbreviation, so that is all a team is here. Two teams sharing one,
+	// which the collected history has, would be one unreachable option and a duplicate key, so the
+	// first of them stands for the abbreviation.
+	const options = $derived(
+		teams.filter(
+			(team, index) =>
+				teams.findIndex((other) => other.abbreviation === team.abbreviation) === index
+		)
+	);
 </script>
 
 <div class="panel" role="group" aria-labelledby="game-group">
@@ -51,7 +61,7 @@
 			<label class="micro" for="home">Home team</label>
 			<select id="home" name="home" bind:value={homeTeam}>
 				<option value="">Pick a team</option>
-				{#each teams as team (team.abbreviation)}
+				{#each options as team (team.abbreviation)}
 					<option value={team.abbreviation}>{team.name}</option>
 				{/each}
 			</select>
@@ -61,7 +71,7 @@
 			<label class="micro" for="away">Away team</label>
 			<select id="away" name="away" bind:value={awayTeam}>
 				<option value="">Pick a team</option>
-				{#each teams as team (team.abbreviation)}
+				{#each options as team (team.abbreviation)}
 					<option value={team.abbreviation}>{team.name}</option>
 				{/each}
 			</select>

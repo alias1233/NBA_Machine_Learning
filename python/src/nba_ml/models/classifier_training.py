@@ -9,20 +9,22 @@ This never runs on the server. Training happens on the developer machine and the
 published from there.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
 import numpy as np
 import pandas as pd
 import torch, torch.nn as nn
+from dateutil.relativedelta import relativedelta
 
 from nba_ml import season
+from nba_ml.feature_engineering.samples import SPLIT_NAMES, EvaluationSplit, SplitKey
 from nba_ml.machine_learning import datasets, evaluation, report, serialization, trainer
 from nba_ml.machine_learning.architectures.gru_feed_forward import GRUFeedForward
 from nba_ml.machine_learning.datasets import GameSequences, SequenceGameDataset, SequenceInputSamples
-from nba_ml.models import loading
+from nba_ml.models import loading, metrics
 from nba_ml.models.classifiers import ClassifierModelSpecification
 
 CACHED_DATASETS = 'datasets'
@@ -33,27 +35,64 @@ RANDOM_SEED = 12156666
 CHUNK_STEP_SIZE = 1
 """How many of a subject's games are stepped over between samples. One keeps every game."""
 
-# Games are split by date, so a model is always scored on games played after the ones it learned
-# from. A game on a start date belongs to the earlier split. Every family splits on the same dates,
-# so two models are scored on the same games however different they are.
-VALIDATION_START_DATE = datetime(2025, 8, 1)
-TEST_START_DATE = datetime(2026, 6, 8)
-
-EVALUATE_ON_VALIDATION_SET = True
+EVALUATION_LENGTH_YEARS = 1
 """
-Scores the finished model on the validation set rather than the test set, which is far larger and so
-a steadier reading while tuning. That score is not held out, because the run already used those games
-to pick its stopping epoch. Turn this off before publishing an accuracy anywhere it matters.
+How far back the games a model is scored on reach, counted from the day the run starts.
+
+A year is the shortest window that holds a whole season, which is the point. Validation and test are
+told apart by something other than the date, so both of them hold the opening weeks, the closing
+weeks and the playoffs. Scoring a model on a fortnight in June said nothing about any of those.
 """
 
-HELD_OUT_LABEL = "Test set"
-VALIDATION_LABEL = "Validation set, not held out"
+VALIDATION_FRACTION = 0.5
+"""
+The share of the evaluation period that picks the stopping epoch, the rest being held out.
+
+A half leaves the two the same size, which is what makes the published figure as steady as the one
+the run tuned against.
+"""
+
+SPLIT_SEED = 5891244
+"""
+Decides which keys land in validation and which in test.
+
+Its own number rather than RANDOM_SEED, so a run can be repeated with different weights on exactly
+the same games, which is the only way to tell a change in the model from a change in the split.
+"""
+
+def default_evaluation_start_date() -> datetime:
+    """
+    The first day of the evaluation period, which is a year back from today.
+
+    Read off today rather than written down, so a run started next season scores that season rather
+    than a stretch of calendar somebody has to remember to move. `--evaluation-start` pins it where
+    several models have to be scored on exactly the same games across more than one day.
+    """
+
+    return datetime.combine(
+        season.today() - relativedelta(years=EVALUATION_LENGTH_YEARS),
+        datetime.min.time()
+    )
+
+def default_evaluation_split() -> EvaluationSplit:
+    """
+    What a run holds back unless a caller says otherwise.
+
+    What the two splits are told apart by is left at its default here, because that is the family's
+    answer rather than the run's. train replaces it with whatever the family brought.
+    """
+
+    return EvaluationSplit(
+        start_date=default_evaluation_start_date(),
+        validation_fraction=VALIDATION_FRACTION,
+        seed=SPLIT_SEED
+    )
 
 LabeledData = tuple[GameSequences, SequenceInputSamples, SequenceInputSamples, SequenceInputSamples]
 """Every sample the family holds: the games, then the training, validation and test splits."""
 
-LabeledDataBuilder = Callable[[datetime, datetime, datetime, int, bool], LabeledData]
-"""Builds samples from a training start, split starts, a sample step size and a debug flag."""
+LabeledDataBuilder = Callable[[datetime, EvaluationSplit, int, bool], LabeledData]
+"""Builds samples from a training start, an evaluation split, a sample step size and a debug flag."""
 
 @dataclass(frozen=True)
 class TrainingResult():
@@ -66,7 +105,10 @@ class TrainingResult():
 
     run: trainer.TrainingRun
     scores: dict[str, float]
-    """How the saved model scored, or empty when the run was told not to score it."""
+    """How the saved model scored on its held-out games, or empty when it was not scored."""
+
+    evaluation: metrics.ModelEvaluation | None = None
+    """What was written beside the model, which is what the site reads. None when it was not scored."""
 
 @dataclass(frozen=True)
 class TrainingInputs():
@@ -82,20 +124,35 @@ class TrainingInputs():
     max_sequence_length: int | None
     """How many of the most recent games the network reads, or None for every one of them."""
 
+    split_on: SplitKey = SplitKey.SUBJECT
+    """
+    What tells this family's validation and test samples apart. See samples.EvaluationSplit.
+
+    The subject unless a family says otherwise, because a league of players halves cleanly and a
+    player then appears in one split only. A family whose subjects are its thirty teams says the
+    game instead, since halving those would measure a model on fifteen of them.
+    """
+
     build_description: tuple = ()
     """Anything else deciding what a build holds, beyond the columns and the output shape."""
 
 def _describe_build(
     model_specs: ClassifierModelSpecification,
     inputs: TrainingInputs,
-    training_start_date: datetime
+    training_start_date: datetime,
+    evaluation_split: EvaluationSplit,
+    chunk_step_size: int = CHUNK_STEP_SIZE
     ) -> tuple:
     """
     Everything that decides what a build holds, written as plain data so it can be saved beside one.
 
     A saved build is reused only while this still matches, so changing a column, the value being
-    predicted, the class range or how much history a sample needs rebuilds rather than silently
-    training on the last one.
+    predicted, the class range, how much history a sample needs, how the splits are drawn or how
+    many games are stepped over rebuilds rather than silently training on the last one.
+
+    The splits belong here because a saved build holds the finished splits and nothing about them
+    can be recovered from it afterwards. Left out, a run under a new split would quietly fit and
+    score itself on the old one.
     """
 
     return (
@@ -108,7 +165,9 @@ def _describe_build(
         model_specs.output.value_step,
         model_specs.output.impossible_value,
         inputs.build_description,
-        training_start_date
+        training_start_date,
+        evaluation_split,
+        chunk_step_size
     )
 
 def _load_cached_build(file_path: Path, description: tuple, print_debug: bool):
@@ -136,9 +195,32 @@ def _load_cached_build(file_path: Path, description: tuple, print_debug: bool):
 
     return None
 
+def _check_splits_hold_something(
+    split_samples: Sequence[SequenceInputSamples],
+    evaluation_split: EvaluationSplit
+    ):
+    """
+    Stops a run whose splits are not all there.
+
+    An empty validation split picks the stopping epoch out of nothing and an empty test split scores
+    the finished model on nothing, and neither says a word about it. Both mean the evaluation period
+    reaches past the games held, or that a fraction of nought or one emptied one of them.
+    """
+
+    empty = [name for name, samples in zip(SPLIT_NAMES, split_samples) if len(samples.outputs) == 0]
+
+    if empty:
+        raise ValueError(
+            f"The {' and '.join(empty)} split holds no samples, so this run would report nothing. "
+            f"The evaluation period opens on {evaluation_split.start_date.date()} and takes "
+            f"{evaluation_split.validation_fraction:.0%} of it for validation. Move it back to "
+            "where games are held."
+        )
+
 def _build_datasets(
         model_specs: ClassifierModelSpecification,
         inputs: TrainingInputs,
+        evaluation_split: EvaluationSplit,
         use_cached_build: bool = True,
         save_cached_build: bool = True,
         print_debug: bool = False,
@@ -152,7 +234,7 @@ def _build_datasets(
     """
 
     file_path = model_specs.training_cache_file()
-    description = _describe_build(model_specs, inputs, training_start_date)
+    description = _describe_build(model_specs, inputs, training_start_date, evaluation_split)
     cached = None
 
     if use_cached_build and file_path.exists():
@@ -164,11 +246,14 @@ def _build_datasets(
     if cached is None:
         labeled_data = inputs.build_labeled_data(
             training_start_date,
-            VALIDATION_START_DATE,
-            TEST_START_DATE,
+            evaluation_split,
             CHUNK_STEP_SIZE,
             print_debug
         )
+
+        # Before the scalers are fitted, which is where an empty split would otherwise stop the run
+        # with a message about array shapes rather than about the dates that caused it.
+        _check_splits_hold_something(labeled_data[1:], evaluation_split)
 
         cached = datasets.build_classification_datasets(
             *labeled_data,
@@ -220,22 +305,47 @@ def _list_feature_columns(inputs: TrainingInputs) -> str:
         )
     )
 
+def _covered(dataset: SequenceGameDataset) -> str:
+    """Which games one split holds, written so that two splits can be read against each other."""
+
+    first, last = metrics.dates_covered(dataset.samples.game_dates)
+
+    return f"{len(dataset):,} samples" + (f", {first} to {last}" if first else "")
+
 def _describe_data(
     training_dataset: SequenceGameDataset,
     validation_dataset: SequenceGameDataset,
     test_dataset: SequenceGameDataset,
-    training_start_date: datetime
+    training_start_date: datetime,
+    evaluation_split: EvaluationSplit
     ) -> dict:
     return {
-        "training samples": len(training_dataset),
-        "validation samples": len(validation_dataset),
-        "test samples": len(test_dataset),
+        "training": _covered(training_dataset),
+        "validation": _covered(validation_dataset),
+        "test": _covered(test_dataset),
         "training starts": training_start_date.date(),
-        "validation starts": VALIDATION_START_DATE.date(),
-        "test starts": TEST_START_DATE.date(),
-        "scored on": VALIDATION_LABEL if EVALUATE_ON_VALIDATION_SET else HELD_OUT_LABEL,
+        "evaluation starts": evaluation_split.start_date.date(),
+        "validation fraction": evaluation_split.validation_fraction,
+        "split apart by": evaluation_split.split_on.value,
+        "split seed": str(evaluation_split.seed),
+        "scored on": metrics.TEST_SPLIT_LABEL,
         "sample step size": CHUNK_STEP_SIZE,
         "random seed": str(RANDOM_SEED)
+    }
+
+def _report_scores(scores: dict[str, float], floor: dict[str, float]) -> dict[str, str]:
+    """
+    Every scored figure in the words a reader knows, each beside the floor it is read against.
+
+    A figure with no floor is one the floor cannot be scored on, so it is shown on its own rather
+    than beside a blank.
+    """
+
+    return {
+        metrics.label_of(key): (
+            f"{value:.6g}" if key not in floor else f"{value:.6g}  (floor {floor[key]:.6g})"
+        )
+        for key, value in scores.items()
     }
 
 def _describe_run(training_run: trainer.TrainingRun) -> dict:
@@ -275,15 +385,57 @@ def _value_scale(
         impossible_value=output.impossible_value
     )
 
+FLOOR_WINDOW_DAYS = 365
+"""
+How much of the training era the floor below is worked out over.
+
+The last season before the evaluation period rather than all thirty of them. Scoring changed enough
+across the archive that a floor read off the whole of it would be far worse than one anybody would
+actually use, which would flatter the model standing beside it.
+"""
+
+def _floor_probabilities(
+        training_dataset: SequenceGameDataset,
+        evaluation_split: EvaluationSplit,
+        classes: int,
+        samples: int
+    ) -> np.ndarray:
+    """
+    The answer a model that reads nothing would give every game: how often each outcome happened in
+    the season before the evaluation period.
+
+    This is what turns a figure into a claim. An average miss of eleven points says nothing on its
+    own, and says a great deal beside the thirteen that answering with last season's spread scores
+    on the same games.
+    """
+
+    outputs = training_dataset.samples.outputs
+    game_dates = training_dataset.samples.game_dates
+
+    if game_dates is not None and len(game_dates) > 0:
+        recent = game_dates >= np.datetime64(evaluation_split.start_date) - np.timedelta64(
+            FLOOR_WINDOW_DAYS, 'D'
+        )
+
+        if recent.any():
+            outputs = outputs[recent]
+
+    return np.tile(evaluation.class_prior(outputs, classes), (samples, 1))
+
 def _evaluate_saved_model(
         model_specs: ClassifierModelSpecification,
-        evaluation_dataset: SequenceGameDataset,
+        training_dataset: SequenceGameDataset,
+        test_dataset: SequenceGameDataset,
+        evaluation_split: EvaluationSplit,
         loss_function: trainer.LossFunction,
         training_run: trainer.TrainingRun
-    ) -> dict:
+    ) -> tuple[dict[str, float], metrics.ModelEvaluation]:
     """
-    Reloads the model that was just saved and scores it, which also proves that the saved file round
-    trips back into a working model.
+    Reloads the model that was just saved and scores it on the held-out games, which also proves
+    that the saved file round trips back into a working model.
+
+    Returns:
+        (every figure scored, the record written beside the model)
     """
 
     graphs_directory = model_specs.graphs_directory()
@@ -296,7 +448,7 @@ def _evaluate_saved_model(
     configuration = model_specs.training_parameters.configuration
     predictions = trainer.predict(
         model,
-        evaluation_dataset,
+        test_dataset,
         configuration.batch_size,
         configuration.device,
         datasets.collate_sequence_batch
@@ -307,23 +459,48 @@ def _evaluate_saved_model(
         loss_function = loss_function.cpu()
 
     output = model_specs.output
-    outputs = evaluation_dataset.outputs
-    metrics = {
-        "loss": float(loss_function(predictions, outputs)),
-        "cross entropy": float(nn.functional.cross_entropy(predictions, outputs))
+    outputs = test_dataset.outputs
+    value_scale = _value_scale(model_specs, test_dataset)
+    probabilities = torch.softmax(predictions, dim=1).numpy()
+    actuals = outputs.numpy()
+
+    scores = {
+        evaluation.LOSS: float(loss_function(predictions, outputs)),
+        evaluation.CROSS_ENTROPY: float(nn.functional.cross_entropy(predictions, outputs)),
+        **evaluation.score_classification(probabilities, actuals, value_scale)
     }
 
-    metrics.update(evaluation.output_test_evaluation_classification(
-        predictions.numpy(),
-        outputs.numpy(),
+    floor = evaluation.score_classification(
+        _floor_probabilities(training_dataset, evaluation_split, output.length, len(actuals)),
+        actuals,
+        value_scale
+    )
+
+    evaluation.graph_classification(
+        probabilities,
+        actuals,
         label=model_specs.name,
         class_labels=[output.label(position) for position in range(output.length)],
-        values=_value_scale(model_specs, evaluation_dataset),
+        values=value_scale,
         output_size=20,
         save_graph_directory_path=graphs_directory
-    ))
+    )
 
-    return metrics
+    first_game, last_game = metrics.dates_covered(test_dataset.samples.game_dates)
+
+    return (
+        scores,
+        metrics.ModelEvaluation(
+            model=model_specs.name,
+            scored_on=metrics.TEST_SPLIT_LABEL,
+            samples=len(actuals),
+            first_game=first_game,
+            last_game=last_game,
+            evaluated=datetime.now().isoformat(timespec="seconds"),
+            metrics=scores,
+            floor=floor
+        )
+    )
 
 def train(
         model_specs: ClassifierModelSpecification,
@@ -333,14 +510,21 @@ def train(
         save_cached_build: bool = True,
         print_debug: bool = True,
         print_all_debug: bool = False,
-        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON)
+        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON),
+        evaluation_split: EvaluationSplit | None = None
         ) -> TrainingResult:
     """
-    Fits one model spec, saves it, and writes a report of the run next to it.
+    Fits one model spec, saves it, and writes a report and a score of the run next to it.
+
+    The finished model is scored on the test split, which the run never read, so what it writes is
+    the only figure worth publishing. Validation picks the stopping epoch and is reported as part of
+    the run rather than as an accuracy.
 
     Args:
-        use_cached_build reuses the last run's preprocessed build when it was made from the same
-        columns. save_cached_build writes this run's build for the next one to reuse.
+        use_cached_build reuses the last run's preprocessed build when it was made the same way.
+        save_cached_build writes this run's build for the next one to reuse.
+        evaluation_split says which games are held back and how they are divided. It defaults to the
+        last year, halved by whatever this family splits on.
 
     Returns:
         The record of the run and the scores of the saved model, so a caller comparing two of them
@@ -356,16 +540,22 @@ def train(
 
     parameters = model_specs.training_parameters
 
+    # What the splits are told apart by belongs to the family, not to the run, so a caller pinning
+    # the dates cannot accidentally halve thirty teams.
+    evaluation_split = replace(
+        evaluation_split if evaluation_split is not None else default_evaluation_split(),
+        split_on=inputs.split_on
+    )
+
     training_dataset, validation_dataset, test_dataset, scaler_parameters = _build_datasets(
         model_specs,
         inputs,
+        evaluation_split,
         use_cached_build,
         save_cached_build,
         print_debug,
         training_start_date
     )
-
-    evaluation_dataset = validation_dataset if EVALUATE_ON_VALIDATION_SET else test_dataset
 
     model = GRUFeedForward(
         training_dataset.sequence_input_dim,
@@ -389,7 +579,9 @@ def train(
 
     model_description = report.describe_model(model)
     feature_description = _describe_features(inputs, training_dataset)
-    data_description = _describe_data(training_dataset, validation_dataset, test_dataset, training_start_date)
+    data_description = _describe_data(
+        training_dataset, validation_dataset, test_dataset, training_start_date, evaluation_split
+    )
     label_description = datasets.summarize_classification_outputs(
         training_dataset.outputs,
         model_specs.output.length,
@@ -464,13 +656,32 @@ def train(
     )
 
     scores: dict[str, float] = {}
+    model_evaluation: metrics.ModelEvaluation | None = None
+
     if output_evaluations:
-        scores = _evaluate_saved_model(model_specs, evaluation_dataset, loss_function, training_run)
-        training_report.add(VALIDATION_LABEL if EVALUATE_ON_VALIDATION_SET else HELD_OUT_LABEL, scores)
+        scores, model_evaluation = _evaluate_saved_model(
+            model_specs,
+            training_dataset,
+            test_dataset,
+            evaluation_split,
+            loss_function,
+            training_run
+        )
+        evaluation_path = metrics.write(model_specs.evaluation_file(), model_evaluation)
+
+        training_report.add(
+            f"Held-out test set, {model_evaluation.samples:,} games",
+            _report_scores(scores, model_evaluation.floor)
+        )
+
+        if print_debug:
+            print(f"\n===== SCORES FOR {model_specs.name.upper()} =====")
+            report.print_values("Held-out test set", _report_scores(scores, model_evaluation.floor))
+            print(f"\nSaved the scores to {evaluation_path}.")
 
     report_path = training_report.write(model_specs.training_report_file())
 
     if print_debug:
         print(f"\nSaved the model to {model_file} and its report to {report_path}.")
 
-    return TrainingResult(training_run, scores)
+    return TrainingResult(training_run, scores, model_evaluation)

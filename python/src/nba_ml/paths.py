@@ -50,6 +50,16 @@ def model_file(category: str, name: str) -> Path:
 def training_report_file(category: str, name: str) -> Path:
     return model_directory(category, name) / "training_report.txt"
 
+def evaluation_file(category: str, name: str) -> Path:
+    """
+    How the finished model scored on its held-out games, which the service reads back.
+
+    Kept beside the weights so that publishing a model publishes its measurements with it, and kept
+    as JSON so that reading one costs nothing.
+    """
+
+    return model_directory(category, name) / "evaluation.json"
+
 def graphs_directory(category: str, name: str) -> Path:
     return model_directory(category, name) / "graphs"
 

@@ -77,7 +77,41 @@ export type Model = {
 	published: boolean;
 };
 
-/** The explanatory card copy returned only for one family About page. */
+/** How a figure is written down: in the statistic's own units, as a probability, or as a bare score. */
+export type MetricUnit = 'amount' | 'probability' | 'score';
+
+/** One measured figure, with everything needed to write it down and read it. */
+export type Metric = {
+	/** The stable name of the figure, so one can be singled out without matching on wording. */
+	key: string;
+	label: string;
+	description: string;
+	value: number;
+	/** What answering with the season's own spread of outcomes scores on the same games, if scorable. */
+	floor: number | null;
+	unit: MetricUnit;
+	higher_is_better: boolean;
+};
+
+/** How one model scored on games it never saw while it was being fitted. */
+export type ModelEvaluation = {
+	/** Which split produced these figures. Only a held-out one is published. */
+	scored_on: string;
+	samples: number;
+	/** The stretch of calendar the scored games cover, as YYYY-MM-DD. */
+	first_game: string;
+	last_game: string;
+	/** When the scoring ran, in UTC. */
+	evaluated: string;
+	/** The figures this model chose to publish, headline first. */
+	metrics: Metric[];
+};
+
+/**
+ * The explanatory card copy returned only for one family About page.
+ *
+ * It carries no figures. What a model measured is read on its own, when a reader opens that model.
+ */
 export type FamilyAboutModel = {
 	name: string;
 	title: string;

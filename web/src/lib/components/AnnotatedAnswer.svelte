@@ -3,8 +3,9 @@
 
 	It is the block a prediction page draws, at the width it draws it, holding a made-up answer. The
 	line drags and the odds answer it, so a reader learns the block by moving it, and it can never
-	fall out of step with the real thing because it is the real thing. It stands for no family, so it
-	carries no way to one and writes no line into the address bar.
+	fall out of step with the real thing because it is the real thing. It carries no footer, because
+	its way out leads to the section it is already standing in, and it writes no line into the address
+	bar, because nothing here was asked for.
 
 	The terms sit around it. On a wide page, a hairline leader runs from each to the part it names. A
 	leader is the shortest segment from the words of a term to just inside that part, measured off the

@@ -35,19 +35,19 @@ export const MODEL_FAMILIES: ModelFamily[] = [
 	{
 		name: 'player_stats',
 		slug: 'player-stats',
-		title: 'Player game statistics',
+		title: 'Player stat models',
 		description: 'Points, rebounds and assists for one player in one game.'
 	},
 	{
 		name: 'team_stats',
 		slug: 'team-stats',
-		title: 'Team statistics',
+		title: 'Team stat models',
 		description: 'How many points one team scores in a game.'
 	},
 	{
 		name: 'game_stats',
 		slug: 'game-stats',
-		title: 'Game statistics',
+		title: 'Game stat models',
 		description: 'The winning margin and the total points of one game.'
 	}
 ];
