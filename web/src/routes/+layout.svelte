@@ -2,9 +2,18 @@
 	The shell every page sits in: the header, the page itself, and the footer. The wordmark and the
 	tabs are rooted, so they sit in the same place on every page.
 
-	The header is fixed and gets out of the way once the reader scrolls. Five things bring it back and
-	nothing else: the top of the page, a pointer in the top --header-reveal-zone, a scroll back up
-	where there is no pointer, the models menu standing open, and keyboard focus landing inside it.
+	Every page opens with a printed plate band and the header is printed on it rather than set above
+	it, so the top of the screen is one object. Once the reader has scrolled it detaches and becomes a
+	plate strip carrying the shadow, which is the one time it is a thing of its own.
+
+	It is fixed and gets out of the way once the reader scrolls. Five things bring it back and nothing
+	else: the top of the page, a pointer in the top --header-reveal-zone, a scroll back up where there
+	is no pointer, the models menu standing open, and keyboard focus landing inside it.
+
+	The home page is the exception. Its first screen already prints the name at display size and every
+	tab leads somewhere the plate itself offers, so the header is held away until the reader has
+	scrolled past that screen. Keyboard focus still brings it back, and the skip link above it reaches
+	the page without it.
 
 	The models menu opens on hover. A touch device has none, so there the first tap on the tab opens
 	it and the second follows the tab.
@@ -19,7 +28,7 @@
 	import '../app.css';
 
 	import { longGameDay } from '$lib/games';
-	import { MODELS_PATH, MODELS_SECTION, familyPath } from '$lib/models';
+	import { MODELS_PATH, MODELS_SECTION, familyPath, plateOf } from '$lib/models';
 	import { SITE_NAME } from '$lib/site';
 
 	let { children, data } = $props();
@@ -27,6 +36,10 @@
 	const here = $derived(page.url.pathname);
 	const home = $derived(here === '/');
 	const onModels = $derived(here.startsWith('/models'));
+
+	// Which stock this page is printed on. It is set on the header as well as the page, because the
+	// header is printed on the band under it and takes that ground once it detaches.
+	const plate = $derived(plateOf(here));
 
 	// Every entry in the menu leads to a prediction page, so a family with nothing to predict yet is
 	// listed on the home page and not here.
@@ -134,21 +147,61 @@
 
 	let scrollY = $state(0);
 	let headerHeight = $state(0);
+	let viewportHeight = $state(0);
 	let nearTop = $state(false);
 	let holdingFocus = $state(false);
 	let scrolledUp = $state(false);
 	let revealZone = $state(0);
 
+	/**
+	 * How far down the home page the header stays away, in pixels.
+	 *
+	 * The plate's own bottom edge, or one screen, whichever comes first. The plate runs to two or
+	 * three screens on a phone, and a reader that far into it with no way to reach the tabs is worse
+	 * off than one who has simply left the first screen behind.
+	 */
+	let heroDepth = $state(0);
+
+	$effect(() => {
+		// Read so a viewport of a new size measures a screenful again.
+		viewportHeight;
+		viewportWidth;
+
+		if (!home) {
+			heroDepth = 0;
+			return;
+		}
+
+		const hero = document.querySelector('[data-hero]');
+		if (!hero) return;
+
+		const measure = () => {
+			const bottom = hero.getBoundingClientRect().bottom + window.scrollY;
+
+			heroDepth = Math.min(bottom - headerHeight, window.innerHeight);
+		};
+
+		measure();
+
+		// The plate resizes with the fonts landing and with the day's samples, neither of which is a
+		// viewport change.
+		const watch = new ResizeObserver(measure);
+		watch.observe(hero);
+
+		return () => watch.disconnect();
+	});
+
+	/** The home page's first screen, where the plate says everything the header would. */
+	const overHero = $derived(heroDepth > 0 && scrollY < heroDepth);
+
 	// It hides once the page has scrolled past half the header height, so a small scroll does not
 	// take it away. The menu hangs below the reveal zone, so an open one holds the header as well,
 	// and so does keyboard focus, because a hidden header cannot be scrolled to.
 	const hidden = $derived(
-		scrollY > headerHeight / 2 &&
-			!nearTop &&
-			!scrolledUp &&
-			!overMenu &&
-			!revealed &&
-			!holdingFocus
+		holdingFocus
+			? false
+			: overHero ||
+					(scrollY > headerHeight / 2 && !nearTop && !scrolledUp && !overMenu && !revealed)
 	);
 
 	/** Below this a move is jitter rather than a direction. */
@@ -239,13 +292,34 @@
 <svelte:window
 	bind:scrollY
 	bind:innerWidth={viewportWidth}
+	bind:innerHeight={viewportHeight}
 	onscroll={onScroll}
 	onpointermove={onPointerMove}
 />
 
+<!--
+	THESIS: The model's answer is printed and fixed; the reader's question is drawn on top of it.
+	This surface refuses the category's dark odds-board and its cream-and-serif opposite alike.
+	OWN-WORLD: A saturated ink-blue plate (#013278) printed flat in bone (#ece3d1) and one spot
+	orange (#f35411), registered with press crosses and a plate number, under a clear acetate sheet
+	carrying wet-erase magenta (#f1589a) marks. Sharp corners everywhere. Mono for every figure.
+	STORY: A visitor sees six real answers the site drew this morning, picks one by hand, drags a
+	line across it, and learns that the answer is a shape rather than a number.
+	FIRST VIEWPORT: Printed name and one line top left; tonight's samples as a grid of small hairline
+	plates lower left, one ringed in grease pencil; the ringed sample's full distribution, its line
+	handle and three printed odds boxes on the acetate to the right, with the orange action under it.
+	FORM: The Coach's Acetate, candidate 7 of the grounded list, seed key 03ae8ebd.
+	FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the
+	verdict, DESIGN.md, and every shipping raster carrying its provenance.
+-->
+<!-- The first thing focus reaches, and the one way past a header that is holding itself away. -->
+<a class="skip button" href="#content">Skip to content</a>
+
 <header
+	class="plate"
 	class:hidden
-	class:scrolled={scrollY > 0}
+	class:detached={scrollY > 0}
+	data-plate={plate}
 	bind:clientHeight={headerHeight}
 	onfocusin={onHeaderFocusIn}
 	onfocusout={onHeaderFocusOut}
@@ -278,8 +352,11 @@
 						Models
 					</a>
 
+					<!-- A slip of the same plate, so the menu is part of the printing above it rather than
+					     a page-coloured card floating over it. Each family says what it answers, because a
+					     title alone leaves the reader to open all three to find out. -->
 					{#if predictable.length > 0}
-						<ul class="panel" aria-labelledby="models-tab" bind:this={menuList}>
+						<ul aria-labelledby="models-tab" bind:this={menuList}>
 							{#each predictable as family (family.name)}
 								{@const path = familyPath(family)}
 								<li>
@@ -288,7 +365,8 @@
 										aria-current={here === path ? 'page' : undefined}
 										onclick={(event) => onFamilyEntry(event, path)}
 									>
-										{family.title}
+										<span class="entry-title">{family.title}</span>
+										<span class="entry-note small">{family.description}</span>
 									</a>
 								</li>
 							{/each}
@@ -304,7 +382,8 @@
 	</div>
 </header>
 
-<main>
+<!-- tabindex, so the skip link above moves focus here and not only the scroll. -->
+<main id="content" tabindex="-1" data-plate={plate}>
 	{@render children()}
 </main>
 
@@ -319,37 +398,65 @@
 		{/if}
 
 		<ul class="links">
-			<li><a href="/about">About</a></li>
-			<li><a href="/privacy">Privacy</a></li>
+			<li><a class="text-link" href="/about">About</a></li>
+			<li><a class="text-link" href="/privacy">Privacy</a></li>
 		</ul>
 	</div>
 </footer>
 
 <style>
-	/* The block tone is what separates the header from the page, so it carries no rule. Everything
-	   drawn on it comes from the block family, the menu below it excepted, which is a panel sitting
-	   on the page. */
+	/*
+	 * Printed on the band under it rather than set above it, so the top of every page is one object
+	 * and the wordmark lines up with the name stamped below it.
+	 *
+	 * It takes the plate's inks through the .plate class in app.css and remaps only the block family
+	 * on top of that, so every tab, rule and accent in the markup is already correct without a rule
+	 * per element.
+	 */
 	header {
 		position: fixed;
-		z-index: 30;
+		z-index: var(--layer-header);
 		inset: 0 0 auto;
-		background: var(--block);
-		--plane-accent: var(--accent-block);
-		--plane-accent-on: var(--block);
+		--block-ink: var(--plate-ink);
+		--block-muted: var(--plate-ink-muted);
+		--hairline-block: var(--plate-rule);
 		transition:
 			translate var(--motion) var(--ease-in),
+			background var(--motion-fast) var(--ease-in),
 			box-shadow var(--motion-fast) var(--ease-in);
 	}
 
-	/* A header returning over scrolled content with no shadow reads as a strip cut out of the page
-	   rather than as something above it. */
-	header.scrolled {
+	/* At rest it is part of the band it is printed on, so it has no ground of its own. */
+	header.plate {
+		background: transparent;
+	}
+
+	/* Off the band and over the page, where it is a strip of plate in its own right. With no ground
+	   and no shadow it reads as something cut out of the page rather than as something above it. */
+	header.plate.detached {
+		background: var(--plate);
 		box-shadow: var(--shadow);
 	}
 
 	header.hidden {
 		translate: 0 -100%;
 		transition-timing-function: var(--ease-out);
+	}
+
+	/* Off screen until it is focused, then a printed slip in the top corner. */
+	.skip {
+		position: fixed;
+		z-index: var(--layer-skip);
+		top: var(--space-2);
+		left: var(--space-4);
+		translate: 0 -200%;
+		background: var(--plate-spot);
+		color: var(--plate-spot-on);
+		transition: translate var(--motion) var(--ease-in);
+	}
+
+	.skip:focus-visible {
+		translate: 0 0;
 	}
 
 	/* One row at every width. The page reserves exactly this height, so the wordmark gives up room
@@ -429,17 +536,21 @@
 	}
 
 	/* Centred on the Models tab, and moved left by whatever centring would have hung past the page
-	   gutter. A raised panel, so it carries the shadow. */
+	   gutter. It floats over the page, so it carries the shadow. */
 	.menu > ul {
 		position: absolute;
-		z-index: 20;
+		z-index: var(--layer-floating);
 		top: 100%;
 		left: 50%;
 		translate: calc(-50% - var(--menu-nudge, 0px)) 0;
 		visibility: hidden;
 		opacity: 0;
-		min-width: max-content;
+		width: max-content;
+		max-width: min(24rem, calc(100vw - var(--space-5) * 2));
+		margin-block-start: var(--space-2);
 		padding: var(--space-2);
+		background: var(--plate-deep);
+		border: var(--rule-plate-strong);
 		list-style: none;
 		box-shadow: var(--shadow);
 		transition:
@@ -449,20 +560,31 @@
 
 	.menu > ul a {
 		display: flex;
-		align-items: center;
+		flex-direction: column;
+		gap: 2px;
+		justify-content: center;
 		min-height: var(--tap-target);
-		padding-inline: var(--control-padding-x);
-		border-radius: var(--radius);
-		color: var(--ink);
-		font-size: var(--type-small);
+		padding: var(--space-2) var(--control-padding-x);
+		color: var(--plate-ink);
 		text-decoration: none;
-		white-space: nowrap;
+	}
+
+	.entry-title {
+		font-weight: 600;
+	}
+
+	.entry-note {
+		color: var(--plate-ink-muted);
 	}
 
 	.menu > ul a:hover,
 	.menu > ul a:focus-visible {
-		background: var(--surface);
-		color: var(--accent);
+		background: var(--plate);
+	}
+
+	.menu > ul a:hover .entry-title,
+	.menu > ul a:focus-visible .entry-title {
+		color: var(--plate-spot);
 	}
 
 	/* The entry for the page the reader is already on. It leads nowhere, so it is marked with a rule
@@ -470,8 +592,8 @@
 	   like. */
 	.menu > ul a[aria-current] {
 		border-left: var(--rule-accent);
-		background: var(--surface);
-		color: var(--accent);
+		border-left-color: var(--plate-spot);
+		background: var(--plate);
 		cursor: default;
 	}
 
@@ -492,13 +614,19 @@
 	}
 
 	/* A fixed header is out of flow, so the page reserves its height rather than shifting under it
-	   when it hides. */
+	   when it hides. The band a page opens with takes that reservation back, in app.css, because the
+	   header is printed on the band rather than set above it. */
 	main {
 		display: flex;
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
-		padding-block: calc(var(--header-height) + var(--space-5)) var(--space-8);
+		padding-block: var(--header-height) var(--space-8);
+	}
+
+	/* It is only focusable so the skip link can land on it, so it never draws a ring of its own. */
+	main:focus {
+		outline: none;
 	}
 
 	footer {
@@ -517,12 +645,6 @@
 		gap: var(--space-4);
 		padding: 0;
 		list-style: none;
-	}
-
-	.links a {
-		display: inline-flex;
-		align-items: center;
-		min-height: var(--tap-target);
 	}
 
 	@media (min-width: 40rem) {

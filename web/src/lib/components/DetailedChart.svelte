@@ -250,7 +250,7 @@
 	dialog {
 		position: fixed;
 		inset: 0;
-		z-index: 40;
+		z-index: var(--layer-overlay);
 		width: auto;
 		max-width: none;
 		height: auto;

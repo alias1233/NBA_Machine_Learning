@@ -62,32 +62,32 @@
 		{
 			part: 'lead',
 			term: 'Expected',
-			body: 'The expected value of the predicted statistic. On average, this value would be the closest to the true statistic.'
+			body: 'Every outcome averaged together, with the likelier ones counting for more. A single game usually lands near this number rather than on it.'
 		},
 		{
 			part: 'chart',
 			term: 'The chart',
-			body: 'One bar per outcome, the height representing the chance of that outcome occuring.'
+			body: 'One bar for every outcome the model can answer with. The taller the bar, the likelier that outcome.'
 		},
 		{
 			part: 'line',
 			term: 'The line',
-			body: 'Set the line for calculating the under, push, and over values.'
+			body: 'The number you are asking about. Move it and the three chances follow it. Nothing is sent anywhere, so you can move it as much as you like.'
 		},
 		{
 			part: 'under',
 			term: 'Under',
-			body: 'The total probability of the result finishing below the line.'
+			body: 'The chance the real result comes in below your line. It is every bar to the left of it added up.'
 		},
 		{
 			part: 'push',
 			term: 'Push',
-			body: 'The probability the result is exactly equal to the value of the line. Only whole numbers can be landed on.'
+			body: 'The chance the result lands exactly on your line. Only a whole number can be landed on, so a line of 24.5 always reads 0 percent.'
 		},
 		{
 			part: 'over',
 			term: 'Over',
-			body: 'The total probability of the result finishing above the line.'
+			body: 'The chance the real result comes in above your line. It is every bar to the right of it added up.'
 		}
 	];
 
@@ -202,7 +202,7 @@
 			stat="points"
 			heading="John Basketball, points"
 			headingLevel={3}
-			subheading="HOME TEAM at AWAY TEAM, GAME DATE"
+			subheading="Away team at home team, game day"
 			openOn={LINE}
 			example
 			customRoster={false}

@@ -24,11 +24,22 @@ import type {
 	Prediction,
 	Roster,
 	ScheduledGame,
-	Team,
+	Showcase,
 	TeamPredictionRequest
 } from '$lib/types';
 
 const DEFAULT_URL = 'http://127.0.0.1:8000';
+
+/**
+ * How long any call waits before it counts as the service not being there.
+ *
+ * A refused connection fails at once, but a service that has accepted the connection and then
+ * stopped answering does not, and without this a page waits on it for as long as the platform's own
+ * default, which is minutes. Well above a prediction, which takes about half a second and may queue
+ * behind the cap, so nothing that would have answered is cut off. A caller with a tighter promise to
+ * keep passes its own.
+ */
+const PATIENCE = 15_000;
 
 function baseUrl(): string {
 	return (env.NBA_API_URL || DEFAULT_URL).replace(/\/+$/, '');
@@ -52,11 +63,16 @@ async function refusalOf(response: Response): Promise<App.Error> {
 	return { message: `The prediction service answered ${response.status}.` };
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+	path: string,
+	{ patience = PATIENCE, ...init }: RequestInit & { patience?: number } = {}
+): Promise<T> {
 	let response: Response;
 
+	// A call that timed out and a call that was refused are the same thing to whoever asked: no
+	// answer. Both leave here as a 503, so a loader wording one has only the one case to word.
 	try {
-		response = await fetch(baseUrl() + path, init);
+		response = await fetch(baseUrl() + path, { signal: AbortSignal.timeout(patience), ...init });
 	} catch {
 		error(503, 'The prediction service is not reachable.');
 	}
@@ -67,8 +83,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const getHealth = () => request<Health>('/health');
-
-export const getTeams = () => request<Team[]>('/teams');
 
 export const getModels = () => request<Model[]>('/models');
 
@@ -81,6 +95,19 @@ export const getModelEvaluation = (family: string, model: string) =>
 	request<ModelEvaluation | null>(
 		`/models/${encodeURIComponent(family)}/about/${encodeURIComponent(model)}/evaluation`
 	);
+
+/**
+ * The day's sample predictions, already built by a job.
+ *
+ * This is a file read on the service rather than a prediction, which is the whole point of it: the
+ * home page shows real answers without a visitor's arrival costing a forward pass. Null where no set
+ * has been published yet, which the page draws around rather than treating as a failure.
+ *
+ * Given far less patience than anything else here, because it is one file read and because the home
+ * page has to render. Anything slower than this is the service being unable to answer, and the plate
+ * is drawn without samples rather than the page waiting on it.
+ */
+export const getShowcase = () => request<Showcase | null>('/showcase', { patience: 2_000 });
 
 export const getPlayer = (id: number) => request<Player>(`/players/${id}`);
 

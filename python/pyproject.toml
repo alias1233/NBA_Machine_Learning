@@ -53,6 +53,7 @@ nba-predict = "nba_ml.cli.predict:main"
 nba-backup = "nba_ml.cli.backup:main"
 nba-update-serving = "nba_ml.cli.update_serving:main"
 nba-serving-data = "nba_ml.cli.serving_data:main"
+nba-showcase = "nba_ml.cli.showcase:main"
 
 [build-system]
 requires = ["hatchling"]

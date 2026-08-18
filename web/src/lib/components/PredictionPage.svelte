@@ -1,79 +1,93 @@
 <!--
 	The shape every prediction page takes, whichever family it is for.
 
-	It has two shapes. Before the first prediction it is one centred column of controls and nothing
-	else, because a reader who has not asked for anything should not be looking at an empty box. On
-	the first submit the answer column opens beside them, line first and then widening, and never
-	closes.
+	The page opens on the printed band, stamped on the family's own stock, and the work sits under it
+	in three regions: the night's board, the parameters, and the answer. That is the order a reader
+	works in, and each is a different register, which is what tells them apart without a box around
+	any of them. The board is printed, because the slate is the site talking. The parameters are
+	paper, because that is the reader working. The answer is a block, because it is an object set into
+	the page.
 
-	What differs between families is what the reader has to choose and how the answer names itself, so
-	those arrive as the two snippets. Everything here is the shared layout, which is the same for all
-	of them.
+	Wide, the asking and the answering are two rows rather than three columns. The board and the
+	parameters stand side by side, because the reader moves between them until the request is
+	complete, and the answer takes the whole page under them, because a distribution is a drawing and
+	a drawing wants width. The board is given the larger share of that first row: it holds a whole
+	night of cards, and the parameters hold at most a handful of fields.
+
+	All three stand from the first frame, the answer included. Nothing opens, and nothing about the
+	empty answer pulses, because a reader who has not pressed the button is not waiting on anything.
+
+	Narrow, the three lie on top of each other in the same order, so the page is read down rather than
+	across and nothing is dropped.
+
+	What differs between families is the night's board, the game the parameters are about, what the
+	reader has to choose, and how the answer names itself, so those arrive as the four snippets.
+	Everything here is the shared layout.
 -->
 <script lang="ts">
-	import { tick } from 'svelte';
-	import { prefersReducedMotion } from 'svelte/motion';
-	import { MediaQuery } from 'svelte/reactivity';
-
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { MOTION_REVEAL, MOTION_SLOW, appear, flow, flowingHeight } from '$lib/motion';
-	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
+	import PlateBand from '$lib/components/PlateBand.svelte';
+	import { walkTo } from '$lib/scroll';
 	import { pageTitle } from '$lib/site';
 
 	import type { Snippet } from 'svelte';
 
 	type Props = {
 		title: string;
-		/** One sentence, for a search result and a shared link. */
+		/** One sentence, for a search result, a shared link, and the band's own lede. */
 		description: string;
 		/** The family's own page, linked under the title before a reader asks for a number. */
 		aboutHref: string;
 		/** False when the service offers nothing this page can draw, which is its empty state. */
 		hasModels: boolean;
-		/** True when the page loaded with an answer already, so the column opens with no motion. */
-		answered: boolean;
+		/** False where the service did not answer at all, which is not the same as nothing published. */
+		answering: boolean;
+		/** The night's games, the first region. Omitted by a family that predicts on something else. */
+		board?: Snippet;
+		/** The head naming the game the parameters are about. Omitted where there is no board. */
+		matchup?: Snippet;
 		controls: Snippet;
 		/** One element. It holds the answer, the skeleton and a failure alike. */
 		result: Snippet;
 	};
 
-	let { title, description, aboutHref, hasModels, answered, controls, result }: Props = $props();
+	let {
+		title,
+		description,
+		aboutHref,
+		hasModels,
+		answering,
+		board,
+		matchup,
+		controls,
+		result
+	}: Props = $props();
 
 	let answerColumn = $state<HTMLElement>();
-
-	// svelte-ignore state_referenced_locally
-	let opened = $state(answered);
-	// svelte-ignore state_referenced_locally
-	let widened = $state(answered);
-
-	// The width two columns need, which app.css sets the layout at. Above it the answer opens
-	// sideways, below it there is nowhere to the side and its own height is what opens.
-	const sideways = new MediaQuery('min-width: 64rem', false);
+	let controlsColumn = $state<HTMLElement>();
 
 	/**
-	 * Opens the answer column, once, for a reader who pressed the button, and walks them to it.
+	 * Walks the reader to the answer when it is not already in front of them.
 	 *
-	 * The line grows first and then widens into the column, so the press gets an answer of its own
-	 * straight away rather than waiting on the service. Nothing is awaited by the caller, because the
-	 * request it is answering goes out in the same breath.
-	 *
-	 * The walk starts with the reveal rather than after it, and follows the column for the whole of
-	 * both phases, because the page is still growing under it while they run.
+	 * Beside the parameters it almost always is, so this does nothing there. Under them, which is
+	 * every narrow screen, the answer is a page away from the button that asked for it. Nothing is
+	 * awaited by the caller, because the request it is answering goes out in the same breath.
 	 */
-	export async function reveal(): Promise<void> {
-		const revealing = opened ? 0 : MOTION_SLOW + MOTION_REVEAL;
+	export function reveal(): void {
+		walkTo(answerColumn, { block: 'start' });
+	}
 
-		if (!opened) {
-			opened = true;
-
-			if (prefersReducedMotion.current) widened = true;
-			else setTimeout(() => (widened = true), MOTION_SLOW);
-		}
-
-		// The column is created by the line above, so it has to exist before it can be scrolled to.
-		await tick();
-		scrollIntoViewIfOffScreen(answerColumn, 'start', revealing);
+	/**
+	 * Puts the parameters at the top of the screen, under the header.
+	 *
+	 * A game is what the whole request is about, so choosing one changes every question under it. The
+	 * page is walked whether or not the parameters were already showing, because leaving the board
+	 * they were picked from filling the screen above them is what made the choice read as though
+	 * nothing had happened.
+	 */
+	export function revealControls(): void {
+		walkTo(controlsColumn, { block: 'start', always: true });
 	}
 </script>
 
@@ -82,153 +96,112 @@
 	<meta name="description" content={description} />
 </svelte:head>
 
-<div class="page sections" class:page--wide={widened}>
-	<div class="work" class:wide={widened}>
-		<div class="title">
-			<h1 class="page-title">{title}</h1>
+<PlateBand {title} lede={description}>
+	{#snippet action()}
+		<!-- How the number is reached, before a reader asks for one. -->
+		<a class="small text-link" href={aboutHref}>How these models work</a>
+	{/snippet}
+</PlateBand>
 
-			<!-- How the number is reached, before a reader asks for one. -->
-			<a class="small" href={aboutHref}>How this model works</a>
-		</div>
-
-		{#if !hasModels}
-			<!-- With nothing published there is nothing to offer, so the page is this and no more. -->
-			<Notice>No model is published right now.</Notice>
+<div class="page work">
+	{#if !hasModels}
+		<!-- With nothing to ask there is nothing to offer, so the page is this and no more. A service
+		     that never answered is not an empty family, and only one of the two is worth waiting for. -->
+		{#if answering}
+			<Notice>No model here can answer yet.</Notice>
 		{:else}
-			<div class="columns sections">
-				<div class="controls sections">
-					{@render controls()}
-				</div>
-
-				{#if opened}
-					<!-- The line that grows out of the column's future left edge, phase one of the reveal.
-					     It fades as the column takes its width, because the edge it marks moves off it. -->
-					{#if !widened}
-						<div class="opening-line" out:appear aria-hidden="true"></div>
-					{/if}
-
-					<!-- Two columns open sideways. One column has nowhere to the side, so the answer
-					     arrives at the bottom and opens by its own height instead. -->
-					<div
-						class="answer"
-						class:narrow={!widened}
-						in:flow={{ duration: sideways.current ? 0 : MOTION_REVEAL }}
-						bind:this={answerColumn}
-					>
-						<!-- One box for the skeleton, the answer and a failure alike, so the page never jumps
-						     once the column is open. It holds the height of whichever is in it, so the
-						     skeleton flows into the answer rather than being replaced by it. -->
-						<div class="answer-body" use:flowingHeight>
-							{@render result()}
-						</div>
-					</div>
-				{/if}
-			</div>
+			<Notice>
+				The prediction service is not answering, so nothing can be predicted right now. Try again in a
+				few minutes.
+			</Notice>
 		{/if}
-	</div>
+	{:else}
+		<div class="columns" class:boardless={!board}>
+			{#if board}
+				<div class="board-column">{@render board()}</div>
+			{/if}
+
+			<!--
+				The head, the game it is about, then the fields. This region is what the form's groups are
+				measured against, so how many columns they set as follows the width it has rather than
+				the width of the screen.
+			-->
+			<section class="controls" aria-labelledby="controls-column" bind:this={controlsColumn}>
+				<h2 class="column-label micro" id="controls-column">What to predict</h2>
+				{@render matchup?.()}
+				{@render controls()}
+			</section>
+
+			<section class="answer" aria-labelledby="answer-column" bind:this={answerColumn}>
+				<h2 class="column-label micro" id="answer-column">Answer</h2>
+				{@render result()}
+			</section>
+		</div>
+	{/if}
 
 	<AdSlot place="modelBelowResult" />
 </div>
 
 <style>
-	/* The page takes its wide cap as the column widens, which is the second half of the reveal. */
-	.page {
-		transition: max-width var(--motion-reveal) var(--ease-in-out);
-	}
-
-	/* Whatever is in the column decides its height, and the swap from the skeleton to the answer
-	   flows between the two rather than landing in one frame. The height itself is the action's. */
-	.answer-body {
-		overflow: clip;
-	}
-
-	/* One narrow column, centred, until an answer opens beside it. The width is explicit because an
-	   auto margin on a flex item turns off its stretch and leaves it shrink to fit. */
 	.work {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-5);
-		width: 100%;
-		max-width: var(--control-column);
-		margin-inline: auto;
+		gap: var(--space-7);
+		padding-block-start: var(--space-7);
 	}
 
-	.title {
+	/* Narrow: board, then parameters, then answer, which is the order the work is done in. */
+	.columns {
+		display: grid;
+		gap: var(--space-6);
+	}
+
+	.board-column,
+	.controls,
+	.answer {
+		min-width: 0;
+	}
+
+	.controls {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
+		gap: var(--space-4);
+		container-type: inline-size;
+		container-name: controls;
 	}
 
-	.title a {
-		display: inline-flex;
-		align-items: center;
-		min-height: var(--tap-target);
+	/* The block inside sets itself against this rather than against the screen, because it is also
+	   drawn in a narrow column on the About page and has to fold there without a breakpoint. */
+	.answer {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		container-type: inline-size;
+		container-name: answer-column;
 	}
 
-	/* Below 64rem there is no column and no reveal. The answer arrives at the bottom of the one
-	   column and the page is scrolled to it. */
-	.opening-line {
-		display: none;
-	}
-
+	/*
+	 * Wide enough for two rows: the board and the parameters side by side, and the answer across the
+	 * whole page under them. The two above are the request and they are worked on together, so they
+	 * share a line of sight. The answer is what the page was for, and given the page it draws its
+	 * distribution at a width a column could never give it.
+	 *
+	 * With no board there is nothing to stand beside, so the parameters take the row on their own and
+	 * their groups set as two columns in it.
+	 */
 	@media (min-width: 64rem) {
-		/* The controls are moved by the reveal, never squeezed, so they hold this width throughout. */
-		.work {
-			transition: max-width var(--motion-reveal) var(--ease-in-out);
-		}
-
-		.work.wide {
-			max-width: var(--content-width-wide);
-		}
-
 		.columns {
-			position: relative;
-			flex-direction: row;
-			align-items: flex-start;
-			gap: var(--space-6);
+			grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+			align-items: start;
+			column-gap: var(--space-6);
 		}
 
-		.controls {
-			flex: 1 1 auto;
-			min-width: 0;
-			max-width: var(--control-column);
+		.columns.boardless {
+			grid-template-columns: minmax(0, 1fr);
 		}
 
-		/*
-		 * Phase two. The column takes its width and the page takes its wide cap together, which
-		 * pushes the controls left as the answer opens. It is clipped, so the skeleton is already
-		 * inside it on the way out rather than reflowing behind it.
-		 */
 		.answer {
-			flex: 0 0 var(--answer-column);
-			min-width: 0;
-			overflow: clip;
-			transition: flex-basis var(--motion-reveal) var(--ease-in-out);
-		}
-
-		.answer.narrow {
-			flex-basis: 0;
-		}
-
-		.answer-body {
-			width: var(--answer-column);
-		}
-
-		/* Phase one, at the column's future left edge, which is the right edge of the row while the
-		   column has no width yet. */
-		.opening-line {
-			display: block;
-			position: absolute;
-			inset: 0 0 0 auto;
-			width: 2px;
-			background: var(--accent);
-			animation: line-grow var(--motion-slow) var(--ease-in);
-		}
-	}
-
-	@keyframes line-grow {
-		from {
-			transform: scaleY(0);
+			grid-column: 1 / -1;
 		}
 	}
 </style>

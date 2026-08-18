@@ -1,23 +1,23 @@
 <!--
 	The game statistics page.
 
-	A request names a game and nothing else, so choosing a card is the whole of it and the reader is
-	walked straight to the button.
+	A request names one of the games on the board and nothing else, so choosing a card is the whole of
+	it and the reader is walked straight to the button.
 
 	A request names no team, so a model whose answer belongs to one side of the game says which side
 	that is. The stat control names that team before a prediction and the answer names it beside the
 	figure, because the number itself carries nothing to say whose it is.
 
-	The form is the reader's pending request and the URL is the answered one. Editing a field or
-	choosing a card changes the form, and only the button copies it into the URL, which is what runs
-	a prediction.
+	The form is the reader's pending request and the URL is the answered one. Choosing a card or a
+	stat changes the form, and only the button copies it into the URL, which is what runs a
+	prediction. That is why choosing a card never fires a request on its own.
 -->
 <script lang="ts">
-	import { afterNavigate, goto, replaceState } from '$app/navigation';
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 
 	import AnswerBlock from '$lib/components/AnswerBlock.svelte';
-	import GameFields from '$lib/components/GameFields.svelte';
+	import MatchupHead from '$lib/components/MatchupHead.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
 	import UpcomingGames from '$lib/components/UpcomingGames.svelte';
@@ -31,11 +31,9 @@
 	} from '$lib/models';
 	import { flow } from '$lib/motion';
 	import { readAnswer } from '$lib/odds';
-	import { gameHref as buildGameHref } from '$lib/predictions';
-	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
+	import { askPrediction, gameHref as buildGameHref } from '$lib/predictions';
 
 	import type { GameSides } from '$lib/models';
-	import type { GameChoice } from '$lib/predictions';
 	import type { ScheduledGame } from '$lib/types';
 
 	let { data } = $props();
@@ -48,51 +46,27 @@
 	 * it back into the URL. afterNavigate re-seeds it whenever a new answer lands.
 	 */
 	const seed = () => ({
-		date: data.choice.date,
-		awayTeam: data.choice.awayTeam,
-		homeTeam: data.choice.homeTeam,
-		seasonType: data.choice.seasonType,
+		game: data.selectedGame?.id ?? null,
 		model: data.model
 	});
 
 	let form = $state(seed());
-	let shell = $state<{ reveal: () => void }>();
-	let submitButton = $state<HTMLElement>();
+	let shell = $state<{ reveal: () => void; revealControls: () => void }>();
 
-	// A page loaded with a prediction already in its URL renders with the column open and no
-	// animation, because nothing happened there for the motion to mark.
-	// svelte-ignore state_referenced_locally
-	const answered = data.prediction !== null || data.error !== null;
+	/** The card under the reader's pointer, which the head above the fields writes out in full. */
+	let previewed = $state<ScheduledGame | null>(null);
 
-	const selectedGame = $derived(
-		data.games.find(
-			(game) =>
-				game.date === form.date &&
-				game.away_team.abbreviation === form.awayTeam &&
-				game.home_team.abbreviation === form.homeTeam &&
-				game.season_type === form.seasonType
-		) ?? null
-	);
+	/** The game the form names, which is the one card standing lifted off the board. */
+	const chosen = $derived(data.games.find((game) => game.id === form.game) ?? null);
 
 	const predicting = $derived(navigating.to?.route.id === '/models/game-stats');
 
 	/** Which parameter is still missing, in at most twelve words. Empty once none are. */
-	const missing = $derived(
-		form.date === '' || form.awayTeam === '' || form.homeTeam === ''
-			? 'Pick a game first.'
-			: form.awayTeam === form.homeTeam
-				? 'A game needs two different teams.'
-				: ''
-	);
+	const missing = $derived(chosen === null ? 'Pick a game first.' : '');
 
-	const teamName = (abbreviation: string) =>
-		data.teams.find((team) => team.abbreviation === abbreviation)?.name ?? abbreviation;
-
-	/** The two sides of a described game, named in full. Null until both of them are named. */
-	const namedSides = (game: GameChoice): GameSides | null =>
-		game.homeTeam === '' || game.awayTeam === ''
-			? null
-			: { home: teamName(game.homeTeam), away: teamName(game.awayTeam) };
+	/** The two sides of a game, named in full. Null before one has been chosen. */
+	const namedSides = (game: ScheduledGame | null): GameSides | null =>
+		game === null ? null : { home: game.home_team.name, away: game.away_team.name };
 
 	/**
 	 * How an answer names itself: the two teams and the stat, then the day.
@@ -101,7 +75,7 @@
 	 * read from one side says so beside its figure, and a category naming a side is named by the team
 	 * playing it, because nothing else in a game statistic's answer marks which team it is about.
 	 */
-	function describe(modelName: string, game: GameChoice) {
+	function describe(modelName: string, game: ScheduledGame | null) {
 		const named = data.models.find(({ name }) => name === modelName) ?? null;
 		const stat = named ? predictsPhrase(named.predicts) : '';
 		const sides = namedSides(game);
@@ -109,27 +83,26 @@
 		return {
 			stat,
 			heading: `${sides ? `${sides.home} vs ${sides.away}` : ''}, ${stat}`,
-			subheading: longGameDay(game.date),
+			subheading: game ? longGameDay(game.date) : '',
 			note: figureNote(named, sides),
 			categoryNames: namedCategories(named, sides)
 		};
 	}
 
-	const reached = $derived(describe(data.model, data.choice));
+	const reached = $derived(describe(data.model, data.selectedGame));
 
-	// While one is being worked out the block names what was asked for, not the last answer. With the
-	// column open but the URL naming no answer, it says which parameter would bring one back.
+	/** The block before anything has been asked. It never pretends to be an answer that failed. */
+	const EMPTY = {
+		stat: '',
+		heading: 'No answer yet',
+		subheading: 'Pick a game, then run the prediction.',
+		note: '',
+		categoryNames: null
+	};
+
+	// While one is being worked out the block names what was asked for, not the last answer.
 	const shown = $derived(
-		predicting
-			? describe(form.model, {
-					date: form.date,
-					homeTeam: form.homeTeam,
-					awayTeam: form.awayTeam,
-					seasonType: form.seasonType
-				})
-			: data.prediction
-				? reached
-				: { stat: '', heading: missing, subheading: '', note: '', categoryNames: null }
+		predicting ? describe(form.model, chosen) : data.prediction ? reached : EMPTY
 	);
 
 	// The loader only offers models the site has a reading for, so this is null while loading and
@@ -142,16 +115,16 @@
 		data.models.find(({ name }) => name === (predicting ? form.model : data.model)) ?? null
 	);
 
-	/** Which side the stat in the form is counted from, once the game names both. */
+	/** Which side the stat in the form is counted from, once a game has been chosen. */
 	const countedFrom = $derived.by(() => {
 		const side = data.models.find(({ name }) => name === form.model)?.read_from;
-		const sides = namedSides(form);
+		const sides = namedSides(chosen);
 
 		return side && sides ? { side, team: sides[side] } : null;
 	});
 
 	// A new game or stat is a new answer, so the block starts from its own line.
-	const answerKey = $derived(JSON.stringify([data.choice, data.model]));
+	const answerKey = $derived(JSON.stringify([data.selectedGame?.id, data.model]));
 
 	/**
 	 * The one sentence an answer is announced with, which is whatever its block leads with. A figure
@@ -170,42 +143,19 @@
 	// The URL is rewritten in place, which runs no load, so the answer beside it keeps standing until
 	// the button asks for a new one.
 	function chooseGame(game: ScheduledGame) {
-		scrollIntoViewIfOffScreen(submitButton, 'end');
+		// A game is what the whole request is about, so the page is put on the questions it opens
+		// rather than on the button at the end of them.
+		shell?.revealControls();
 
-		if (game === selectedGame) return;
+		if (game.id === form.game) return;
 
-		form.date = game.date;
-		form.awayTeam = game.away_team.abbreviation;
-		form.homeTeam = game.home_team.abbreviation;
-		form.seasonType = game.season_type;
+		form.game = game.id;
 
 		// The live URL, not page.url, because a shallow write does not refresh page.url and the next
 		// write would put back what the last one replaced.
 		const url = new URL(location.href);
-		url.searchParams.set('date', game.date);
-		url.searchParams.set('away', game.away_team.abbreviation);
-		url.searchParams.set('home', game.home_team.abbreviation);
-		url.searchParams.set('type', game.season_type);
+		url.searchParams.set('game', String(game.id));
 		replaceState(url, page.state);
-	}
-
-	/**
-	 * Copies the form into the URL, which is what runs a prediction.
-	 *
-	 * The fields name themselves, so the query is read off the form rather than restated here.
-	 */
-	function onSubmit(event: SubmitEvent & { currentTarget: HTMLFormElement }) {
-		event.preventDefault();
-
-		const query = new URLSearchParams();
-
-		for (const [key, value] of new FormData(event.currentTarget)) {
-			if (value !== '') query.append(key, String(value));
-		}
-
-		shell?.reveal();
-
-		goto(`?${query}`, { noScroll: true, keepFocus: true, invalidateAll: true });
 	}
 
 	afterNavigate(({}) => {
@@ -216,55 +166,65 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
-	description="The chance of every winning margin and every points total in one NBA game."
+	description="The chance of every final margin, every points total, and each team winning one NBA game."
 	aboutHref={ABOUT}
 	hasModels={data.models.length > 0}
-	{answered}
+	answering={data.health !== null}
 >
-	{#snippet controls()}
+	{#snippet board()}
 		<UpcomingGames
 			games={data.games}
-			selected={selectedGame}
+			selected={chosen}
 			hrefOf={gameHref}
 			onchoose={chooseGame}
+			onpreview={(game) => (previewed = game)}
 		/>
+	{/snippet}
 
-		<form method="GET" onsubmit={onSubmit}>
-			<GameFields
-				bind:date={form.date}
-				bind:seasonType={form.seasonType}
-				bind:awayTeam={form.awayTeam}
-				bind:homeTeam={form.homeTeam}
-				teams={data.teams}
-			/>
+	{#snippet matchup()}
+		<MatchupHead game={chosen} {previewed} />
+	{/snippet}
 
-			<div class="panel" role="group" aria-labelledby="prediction-group">
-				<p class="micro muted" id="prediction-group">Prediction</p>
+	{#snippet controls()}
+		<form class="form-stack" method="GET" onsubmit={(event) => askPrediction(event, shell)}>
+			<div class="form-groups">
+				<div class="field-group flush">
+					<!-- The game is whichever card is lifted off the board, so it is carried rather than
+					     asked for again. -->
+					<input type="hidden" name="game" value={form.game ?? ''} />
 
-				<div class="field">
-					<label class="micro" for="model">Stat to predict</label>
-					<select id="model" name="model" bind:value={form.model}>
-						{#each data.models as option (option.name)}
-							<option value={option.name}>{sentenceCase(predictsPhrase(option.predicts))}</option>
-						{/each}
-					</select>
-					<!-- A stat with a direction is counted from one side, and the answer names no team,
-					     so the control choosing it says which side that is. -->
-					{#if countedFrom}
-						<p class="small muted" transition:flow>
-							Counted from {countedFrom.team}, the {countedFrom.side} team.
-						</p>
-					{/if}
+					<div class="field">
+						<label class="micro" for="model">Stat</label>
+						<select id="model" name="model" bind:value={form.model}>
+							{#each data.models as option (option.name)}
+								<option value={option.name}>{sentenceCase(predictsPhrase(option.predicts))}</option>
+							{/each}
+						</select>
+						<!-- A stat with a direction is counted from one side, and the answer names no team,
+						     so the control choosing it says which side that is. -->
+						{#if countedFrom}
+							<p class="small muted" transition:flow>
+								Counted from {countedFrom.team}, the {countedFrom.side} team.
+							</p>
+						{/if}
+					</div>
 				</div>
 			</div>
 
-			<div class="submit" bind:this={submitButton}>
-				<button class="button" type="submit" disabled={predicting || missing !== ''}>
-					{predicting ? 'Predicting' : 'Run prediction'}
+			<div class="form-submit">
+				<!-- The button carries the reason it is disabled, so it is not left to a line beside it that
+				     a screen reader has no reason to reach. -->
+				<button
+					class="button"
+					type="submit"
+					disabled={predicting || missing !== ''}
+					aria-describedby={missing && !predicting ? 'submit-missing' : undefined}
+				>
+					{predicting ? 'Predicting' : 'Run a prediction'}
 				</button>
 
 				{#if missing && !predicting}
-					<p class="small muted" transition:flow>{missing}</p>
+					<p id="submit-missing" class="small muted" transition:flow>{missing}</p>
 				{/if}
 			</div>
 		</form>
@@ -282,6 +242,7 @@
 						loading={predicting}
 						stat={shown.stat}
 						heading={shown.heading}
+						headingLevel={3}
 						figureNote={shown.note}
 						categoryNames={shown.categoryNames}
 						subheading={shown.subheading}
@@ -296,26 +257,3 @@
 </PredictionPage>
 
 <p class="visually-hidden" aria-live="polite">{announcement}</p>
-
-<style>
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	/* The panel's own label sits above the fields it groups. */
-	.panel {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-
-	.submit {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: var(--space-2);
-		scroll-margin-bottom: var(--space-5);
-	}
-</style>

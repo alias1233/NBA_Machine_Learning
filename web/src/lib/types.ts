@@ -132,6 +132,52 @@ export type ScheduledGame = {
 	is_mock: boolean;
 };
 
+/**
+ * One of the day's sample predictions, drawn at random by a job rather than asked for by a reader.
+ *
+ * It is the same answer a prediction endpoint returns, plus the subject it was asked about, because
+ * nobody requested it and so nothing else says what it is of. Everything read off the numbers is
+ * still worked out in `src/lib/odds.ts`, exactly as it is for an answer somebody did ask for.
+ */
+export type ShowcaseSample = {
+	family: string;
+	model: string;
+	/** The model's short reader-facing name. */
+	title: string;
+	predicts: string[];
+	output: ModelOutput;
+	values: number[];
+	past_games: number;
+	game: {
+		date: string;
+		home_team: Team;
+		away_team: Team;
+		season_type: SeasonType;
+		/** When the game starts, in UTC. Null when the schedule names no time. */
+		tipoff: string | null;
+	};
+	/** Whose statistic it is, for a player model. Null for every other family. */
+	player: Player | null;
+	/** Which side of the game it is about. Null for a game statistic, which names no side. */
+	team: Team | null;
+	read_from: GameSide | null;
+};
+
+/**
+ * The day's sample predictions, built once by a job and read by everyone who visits that day.
+ *
+ * Nothing on this site predicts on its own, so the home page shows these rather than starting a
+ * forward pass for whoever arrived. The set is drawn at random, seeded from the day, so it changes
+ * every morning and is the same for every reader of that morning.
+ */
+export type Showcase = {
+	format_version: number;
+	/** The day the set was drawn for, as YYYY-MM-DD. */
+	built_for: string;
+	built_at: string;
+	samples: ShowcaseSample[];
+};
+
 export type Health = {
 	models: string[];
 	/** Predictions read rest off the gap to this date, so a stale database reads as a layoff. */

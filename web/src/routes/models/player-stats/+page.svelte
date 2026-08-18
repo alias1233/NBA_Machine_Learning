@@ -1,33 +1,46 @@
 <!--
 	The player game statistics page.
 
-	A request names a game and a player, so choosing a card fills the game and leaves the reader in
-	the player picker, which is the required next step.
+	A request names one of the games on the board, one of its two teams and a player on that team, and
+	the reader is asked for them in that order. Nothing that means nothing yet is on the page: which
+	team arrives with a game, the player picker arrives with a team, and the roster changes arrive
+	with a player. Each answer is what opens the next question, so the form leads rather than waits.
 
-	The form is the reader's pending request and the URL is the answered one. Editing a field or
-	choosing a card changes the form, and only the button copies it into the URL, which is what runs
-	a prediction. That is why choosing a card never fires a request on its own.
+	Asking for the team before the player is what makes the picker readable. One team is fifteen or so
+	names, which is a list a reader can see the whole of, where the two rosters of a game stacked into
+	one list were thirty of them with the second team's players a scroll below the first.
+
+	The roster is the one thing the schedule does not decide, so it stays the reader's to change: who
+	is sitting this game out, and who has joined the team since its last one. Somebody who has just
+	joined is on no roster yet, which is what the search in the picker is for, and the list says so
+	where a reader looking for a missing name will read it.
+
+	The form is the reader's pending request and the URL is the answered one. Choosing a card or a
+	field changes the form, and only the button copies it into the URL, which is what runs a
+	prediction. That is why choosing a card never fires a request on its own.
 -->
 <script lang="ts">
-	import { afterNavigate, goto, replaceState } from '$app/navigation';
+	import { tick } from 'svelte';
+
+	import { afterNavigate, replaceState } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 
 	import AnswerBlock from '$lib/components/AnswerBlock.svelte';
-	import GameFields from '$lib/components/GameFields.svelte';
+	import MatchupHead from '$lib/components/MatchupHead.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PlayerPills from '$lib/components/PlayerPills.svelte';
 	import PlayerSearch from '$lib/components/PlayerSearch.svelte';
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
+	import TeamChoice from '$lib/components/TeamChoice.svelte';
 	import UpcomingGames from '$lib/components/UpcomingGames.svelte';
 	import { longGameDay } from '$lib/games';
 	import { answerSentence, predictsPhrase, sentenceCase } from '$lib/models';
 	import { flow } from '$lib/motion';
 	import { readAnswer } from '$lib/odds';
-	import { gameHref as buildGameHref } from '$lib/predictions';
-	import { scrollIntoViewIfOffScreen } from '$lib/scroll';
+	import { askPrediction, gameHref as buildGameHref } from '$lib/predictions';
+	import { walkTo } from '$lib/scroll';
 
-	import type { GameChoice } from '$lib/predictions';
-	import type { Player, Roster, ScheduledGame } from '$lib/types';
+	import type { Player, Roster, ScheduledGame, Team } from '$lib/types';
 
 	let { data } = $props();
 
@@ -39,10 +52,7 @@
 	 * it back into the URL. afterNavigate re-seeds it whenever a new answer lands.
 	 */
 	const seed = () => ({
-		date: data.choice.date,
-		awayTeam: data.choice.awayTeam,
-		homeTeam: data.choice.homeTeam,
-		seasonType: data.choice.seasonType,
+		game: data.selectedGame?.id ?? null,
 		model: data.model,
 		player: data.player,
 		team: data.playerTeam,
@@ -54,17 +64,13 @@
 	// svelte-ignore state_referenced_locally
 	let rosters = $state<Roster[]>(data.rosters);
 	let loadingRosters = $state(false);
-	let shell = $state<{ reveal: () => void }>();
+	let shell = $state<{ reveal: () => void; revealControls: () => void }>();
 	let submitButton = $state<HTMLElement>();
-	let playerPicker = $state<{
-		focus: () => void;
-		clear: () => void;
-	}>();
+	let teamChoice = $state<{ focus: () => void }>();
+	let playerPicker = $state<{ focus: () => void; clear: () => void }>();
 
-	// A page loaded with a prediction already in its URL renders with the column open and no
-	// animation, because nothing happened there for the motion to mark.
-	// svelte-ignore state_referenced_locally
-	const answered = data.prediction !== null || data.error !== null;
+	/** The card under the reader's pointer, which the head above the fields writes out in full. */
+	let previewed = $state<ScheduledGame | null>(null);
 
 	// Bookkeeping, not state: which game the roster list on the page belongs to, and whether the
 	// reader arrived at that game by choosing a card, which is the one thing that moves focus.
@@ -72,25 +78,18 @@
 	let rostersFor = data.selectedGame?.id ?? null;
 	let chosenByCard = false;
 
-	const selectedGame = $derived(
-		data.games.find(
-			(game) =>
-				game.date === form.date &&
-				game.away_team.abbreviation === form.awayTeam &&
-				game.home_team.abbreviation === form.homeTeam &&
-				game.season_type === form.seasonType
-		) ?? null
-	);
+	/** The game the form names, which is the one card standing lifted off the board. */
+	const chosen = $derived(data.games.find((game) => game.id === form.game) ?? null);
+
+	/** The two sides of the chosen game, away first, which is the order the board deals them. */
+	const sides = $derived(chosen === null ? [] : [chosen.away_team, chosen.home_team]);
 
 	/**
-	 * A chosen game switches the picker to its two rosters. Nothing navigates, so the list is
-	 * fetched rather than loaded.
-	 *
-	 * The reader is put in the picker straight away rather than when the names land, so choosing a
-	 * card is answered by the page at once. The list stands open and pulsing until they arrive.
+	 * A chosen game brings its two rosters with it. Nothing navigates, so they are fetched rather
+	 * than loaded, and the picker below opens on whichever of the two the reader names.
 	 */
 	$effect(() => {
-		const game = selectedGame;
+		const game = chosen;
 
 		if (game === null) {
 			rosters = [];
@@ -104,12 +103,13 @@
 		rostersFor = game.id;
 		rosters = [];
 		loadingRosters = true;
-		clearRoster();
+		clearRequest();
 
+		// The card is answered by the page in the same frame it is chosen, by putting the reader on
+		// the question a game opens, rather than when the names behind it arrive.
 		if (chosenByCard) {
 			chosenByCard = false;
-			playerPicker?.clear();
-			playerPicker?.focus();
+			teamChoice?.focus();
 		}
 
 		let live = true;
@@ -132,104 +132,80 @@
 	});
 
 	/**
-	 * A teammate of the last game is not a teammate of this one, so changing the game drops both
-	 * roster controls. The chosen player goes with them, because a new game usually means a new
-	 * player.
+	 * Everything a game or a team decides, dropped.
+	 *
+	 * A player belongs to one team of one game, and so does every roster change made around them, so
+	 * changing either of those two leaves none of it standing.
 	 */
-	function clearRoster() {
+	function clearRequest({ keepTeam = false } = {}) {
+		if (!keepTeam) form.team = '';
+
+		form.player = null;
 		form.out = [];
 		form.joined = [];
-		form.player = null;
-		form.team = '';
 
 		const url = new URL(location.href);
 
+		url.searchParams.delete('player');
 		url.searchParams.delete('out');
 		url.searchParams.delete('joined');
-		url.searchParams.delete('team');
+		if (!keepTeam) url.searchParams.delete('team');
 
 		if (url.search !== location.search) replaceState(url, page.state);
 	}
 
-	/** Whether a roster names the chosen player, which is how their team is known without asking. */
-	const knownTeam = $derived(
-		form.player === null ||
-			rosters.some((roster) => roster.players.some(({ id }) => id === form.player?.id))
-	);
-
-	/** The two sides of the described game, named, home first. The only answers to which team. */
-	const sides = $derived(
-		[form.homeTeam, form.awayTeam]
-			.filter((abbreviation) => abbreviation !== '')
-			.map((abbreviation) => ({
-				abbreviation,
-				name: data.teams.find((team) => team.abbreviation === abbreviation)?.name ?? abbreviation
-			}))
-	);
-
-	/** The roster the chosen player is on, taken from the reader's answer when no roster names them. */
+	/** The named team's roster, which is who the picker offers and who can be sat out. */
 	const playerRoster = $derived(
-		rosters.find((roster) => roster.players.some(({ id }) => id === form.player?.id)) ??
-			rosters.find((roster) => roster.team.abbreviation === form.team) ??
-			null
+		rosters.find((roster) => roster.team.abbreviation === form.team) ?? null
 	);
 
-	/**
-	 * Who can be sat out. Only a teammate can be missing from the game, so the list is that one team.
-	 * Where no roster names the chosen player their team is not known, so both sides are offered.
-	 */
-	const outGroups = $derived(
-		(playerRoster ? [playerRoster] : rosters).map((roster) => ({
-			team: roster.team,
-			players: roster.players.filter(
-				(candidate) =>
-					candidate.id !== form.player?.id && !form.out.some(({ id }) => id === candidate.id)
-			)
-		}))
+	/** Who can be sat out: the player's own team, less the player and whoever is already out. */
+	const outCandidates = $derived(
+		(playerRoster?.players ?? []).filter(
+			(candidate) =>
+				candidate.id !== form.player?.id && !form.out.some(({ id }) => id === candidate.id)
+		)
 	);
 
 	const predicting = $derived(navigating.to?.route.id === '/models/player-stats');
 
 	/** Which parameter is still missing, in at most twelve words. Empty once none are. */
 	const missing = $derived(
-		form.date === '' || form.awayTeam === '' || form.homeTeam === ''
+		chosen === null
 			? 'Pick a game first.'
-			: form.awayTeam === form.homeTeam
-				? 'A game needs two different teams.'
+			: form.team === ''
+				? 'Pick a team first.'
 				: form.player === null
 					? 'Pick a player first.'
-					: !knownTeam && form.team === ''
-						? 'Say which team this player is on.'
-						: ''
+					: ''
 	);
 
 	/** How an answer names itself: the player and the stat, then the game. */
-	function describe(player: Player | null, modelName: string, game: GameChoice) {
+	function describe(player: Player | null, modelName: string, game: ScheduledGame | null) {
 		const named = data.models.find(({ name }) => name === modelName);
 		const stat = named ? predictsPhrase(named.predicts) : '';
 
 		return {
 			stat,
 			heading: `${player?.name ?? ''}, ${stat}`,
-			subheading: `${game.awayTeam} at ${game.homeTeam}, ${longGameDay(game.date)}`
+			subheading: game
+				? `${game.away_team.abbreviation} at ${game.home_team.abbreviation}, ${longGameDay(game.date)}`
+				: ''
 		};
 	}
 
-	const reached = $derived(describe(data.player, data.model, data.choice));
+	const reached = $derived(describe(data.player, data.model, data.selectedGame));
 
-	// While one is being worked out the block names what was asked for, not the last answer. With
-	// the column open but the URL naming no answer, it says which parameter would bring one back.
+	/** The block before anything has been asked. It never pretends to be an answer that failed. */
+	const EMPTY = {
+		stat: '',
+		heading: 'No answer yet',
+		subheading: 'Pick a game, a team and a player, then run the prediction.'
+	};
+
+	// While one is being worked out the block names what was asked for, not the last answer.
 	const shown = $derived(
-		predicting
-			? describe(form.player, form.model, {
-					date: form.date,
-					homeTeam: form.homeTeam,
-					awayTeam: form.awayTeam,
-					seasonType: form.seasonType
-				})
-			: data.prediction
-				? reached
-				: { stat: '', heading: missing, subheading: '' }
+		predicting ? describe(form.player, form.model, chosen) : data.prediction ? reached : EMPTY
 	);
 
 	// The loader only offers models the site has a reading for, so this is null while loading and
@@ -246,92 +222,86 @@
 	const customRoster = $derived(data.out.length > 0 || data.joined.length > 0);
 
 	// A new game, player or stat is a new answer, so the block starts from its own line.
-	const answerKey = $derived(JSON.stringify([data.choice, data.player?.id, data.model]));
+	const answerKey = $derived(JSON.stringify([data.selectedGame?.id, data.player?.id, data.model]));
 
 	/** The one sentence an answer is announced with, which is whatever its block leads with. */
 	const announcement = $derived(
 		answer && data.player ? `${data.player.name}. ${answerSentence(answer, reached.stat)}` : ''
 	);
 
-	const gameHref = (game: ScheduledGame) =>
-		buildGameHref(game, {
-			model: form.model,
-			player: form.player ? String(form.player.id) : ''
-		});
+	/** What the picker is keyed on, so a new team or a new answer opens it on an empty box. */
+	const pickerKey = $derived(`${form.team}:${data.player?.id ?? ''}`);
+
+	// Only the stat survives a change of game. The team and the player belong to the game that was on
+	// the board when they were picked.
+	const gameHref = (game: ScheduledGame) => buildGameHref(game, { model: form.model });
 
 	// The URL is rewritten in place, which runs no load, so the answer beside it keeps standing
 	// until the button asks for a new one.
 	function chooseGame(game: ScheduledGame) {
-		scrollIntoViewIfOffScreen(submitButton, 'end');
+		// A game is what the whole request is about, so the page is put on the questions it opens
+		// rather than on the button at the end of them.
+		shell?.revealControls();
 
-		if (game === selectedGame) {
-			playerPicker?.focus();
+		if (game.id === form.game) {
+			teamChoice?.focus();
 			return;
 		}
 
-		// The roster fetch above picks this up, so the picker is cleared and focused in the same
-		// frame the card is chosen rather than when its names arrive.
+		// The roster effect above picks this up, so the reader is put on the two teams in the same
+		// frame the card is chosen rather than when the rosters behind them arrive.
 		chosenByCard = true;
 
-		form.date = game.date;
-		form.awayTeam = game.away_team.abbreviation;
-		form.homeTeam = game.home_team.abbreviation;
-		form.seasonType = game.season_type;
+		form.game = game.id;
 
 		// The live URL, not page.url, because a shallow write does not refresh page.url and the next
-		// write would put back what the last one replaced, including the roster this just cleared.
+		// write would put back what the last one replaced, including what this just cleared.
 		const url = new URL(location.href);
-		url.searchParams.set('date', game.date);
-		url.searchParams.set('away', game.away_team.abbreviation);
-		url.searchParams.set('home', game.home_team.abbreviation);
-		url.searchParams.set('type', game.season_type);
+		url.searchParams.set('game', String(game.id));
 		replaceState(url, page.state);
+	}
+
+	async function chooseTeam(side: Team) {
+		if (side.abbreviation !== form.team) {
+			form.team = side.abbreviation;
+			clearRequest({ keepTeam: true });
+
+			const url = new URL(location.href);
+			url.searchParams.set('team', side.abbreviation);
+			replaceState(url, page.state);
+		}
+
+		walkTo(submitButton, { block: 'end' });
+
+		// The picker arrives with the team, so it is there to be emptied and put the reader in only
+		// once the page has caught up with the choice that opened it.
+		await tick();
+
+		playerPicker?.clear();
+		playerPicker?.focus();
 	}
 
 	function choosePlayer(player: Player) {
 		form.player = player;
 		form.out = [];
-		form.team = '';
 
-		scrollIntoViewIfOffScreen(submitButton, 'end');
+		walkTo(submitButton, { block: 'end' });
 	}
 
 	function addOut(event: Event & { currentTarget: HTMLSelectElement }) {
-		const chosen = outGroups
-			.flatMap((group) => group.players)
-			.find(({ id }) => id === Number(event.currentTarget.value));
+		const sittingOut = outCandidates.find(({ id }) => id === Number(event.currentTarget.value));
 
-		if (chosen) form.out = [...form.out, chosen];
+		if (sittingOut) form.out = [...form.out, sittingOut];
 
 		event.currentTarget.value = '';
 
-		scrollIntoViewIfOffScreen(submitButton, 'end');
+		walkTo(submitButton, { block: 'end' });
 	}
 
 	function addJoined(player: Player) {
 		if (!form.joined.some(({ id }) => id === player.id)) form.joined = [...form.joined, player];
 
-		scrollIntoViewIfOffScreen(submitButton, 'end');
-	}
-
-	/**
-	 * Copies the form into the URL, which is what runs a prediction.
-	 *
-	 * The fields name themselves, so the query is read off the form rather than restated here. A new
-	 * answer opens on its own line, so the last one's is not carried over.
-	 */
-	function onSubmit(event: SubmitEvent & { currentTarget: HTMLFormElement }) {
-		event.preventDefault();
-
-		const query = new URLSearchParams();
-
-		for (const [key, value] of new FormData(event.currentTarget)) {
-			if (value !== '') query.append(key, String(value));
-		}
-
-		shell?.reveal();
-
-		goto(`?${query}`, { noScroll: true, keepFocus: true, invalidateAll: true });
+		walkTo(submitButton, { block: 'end' });
 	}
 
 	afterNavigate(({}) => {
@@ -345,127 +315,139 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
-	description="The chance of every points, rebounds and assists total for an NBA player in one game."
+	description="The chance of every points, rebounds, assists and other box score total for an NBA player in one game."
 	aboutHref={ABOUT}
 	hasModels={data.models.length > 0}
-	{answered}
+	answering={data.health !== null}
 >
-	{#snippet controls()}
+	{#snippet board()}
 		<UpcomingGames
 			games={data.games}
-			selected={selectedGame}
+			selected={chosen}
 			hrefOf={gameHref}
 			onchoose={chooseGame}
+			onpreview={(game) => (previewed = game)}
 		/>
+	{/snippet}
 
-		<form method="GET" onsubmit={onSubmit}>
-			<GameFields
-				bind:date={form.date}
-				bind:seasonType={form.seasonType}
-				bind:awayTeam={form.awayTeam}
-				bind:homeTeam={form.homeTeam}
-				teams={data.teams}
-			/>
+	{#snippet matchup()}
+		<MatchupHead game={chosen} {previewed} />
+	{/snippet}
 
-			<!-- A chosen game opens the list on its two rosters, and typing searches the whole
-			     league. Somebody who has just joined a team is on no roster yet, and nothing
-			     collected says which side they are on, so they are the one case that is asked. -->
-			<div class="panel">
-				{#key data.player?.id}
-					<PlayerSearch
-						bind:this={playerPicker}
-						id="player"
-						label="Player"
-						initial={form.player}
-						{rosters}
-						{loadingRosters}
-						onchoose={choosePlayer}
-					/>
-				{/key}
+	{#snippet controls()}
+		<form class="form-stack" method="GET" onsubmit={(event) => askPrediction(event, shell)}>
+			<div class="form-groups">
+				<!-- A team of the chosen game, a player on it, and a statistic. Each of the first two
+				     opens the next, so nothing on the page is a question the reader has nothing to
+				     answer it with yet. -->
+				<div class="field-group flush">
+					<!-- The game is whichever card is lifted off the board, so it is carried rather than
+					     asked for again. -->
+					<input type="hidden" name="game" value={form.game ?? ''} />
 
-				<input type="hidden" name="player" value={form.player?.id ?? ''} />
+					{#if sides.length === 2}
+						<div transition:flow>
+							<TeamChoice
+								bind:this={teamChoice}
+								id="team"
+								label="Team"
+								name="team"
+								{sides}
+								value={form.team}
+								onchoose={chooseTeam}
+							/>
+						</div>
+					{/if}
 
-				{#if !knownTeam && sides.length === 2}
-					<div class="field" transition:flow>
-						<label class="micro" for="player-team">Team</label>
-						<select id="player-team" name="team" bind:value={form.team}>
-							<option value="">Pick a team</option>
-							{#each sides as side (side.abbreviation)}
-								<option value={side.abbreviation}>{side.name}</option>
+					<!-- The picker opens on the named team's roster, and typing searches the whole league
+					     instead, which is how somebody who has just joined and is on no roster yet is
+					     reached. The list says so itself, where a reader missing a name will read it. -->
+					{#if form.team !== ''}
+						<div transition:flow>
+							{#key pickerKey}
+								<PlayerSearch
+									bind:this={playerPicker}
+									id="player"
+									label="Player"
+									initial={form.player}
+									rosters={playerRoster ? [playerRoster] : []}
+									{loadingRosters}
+									onchoose={choosePlayer}
+								/>
+							{/key}
+
+							<input type="hidden" name="player" value={form.player?.id ?? ''} />
+						</div>
+					{/if}
+
+					<div class="field">
+						<label class="micro" for="model">Stat</label>
+						<select id="model" name="model" bind:value={form.model}>
+							{#each data.models as option (option.name)}
+								<option value={option.name}>{sentenceCase(predictsPhrase(option.predicts))}</option>
 							{/each}
 						</select>
-						<p class="small muted">No collected game puts this player on either side.</p>
 					</div>
-				{/if}
-			</div>
-
-			<div class="panel" role="group" aria-labelledby="prediction-group">
-				<p class="micro muted" id="prediction-group">Prediction</p>
-
-				<div class="field">
-					<label class="micro" for="model">Stat to predict</label>
-					<select id="model" name="model" bind:value={form.model}>
-						{#each data.models as option (option.name)}
-							<option value={option.name}>{sentenceCase(predictsPhrase(option.predicts))}</option>
-						{/each}
-					</select>
 				</div>
-			</div>
 
-			<!-- A roster change takes effect on the next prediction, with the rest of the form.
-			     Nothing here fires a request on its own. -->
-			<div class="panel" role="group" aria-labelledby="roster-group">
-				<p class="micro muted" id="roster-group">Roster</p>
+				<!-- The one thing the schedule does not decide, and the last thing asked, because every
+				     name in it is measured against the player above. A roster change takes effect on the
+				     next prediction, with the rest of the form, and nothing here fires a request on its
+				     own. -->
+				{#if form.player !== null}
+					<div class="field-group" role="group" aria-labelledby="roster-group" transition:flow>
+						<p class="micro group-label" id="roster-group">Roster</p>
 
-				{#if form.player === null}
-					<p class="small muted" transition:flow>Pick a player first.</p>
-				{:else}
-					<div class="fields" transition:flow>
-						<div class="field">
-							<label class="micro" for="out">Out</label>
-							<select id="out" onchange={addOut}>
-								<option value="">Add a player</option>
-								{#each outGroups as group (group.team.abbreviation)}
-									<optgroup label={group.team.name}>
-										{#each group.players as candidate (candidate.id)}
-											<option value={candidate.id}>{candidate.name}</option>
-										{/each}
-									</optgroup>
-								{/each}
-							</select>
-							<p class="small muted">Players on this team who will not play.</p>
-							<PlayerPills
-								players={form.out}
-								name="out"
-								onremove={(player) => (form.out = form.out.filter(({ id }) => id !== player.id))}
-							/>
+						<div class="field-pair">
+							<div class="field">
+								<label class="micro" for="out">Out</label>
+								<select id="out" onchange={addOut}>
+									<option value="">Add a player</option>
+									{#each outCandidates as candidate (candidate.id)}
+										<option value={candidate.id}>{candidate.name}</option>
+									{/each}
+								</select>
+								<p class="small muted">Players on this team who will not play.</p>
+								<PlayerPills
+									players={form.out}
+									name="out"
+									onremove={(player) => (form.out = form.out.filter(({ id }) => id !== player.id))}
+								/>
+							</div>
+
+							<div class="field">
+								<PlayerSearch id="joined" label="New teammates" clearOnChoose onchoose={addJoined} />
+								<p class="small muted">Players who joined this team since its last game.</p>
+								<PlayerPills
+									players={form.joined}
+									name="joined"
+									onremove={(player) =>
+										(form.joined = form.joined.filter(({ id }) => id !== player.id))}
+								/>
+							</div>
 						</div>
 
-						<div class="field">
-							<PlayerSearch id="joined" label="New teammates" clearOnChoose onchoose={addJoined} />
-							<p class="small muted">Players who joined this team since its last game.</p>
-							<PlayerPills
-								players={form.joined}
-								name="joined"
-								onremove={(player) =>
-									(form.joined = form.joined.filter(({ id }) => id !== player.id))}
-							/>
-						</div>
+						{#if form.out.length === 0 && form.joined.length === 0}
+							<p class="small muted" transition:flow>No change from the last game.</p>
+						{/if}
 					</div>
-
-					{#if form.out.length === 0 && form.joined.length === 0}
-						<p class="small muted" transition:flow>No change from the last game.</p>
-					{/if}
 				{/if}
 			</div>
 
-			<div class="submit" bind:this={submitButton}>
-				<button class="button" type="submit" disabled={predicting || missing !== ''}>
-					{predicting ? 'Predicting' : 'Run prediction'}
+			<div class="form-submit" bind:this={submitButton}>
+				<!-- The button carries the reason it is disabled, so it is not left to a line beside it that
+				     a screen reader has no reason to reach. -->
+				<button
+					class="button"
+					type="submit"
+					disabled={predicting || missing !== ''}
+					aria-describedby={missing && !predicting ? 'submit-missing' : undefined}
+				>
+					{predicting ? 'Predicting' : 'Run a prediction'}
 				</button>
 
 				{#if missing && !predicting}
-					<p class="small muted" transition:flow>{missing}</p>
+					<p id="submit-missing" class="small muted" transition:flow>{missing}</p>
 				{/if}
 			</div>
 		</form>
@@ -483,6 +465,7 @@
 						loading={predicting}
 						stat={shown.stat}
 						heading={shown.heading}
+						headingLevel={3}
 						subheading={shown.subheading}
 						openOn={data.line}
 						{customRoster}
@@ -495,37 +478,3 @@
 </PredictionPage>
 
 <p class="visually-hidden" aria-live="polite">{announcement}</p>
-
-<style>
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	/* The panel's own label sits above the fields it groups. */
-	.panel {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-
-	.fields {
-		display: grid;
-		gap: var(--space-4);
-	}
-
-	.submit {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: var(--space-2);
-		scroll-margin-bottom: var(--space-5);
-	}
-
-	@media (min-width: 40rem) {
-		.fields {
-			grid-template-columns: 1fr 1fr;
-		}
-	}
-</style>

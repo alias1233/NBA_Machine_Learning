@@ -3,7 +3,9 @@
 
 	Given rosters it opens on them, because with a game chosen that is who the reader almost always
 	wants. Typing searches the whole league instead, so a player who has just joined a team and is on
-	no roster yet is still reachable.
+	no roster yet is still reachable. The list says which of the two it is showing, and a roster ends
+	on the line that says what to do about a name that is not on it, because that is where a reader
+	looks when they cannot find somebody rather than under the field.
 
 	The prediction service is not reachable from a browser, so the lookup goes through this site's own
 	/api/players route. What happens to a chosen player is the caller's business: the main picker
@@ -54,6 +56,9 @@
 	/** How many names the list stands in for while it waits for them. */
 	const RESERVED_ROWS = 5;
 
+	/** What the list calls a search, which is the whole league rather than the game's own teams. */
+	const LEAGUE = 'Across the league';
+
 	// Deliberately the initial value only. Once the box is on screen the reader owns it.
 	// svelte-ignore state_referenced_locally
 	let text = $state(initial?.name ?? '');
@@ -103,9 +108,14 @@
 
 	/** What the listbox is showing, and the flat position of each entry for the arrow keys. */
 	const shown = $derived.by(() => {
+		// One roster names itself in the field above the list, so a heading over it would say the
+		// team's name twice. Two need telling apart, and a search is neither of them.
 		const groups = searchable
-			? [{ label: '', players: results }]
-			: rosters.map((roster) => ({ label: roster.team.name, players: roster.players }));
+			? [{ label: LEAGUE, players: results }]
+			: rosters.map((roster) => ({
+					label: rosters.length > 1 ? roster.team.name : '',
+					players: roster.players
+				}));
 
 		let position = 0;
 
@@ -264,7 +274,7 @@
 			<ul
 				id="{id}-options"
 				role="listbox"
-				aria-label={searchable ? 'Players' : 'This game'}
+				aria-label={searchable ? 'Players matching your search' : 'Players in this game'}
 				aria-busy={waiting || undefined}
 			>
 				{#if waiting && options.length === 0}
@@ -272,7 +282,7 @@
 						<li class="reserved" role="presentation"><span class="waiting"></span></li>
 					{/each}
 				{:else if options.length === 0}
-					<li class="empty muted small">No player found.</li>
+					<li class="empty muted small">No player matches that name.</li>
 				{:else}
 					{#each shown as group (group.label)}
 						{#if group.label}
@@ -296,6 +306,14 @@
 							</li>
 						{/each}
 					{/each}
+
+					<!-- Where a roster runs out, which is exactly where a reader who cannot find their
+					     player is looking. It is not an option, so it is not reachable by arrow key. -->
+					{#if !searchable}
+						<li class="hint muted small" role="presentation">
+							Somebody missing? Type a name to search the whole league.
+						</li>
+					{/if}
 				{/if}
 			</ul>
 		</div>
@@ -335,7 +353,7 @@
 	/* Floats above the page, so it is the one other thing besides the models menu that is raised. */
 	.floating {
 		position: absolute;
-		z-index: 10;
+		z-index: var(--layer-floating);
 		top: 100%;
 		left: 0;
 		right: 0;
@@ -345,13 +363,19 @@
 		box-shadow: var(--shadow);
 	}
 
-	/* The list is what runs out of room, so it is what scrolls. The panel around it flows to
-	   whatever height that settles at. */
+	/*
+	 * The list is what runs out of room, so it is what scrolls. The panel around it flows to whatever
+	 * height that settles at.
+	 *
+	 * It is given the room a whole roster needs, because a list showing five of eighteen names reads
+	 * as a short list rather than as a long one the reader has to scroll. The screen is the other
+	 * ceiling, so a list on a phone never runs past the bottom of it.
+	 */
 	ul {
 		margin: 0;
 		padding: 0;
 		list-style: none;
-		max-height: calc(var(--space-8) * 2.5);
+		max-height: min(60svh, calc(var(--space-8) * 4));
 		overflow-y: auto;
 	}
 
@@ -366,25 +390,26 @@
 
 	li.empty,
 	li.group,
+	li.hint,
 	li.reserved {
 		cursor: default;
 	}
 
-	/* Reserved space in a panel, drawn as the sunken plane and pulsing so the list reads as loading
-	   rather than as one with nobody in it. */
+	/* Set off from the names above it by a rule, because it is about the list rather than in it. */
+	li.hint {
+		align-items: start;
+		margin-top: var(--space-1);
+		padding-block: var(--space-2);
+		border-top: var(--rule-panel);
+		border-radius: 0;
+	}
+
+	/* Given its size, because a name it is standing in for has none to take. It is what says the
+	   list is still on its way rather than one with nobody in it. */
 	.waiting {
 		width: 100%;
 		max-width: calc(var(--space-8) * 2);
 		height: var(--type-body);
-		background: var(--surface-sunken);
-		border-radius: var(--radius);
-		animation: pulse var(--loading-pulse) var(--ease-in-out) infinite alternate;
-	}
-
-	@keyframes pulse {
-		to {
-			opacity: 0.4;
-		}
 	}
 
 	/* Names which side of the game a run of players is, so the two rosters read as two lists. */

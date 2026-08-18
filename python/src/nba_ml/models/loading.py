@@ -7,6 +7,7 @@ here and inference reads it.
 """
 
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -107,3 +108,17 @@ def can_load(specification: ModelSpecification) -> bool:
         and model.sequence_count == specification.sequences_read
         and _reads_the_columns_it_was_fit_on(saved, specification)
     )
+
+def trained_at(specification: ModelSpecification) -> datetime | None:
+    """
+    When this model's saved file was written, or None where nothing that can answer is saved.
+
+    A file that cannot serve what its specification now promises counts as nothing, because that is
+    what it is to a caller: it has to be fitted again before anything can read it. So a model whose
+    range or columns have moved reads as never trained rather than as trained long ago.
+    """
+
+    if not can_load(specification):
+        return None
+
+    return datetime.fromtimestamp(specification.model_file().stat().st_mtime)

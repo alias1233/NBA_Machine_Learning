@@ -58,8 +58,8 @@
 			<dl aria-hidden="true">
 				{#each Array(RESERVED_ROWS) as _, row (row)}
 					<div class="row">
-						<div class="waiting name"></div>
-						<div class="waiting track"></div>
+						<div class="reserved name" class:waiting={loading}></div>
+						<div class="reserved track" class:waiting={loading}></div>
 					</div>
 				{/each}
 			</dl>
@@ -105,23 +105,11 @@
 		transition: width var(--motion-slow) var(--ease-in);
 	}
 
-	/* Reserved space, drawn as the sunken plane and pulsing so the box reads as loading. */
-	.waiting {
-		background: var(--surface-sunken);
-		border-radius: var(--radius);
-		animation: pulse var(--loading-pulse) var(--ease-in-out) infinite alternate;
-	}
-
-	.waiting.name {
+	/* Given its width, because a name it is standing in for has none to take. */
+	.reserved.name {
 		grid-column: 1 / -1;
 		width: calc(var(--space-8) * 1.5);
 		max-width: 60%;
 		height: var(--type-figure);
-	}
-
-	@keyframes pulse {
-		to {
-			opacity: 0.4;
-		}
 	}
 </style>

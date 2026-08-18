@@ -6,8 +6,9 @@
 
 <FamilyAbout
 	families={data.families}
+	answering={data.health !== null}
 	models={data.models}
 	family="game_stats"
-	title="Game stat models, how it works"
-	description="How the winning margin and the total points of an NBA game are predicted, and how accurate it is."
+	title="How game stat models work"
+	description="How the final margin, the total points and the winner of an NBA game are predicted, and how accurate the models are."
 />

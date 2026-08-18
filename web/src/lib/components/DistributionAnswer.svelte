@@ -133,7 +133,7 @@
 		aria-haspopup="dialog"
 		onclick={() => (detailed = true)}
 	>
-		Detailed view
+		See the full chart
 	</button>
 </LineControl>
 

@@ -39,20 +39,25 @@
 		{#if distribution && !loading}
 			<DistributionAnswer {distribution} {stat} {openOn} {heading} {subheading} {example} />
 		{:else}
+			<!-- Reserved space at the size the answer will take. It pulses only while one is on its
+			     way: standing before the first prediction it keeps still, because nothing is coming
+			     until the reader asks for it. -->
 			<div class="skeleton" aria-hidden="true">
-				<!-- The three the odds land in, named but unanswered, in the row they will be read on. -->
+				<!-- The tracks the odds land in, in the row they will be read on. Nothing here is named:
+				     the words belong to the answer, and a block standing empty has not been told which
+				     model it is waiting for or whether that model reads against a line at all. -->
 				<div class="odds">
-					{#each ['Under', 'Push', 'Over'] as label (label)}
+					{#each [0, 1, 2] as track (track)}
 						<div>
-							<p class="micro muted">{label}</p>
-							<div class="waiting figure"></div>
+							<div class="reserved label" class:waiting={loading}></div>
+							<div class="reserved figure" class:waiting={loading}></div>
 						</div>
 					{/each}
 				</div>
 
-				<div class="waiting chart"></div>
-				<div class="waiting handle"></div>
-				<div class="waiting row"></div>
+				<div class="reserved chart" class:waiting={loading}></div>
+				<div class="reserved handle" class:waiting={loading}></div>
+				<div class="reserved row" class:waiting={loading}></div>
 			</div>
 		{/if}
 	</div>
@@ -78,32 +83,25 @@
 		margin-bottom: var(--space-2);
 	}
 
-	/* Reserved space, drawn as the sunken plane because the surface hands the page-side tokens back.
-	   It pulses, so the box reads as loading rather than as a finished empty one. */
-	.waiting {
-		background: var(--surface-sunken);
-		border-radius: var(--radius);
-		animation: pulse var(--loading-pulse) var(--ease-in-out) infinite alternate;
-	}
-
-	@keyframes pulse {
-		to {
-			opacity: 0.4;
-		}
-	}
-
 	/* The bars, plus the readout above them and the outcome marks below them, which is the whole of
 	   what a drawn chart takes. */
-	.waiting.chart {
+	.reserved.chart {
 		height: calc(var(--chart-height) + var(--space-5) * 2);
 	}
 
-	.waiting.handle,
-	.waiting.row {
+	.reserved.handle,
+	.reserved.row {
 		height: var(--tap-target);
 	}
 
-	.waiting.figure {
+	/* The height a micro label takes on its own line, so the row is the size the named odds land in
+	   however the reserved space is drawn. */
+	.reserved.label {
+		width: 3.25rem;
+		height: calc(var(--type-micro) * 1.4);
+	}
+
+	.reserved.figure {
 		height: var(--type-figure);
 		margin-top: var(--space-1);
 	}

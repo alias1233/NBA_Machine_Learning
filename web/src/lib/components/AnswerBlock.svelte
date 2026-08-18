@@ -7,6 +7,12 @@
 	The middle of it is a reading, one per answer shape, and each owns its own surface and its own
 	reserved space. This holds what every answer has: what was asked, the figure it leads with, and
 	the ways out of it.
+
+	Given the whole page, it sets as two: the brief down a rail on the left, and the reading filling
+	everything beside it. A distribution is a drawing and every pixel it is given is another outcome
+	the reader can tell apart, while what was asked and what it came to are a few short lines that
+	gain nothing from a wide measure. In a narrow column, which is the About page's annotated block
+	and every phone, the two stack in the order they are read.
 -->
 <script lang="ts">
 	import CategoryReading from '$lib/components/CategoryReading.svelte';
@@ -128,60 +134,67 @@
 
 <!-- The one container carrying the accent top edge unhovered, because it is the answer. -->
 <section class="block answer">
-	<header>
-		<!-- The serif role rather than the level's own, so the block reads the same at either. -->
-		<svelte:element this={`h${headingLevel}`} class="type-h2">{heading}</svelte:element>
-		{#if subheading}
-			<p class="muted small">{subheading}</p>
-		{/if}
-
-		<!-- Read before the number, because it is about how much stands behind it. -->
-		{#if thin}
-			<p class="thin small">
-				Built from {pastGames}
-				{pastGames === 1 ? 'past game' : 'past games'}. An answer from this few is unstable.
-			</p>
-		{/if}
-	</header>
-
-	<!-- data-explain names a part the About page's annotated answer runs a leader line to. -->
-	<div class="lead" data-explain="lead">
-		<p class="micro muted">{leadLabel}</p>
-
-		<!-- The note comes from the model and the chosen game, so it stands beside the reserved space
-		     as well and the block does not change size when the answer lands. -->
-		<div class="figure-row">
-			{#if answered}
-				<p class="figure-lead">{leadFigure}</p>
-			{:else}
-				<div class="waiting lead-figure"></div>
+	<div class="brief">
+		<header>
+			<!-- The serif role rather than the level's own, so the block reads the same at either. -->
+			<svelte:element this={`h${headingLevel}`} class="type-h2">{heading}</svelte:element>
+			{#if subheading}
+				<p class="muted small">{subheading}</p>
 			{/if}
 
-			{#if figureNote}
-				<p class="figure-note">{figureNote}</p>
+			<!-- Read before the number, because it is about how much stands behind it. -->
+			{#if thin}
+				<p class="thin small">
+					Built from only {pastGames}
+					{pastGames === 1 ? 'earlier game' : 'earlier games'}, so this answer is less reliable than
+					usual.
+				</p>
 			{/if}
+		</header>
+
+		<!-- data-explain names a part the About page's annotated answer runs a leader line to. -->
+		<div class="lead" data-explain="lead">
+			<p class="micro muted">{leadLabel}</p>
+
+			<!-- The note comes from the model and the chosen game, so it stands beside the reserved
+			     space as well and the block does not change size when the answer lands. -->
+			<div class="figure-row">
+				{#if answered}
+					<p class="figure-lead">{leadFigure}</p>
+				{:else}
+					<div class="reserved lead-figure" class:waiting={loading}></div>
+				{/if}
+
+				{#if figureNote}
+					<p class="figure-note">{figureNote}</p>
+				{/if}
+			</div>
 		</div>
+
+		<!-- A changed answer must never look like the default one, and it says so before the reading
+		     rather than after it, the same as the line about how little stands behind one. -->
+		{#if customRoster && answered}
+			<p><span class="tag micro">Changed roster</span></p>
+		{/if}
 	</div>
 
-	{#if kind === 'category_distribution'}
-		<CategoryReading {categories} {loading} />
-	{:else}
-		<!-- The detailed view covers the page, so it is given the words this block names itself with. -->
-		<DistributionReading
-			{distribution}
-			{loading}
-			{stat}
-			{openOn}
-			{heading}
-			{subheading}
-			{example}
-		/>
-	{/if}
-
-	<!-- A changed answer must never look like the default one. -->
-	{#if customRoster && answered}
-		<p><span class="tag micro">Custom roster</span></p>
-	{/if}
+	<div class="reading-area">
+		{#if kind === 'category_distribution'}
+			<CategoryReading {categories} {loading} />
+		{:else}
+			<!-- The detailed view covers the page, so it is given the words this block names itself
+			     with. -->
+			<DistributionReading
+				{distribution}
+				{loading}
+				{stat}
+				{openOn}
+				{heading}
+				{subheading}
+				{example}
+			/>
+		{/if}
+	</div>
 
 	<!-- The one way out, and what the block is not. A new tab, because everything the reader asked
 	     for is in the address bar of the one they are on. Both stand before an answer as well, so the
@@ -203,6 +216,16 @@
 		flex-direction: column;
 		gap: var(--space-5);
 		border-top-color: var(--plane-accent);
+	}
+
+	.brief {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+
+	.reading-area {
+		min-width: 0;
 	}
 
 	header .type-h2 {
@@ -239,25 +262,32 @@
 		gap: var(--space-3);
 	}
 
-	/* Reserved space on a block. The page's sunken tone would read as a bright bar here, so a
-	   skeleton on a block is drawn in the block's own hairline. It pulses, so the box reads as
-	   loading rather than as a finished empty one. */
-	.waiting {
-		background: var(--hairline-block);
-		border-radius: var(--radius);
-		animation: pulse var(--loading-pulse) var(--ease-in-out) infinite alternate;
-	}
-
-	@keyframes pulse {
-		to {
-			opacity: 0.4;
-		}
-	}
-
-	/* Given its width, because it holds nothing to take one from. */
-	.waiting.lead-figure {
+	/* Given its width, because it holds nothing to take one from. The block plane hands it the
+	   waiting tone, which on block paper is the block's own hairline. */
+	.reserved.lead-figure {
 		width: calc(var(--space-8) * 2);
 		max-width: 100%;
 		height: var(--type-figure-lead);
+	}
+
+	/*
+	 * Given the page, the block sets as a rail and a drawing. The brief takes the top of the rail and
+	 * what the answer is not takes the bottom of it, so the two things a reader needs before and
+	 * after the number sit at the two ends of the column they are read in. The reading spans both
+	 * rows, and the chart in it is given the height that width asks for.
+	 */
+	@container answer-column (min-width: 58rem) {
+		.answer {
+			display: grid;
+			grid-template-columns: minmax(0, 19rem) minmax(0, 1fr);
+			grid-template-rows: 1fr auto;
+			column-gap: var(--space-6);
+			row-gap: var(--space-5);
+			--chart-height: calc(var(--space-8) * 3.75);
+		}
+
+		.reading-area {
+			grid-area: 1 / 2 / span 2 / auto;
+		}
 	}
 </style>

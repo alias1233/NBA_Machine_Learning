@@ -276,6 +276,7 @@
 	 */
 	.plot {
 		display: grid;
+		flex: 1;
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-rows: minmax(0, 1fr) auto;
 		min-height: 0;
@@ -404,7 +405,6 @@
 	}
 
 	.detailed .plot {
-		flex: 1;
 		grid-template-columns: var(--chart-axis) minmax(0, 1fr);
 	}
 

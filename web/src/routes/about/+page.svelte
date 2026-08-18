@@ -10,7 +10,9 @@
 <script lang="ts">
 	import AnnotatedAnswer from '$lib/components/AnnotatedAnswer.svelte';
 	import Faq from '$lib/components/Faq.svelte';
-	import { pageTitle, SITE_NAME } from '$lib/site';
+	import PlateBand from '$lib/components/PlateBand.svelte';
+	import SectionIndex from '$lib/components/SectionIndex.svelte';
+	import { pageTitle, SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
 	import { MODELS_PATH } from '$lib/models';
 
 	/** Placeholders. The wording is the user's to settle, so each one reads as unwritten. */
@@ -19,6 +21,16 @@
 		{ question: 'Second question, not written yet', answer: 'This answer is not written yet.' },
 		{ question: 'Third question, not written yet', answer: 'This answer is not written yet.' },
 		{ question: 'Fourth question, not written yet', answer: 'This answer is not written yet.' }
+	];
+
+	// The anchors are fixed. Every answer block on the site links to #reading, so that one in
+	// particular can never be renamed.
+	const SECTIONS = [
+		['what', 'What this is'],
+		['reading', 'Reading a prediction'],
+		['how', 'How it works'],
+		['disclaimers', 'Disclaimers'],
+		['questions', 'Common questions']
 	];
 </script>
 
@@ -30,108 +42,131 @@
 	/>
 </svelte:head>
 
-<div class="page sections">
-	<h1 class="page-title">About</h1>
+<PlateBand title="About" lede={SITE_DESCRIPTION} />
 
-	<section id="what">
-		<h2>What this is</h2>
-		<p>
-			<a href="/">{SITE_NAME}</a>
-			is a collection of machine learning models that predict statistics of future NBA games.
-		</p>
-		<p>
-			Each model outputs a probability distribution over the range of possible outcomes for 
-			a targeted statistic, allowing for precise calculations of the predicted
-			<b class="under">under</b>,
-			<b class="push">push</b>,
-			and
-			<b class="over">over</b>
-			values for a specified line.
-		</p>
-		<p>
-			Head to the
-			<a href={MODELS_PATH}>Models</a>
-			section to select from the available model types. Visit a specific model type's
-			<em>About</em>
-			page to learn more about what each model predicts.
-		</p>
-	</section>
+<div class="page reading indexed">
+	<SectionIndex sections={SECTIONS} label="Sections of this page" />
 
-	<section id="reading">
-		<h2>Reading a prediction</h2>
+	<div class="sections">
+		<section id="what">
+			<h2 class="section-rule">What this is</h2>
+			<p>
+				<a href="/">{SITE_NAME}</a>
+				is a collection of machine learning models that predict statistics of future NBA games.
+			</p>
+			<p>
+				Each model outputs a probability distribution over the range of possible outcomes for 
+				a targeted statistic, allowing for precise calculations of the predicted
+				<b class="under">under</b>,
+				<b class="push">push</b>,
+				and
+				<b class="over">over</b>
+				values for a specified line.
+			</p>
+			<p>
+				Head to the
+				<a href={MODELS_PATH}>Models</a>
+				section to select from the available model types. Visit a specific model type's
+				<em>About</em>
+				page to learn more about what each model predicts.
+			</p>
+		</section>
 
-		<AnnotatedAnswer />
-	</section>
+		<section id="reading">
+			<h2 class="section-rule">Reading a prediction</h2>
 
-	<section id="how">
-		<h2>How it works</h2>
+			<AnnotatedAnswer />
+		</section>
 
-		<h3><em>What is machine learning?</em></h3>
-		<p>
-			...
-		</p>
-		<p>
-			...
-		</p>
+		<section id="how">
+			<h2 class="section-rule">How it works</h2>
 
-		<h3><em>How are models trained?</em></h3>
-		<p>
-			Historical NBA game logs containing player and team box scores are first collected from 
-			our data provider,
-			<a href="https://www.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE</a>.
-			The raw game logs are then processed by removing redundant data points and engineering
-			new features.
-		</p>
-		<p>
-			The dataset is partitioned by date into training, validation, and test splits.
-			During the learning phase, the model makes predictions on the training dataset, and 
-			its internal weights are adjusted based on the result. After the training epochs have 
-			elapsed, the weights that produced the least error when inferencing on the validation 
-			dataset are kept. Evaluation metrics are then calculated based on a final pass of the 
-			trained model on the test split.
-		</p>
-		<p>
-			Each model has a unique data processing step and tailored hyperparameters, each chosen 
-			to maximize the accuracy of predictions. More information detailing the engineered features 
-			and evaluation scores of a model is outlined within their category's
-			<em>About</em>
-			page.
-		</p>
-	</section>
+			<h3><em>What is machine learning?</em></h3>
+			<p>
+				...
+			</p>
+			<p>
+				...
+			</p>
 
-	<section id="disclaimers">
-		<h2>Disclaimers</h2>
+			<h3><em>How are models trained?</em></h3>
+			<p>
+				Historical NBA game logs containing player and team box scores are first collected from 
+				our data provider,
+				<a href="https://www.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE</a>.
+				The raw game logs are then processed by removing redundant data points and engineering
+				new features.
+			</p>
+			<p>
+				The dataset is partitioned by date into training, validation, and test splits.
+				During the learning phase, the model makes predictions on the training dataset, and 
+				its internal weights are adjusted based on the result. After the training epochs have 
+				elapsed, the weights that produced the least error when inferencing on the validation 
+				dataset are kept. Evaluation metrics are then calculated based on a final pass of the 
+				trained model on the test split.
+			</p>
+			<p>
+				Each model has a unique data processing step and tailored hyperparameters, each chosen 
+				to maximize the accuracy of predictions. More information detailing the engineered features 
+				and evaluation scores of a model is outlined within their category's
+				<em>About</em>
+				page.
+			</p>
+		</section>
 
-		<h3><em>Prediction limitations</em></h3>
-		<p>
-			This site is for informational and entertainment purposes only. Predictions are 
-			<em>not</em> 
-			betting advice.
-		</p>
-		<p>
-			At their core, the models on this site are nothing more than a structured series of matrix 
-			multiplications, activation functions, normalizations, and other mathematical operations.
-			The predicted outcomes are not guaranteed nor always correct. Do not interpret them as such. 
-		</p>
+		<section id="disclaimers">
+			<h2 class="section-rule">Disclaimers</h2>
 
-		<h3><em>Affiliation</em></h3>
-		<p>
-			This site is not affiliated with, endorsed by, or sponsored by the National Basketball Association.
-		</p>
-	</section>
+			<h3><em>Prediction limitations</em></h3>
+			<p>
+				This site is for informational and entertainment purposes only. Predictions are 
+				<em>not</em> 
+				betting advice.
+			</p>
+			<p>
+				At their core, the models on this site are nothing more than a structured series of matrix 
+				multiplications, activation functions, normalizations, and other mathematical operations.
+				The predicted outcomes are not guaranteed nor always correct. Do not interpret them as such. 
+			</p>
 
-	<section id="questions">
-		<h2>Common questions</h2>
+			<h3><em>Affiliation</em></h3>
+			<p>
+				This site is not affiliated with, endorsed by, or sponsored by the National Basketball Association.
+			</p>
+		</section>
 
-		<Faq questions={QUESTIONS} name="about" />
-	</section>
+		<section id="questions">
+			<h2 class="section-rule">Common questions</h2>
+
+			<Faq questions={QUESTIONS} name="about" />
+		</section>
+	</div>
 </div>
 
 <style>
+	.reading {
+		padding-block-start: var(--space-7);
+	}
+
+	.sections {
+		gap: var(--space-7);
+		min-width: 0;
+	}
+
 	section {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
+	}
+
+	section h2 {
+		margin-block-end: var(--space-1);
+	}
+
+	/* A 76rem page would set a line nobody can track back, so running text is capped by measure. */
+	section p,
+	section h3 {
+		max-width: var(--measure);
 	}
 
 	.over {

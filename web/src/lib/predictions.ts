@@ -1,59 +1,34 @@
 /**
  * What every prediction page reads out of its address bar, and the words it answers a refusal with.
  *
- * Every family describes the game the same way, with the same four parameters, whether the reader
- * typed them or chose a card. A family adds only the parameters it alone needs, so this is the part
- * that never differs.
+ * Every family asks about one of the games on the board, so the whole of the game a request names is
+ * that game's own id. Nothing describes a game by hand any more: the schedule is the only source of
+ * one, so a game the schedule does not hold is a game no model can be asked about. A family adds
+ * only the parameters it alone needs, so this is the part that never differs.
  */
 
+import { goto } from '$app/navigation';
+
 import type { HttpError } from '@sveltejs/kit';
-import type { ScheduledGame, SeasonType } from '$lib/types';
+import type { GameRequest, ScheduledGame } from '$lib/types';
 
-export const SEASON_TYPES: SeasonType[] = ['REGULAR_SEASON', 'PLAYOFFS', 'PLAY_IN', 'PRESEASON'];
+export const UNREACHABLE = 'The prediction service is not answering. Try again in a few minutes.';
+const REFUSED = 'This prediction could not be made. Try again in a moment.';
 
-/** The phase field's options, in the order a reader is most likely to want them. */
-export const PHASES = [
-	['REGULAR_SEASON', 'Regular season'],
-	['PLAYOFFS', 'Playoffs'],
-	['PLAY_IN', 'Play-in'],
-	['PRESEASON', 'Preseason']
-] as const;
+/** The game a request names, or null where it names none. */
+export function readGameId(parameters: URLSearchParams): number | null {
+	const id = Number(parameters.get('game'));
 
-export const UNREACHABLE = 'The prediction service is not reachable. Try again shortly.';
-export const SAME_TEAM = 'A game needs two different teams.';
-const REFUSED = 'The prediction could not be made. Try again shortly.';
-
-/** The game being asked about, however the reader described it. */
-export type GameChoice = {
-	date: string;
-	homeTeam: string;
-	awayTeam: string;
-	seasonType: SeasonType;
-};
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-export function readGameChoice(parameters: URLSearchParams): GameChoice {
-	const seasonType = parameters.get('type') as SeasonType;
-
-	return {
-		date: parameters.get('date') || today(),
-		homeTeam: parameters.get('home') || '',
-		awayTeam: parameters.get('away') || '',
-		seasonType: SEASON_TYPES.includes(seasonType) ? seasonType : SEASON_TYPES[0]
-	};
+	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-/** Whether the described game is one of the upcoming ones, which is what a chosen card names. */
-export const isGame = (game: ScheduledGame, choice: GameChoice) =>
-	game.date === choice.date &&
-	game.home_team.abbreviation === choice.homeTeam &&
-	game.away_team.abbreviation === choice.awayTeam &&
-	game.season_type === choice.seasonType;
-
-/** Both sides named, which is what every prediction needs before it can be asked for. */
-export const namesBothTeams = (choice: GameChoice) =>
-	choice.homeTeam !== '' && choice.awayTeam !== '';
+/** A scheduled game written the way the prediction service asks for one. */
+export const gameRequest = (game: ScheduledGame): GameRequest => ({
+	date: game.date,
+	home_team: game.home_team.abbreviation,
+	away_team: game.away_team.abbreviation,
+	season_type: game.season_type
+});
 
 /** A line the reader shared. Anything that is not a number is dropped rather than argued with. */
 export function readLine(parameters: URLSearchParams): number | null {
@@ -69,10 +44,10 @@ export function readLine(parameters: URLSearchParams): number | null {
  * a reader sees are written here.
  */
 const REASONS: Record<string, string> = {
-	too_few_games: 'This player has no earlier game to read.',
-	missing_player_information: 'Too little is known about this player to predict.',
-	unknown_player_team: 'Say which of the two teams this player is on.',
-	no_team_history: 'This team has no earlier game to read.',
+	too_few_games: 'This player has no earlier game to build a prediction from.',
+	missing_player_information: 'Too little is known about this player to make a prediction.',
+	unknown_player_team: 'Say which team this player is on.',
+	no_team_history: 'This team has no earlier game to build a prediction from.',
 	game_already_played: 'This game has already been played, so there is nothing to predict.',
 	service_busy: 'The service is answering as many predictions as it can. Try again in a moment.'
 };
@@ -90,17 +65,39 @@ export function reasonFor(thrown: HttpError): string {
 }
 
 /**
- * What a game card falls back to where scripting is off: the same request with its game filled in.
+ * Copies a prediction form into the address bar, which is what runs a prediction.
+ *
+ * Every family asks with the same form and answers into the same block, so the asking is here. The
+ * fields name themselves, so the query is read off the form rather than restated per family, and an
+ * empty one is left out so the address bar names only what the reader actually asked for.
+ *
+ * The page is told first, because the reader is walked to the answer on the reader's own press
+ * rather than when the service comes back.
+ */
+export function askPrediction(
+	event: SubmitEvent & { currentTarget: HTMLFormElement },
+	shell?: { reveal: () => void }
+) {
+	event.preventDefault();
+
+	const query = new URLSearchParams();
+
+	for (const [key, value] of new FormData(event.currentTarget)) {
+		if (value !== '') query.append(key, String(value));
+	}
+
+	shell?.reveal();
+
+	goto(`?${query}`, { noScroll: true, keepFocus: true, invalidateAll: true });
+}
+
+/**
+ * What a game card falls back to where scripting is off: the same request with its game named.
  *
  * The rest of the form is whatever the page wants carried over, which differs by family.
  */
 export function gameHref(game: ScheduledGame, carried: Record<string, string> = {}): string {
-	const query = new URLSearchParams({
-		date: game.date,
-		away: game.away_team.abbreviation,
-		home: game.home_team.abbreviation,
-		type: game.season_type
-	});
+	const query = new URLSearchParams({ game: String(game.id) });
 
 	for (const [key, value] of Object.entries(carried)) {
 		if (value !== '') query.set(key, value);

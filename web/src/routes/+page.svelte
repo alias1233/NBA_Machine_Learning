@@ -1,309 +1,171 @@
 <!--
-	The home page. A hero about one viewport tall, then the Models section under it.
+	The home page: the hero, then the Models section under it.
 
-	The hero is one grid. The backdrop, the tiles and the words are all items on it, so a tile can be
-	placed across the backdrop's edge and the words hold a row of their own that no tile reaches. The
-	words row sizes itself and the tile rows share what is left, so the collage gives up room before
-	the words do.
+	The hero is one screen of printed plate with two sheets of paper lying on it, and it shows the
+	day's sample predictions rather than describing what the site does. Nothing there predicts: the
+	samples were drawn by a job this morning and are read off a file. See ShowcasePlate.svelte and
+	python/src/nba_ml/showcase.py.
+
+	The Models section is the site's index and the one thing the hero leads to. There are three
+	families and there will not be many more, so each takes a column of its own, printed on its own
+	stock. That is the same ground its prediction page and its About page are printed on, so a reader
+	has seen where they are going before they arrive. What is not a family, which today is only the
+	line saying more are coming, stands under the row rather than in it.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
-
-	import { browser } from '$app/environment';
-
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import Artwork from '$lib/components/Artwork.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { TILES } from '$lib/collage';
+	import ShowcasePlate from '$lib/components/ShowcasePlate.svelte';
 	import { familyGraphic } from '$lib/graphics';
 	import { MODELS_SECTION, familyAboutPath, familyPath } from '$lib/models';
 	import { SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
 
 	let { data } = $props();
-
-	const ENTERED = 'hero-entered';
-
-	// The entrance plays once a browser session. The server cannot read sessionStorage, so it renders
-	// the entrance and the browser cancels it on a return visit. Reading here rather than in onMount
-	// is what keeps a click on the wordmark from showing a frame of it.
-	const entering = !browser || sessionStorage.getItem(ENTERED) === null;
-
-	onMount(() => {
-		sessionStorage.setItem(ENTERED, '1');
-	});
 </script>
 
 <svelte:head>
 	<title>{SITE_NAME}</title>
-	<meta
-		name="description"
-		content={SITE_DESCRIPTION}
-	/>
+	<meta name="description" content={SITE_DESCRIPTION} />
 </svelte:head>
 
-<div class="sections">
-	<section class="hero">
-		<div class="backdrop"></div>
+<ShowcasePlate samples={data.samples} heldOver={data.heldOver} answering={data.answering} />
 
-		<!-- The grid places each tile and the tile carries its own ground, so one crossing the
-		     backdrop's edge looks the same on both sides of it. -->
-		{#each TILES as image, index (index)}
-			<div
-				class="tile"
-				class:entering
-				style="grid-area: t{index + 1}; --arrive-delay: calc({index} * var(--collage-stagger))"
-			>
-				<Artwork src={image && `/collage/${image}`} />
-			</div>
-		{/each}
+<section class="page models" id={MODELS_SECTION}>
+	<!-- Set small on purpose. It names the listing, and the family names under it are what the page
+	     is actually offering, so they are what carries the size. -->
+	<h2 class="page-title micro muted">Models</h2>
 
-		<div class="words" class:entering>
-			<h1 class="display">{SITE_NAME}</h1>
-			<p>{SITE_DESCRIPTION}</p>
+	<!-- A dead service leaves this list empty too, and telling a reader nothing is published would
+	     name the wrong cause. The footer says the same thing at the same moment. -->
+	{#if data.families.length === 0}
+		{#if data.health}
+			<Notice>No model is published yet.</Notice>
+		{:else}
+			<!-- Names the cause but not the recovery. The hero above and the footer below both already
+			     tell the reader to come back, and three of that on one screen is two too many. It still
+			     stands alone for somebody who arrived straight at this section. -->
+			<Notice>No model can be listed while the prediction service is not answering.</Notice>
+		{/if}
+	{:else}
+		<ul class="families">
+			{#each data.families as family (family.name)}
+				<!-- The family's own stock, which is the ground every page of that family is printed on.
+				     One attribute is the whole of what a family colours. -->
+				<li class="family plate" data-plate={family.slug}>
+					<!-- Reserves what the family graphic takes, so dropping one in shifts nothing. -->
+					<div class="graphic">
+						<Artwork src={familyGraphic(family.name)} />
+					</div>
 
-			<div class="actions">
-				<a class="button button--lead" href="#{MODELS_SECTION}">Run a prediction</a>
-				<a href="/about">How it works</a>
-			</div>
-		</div>
-	</section>
+					<div class="said">
+						<h3 class="plate-display">{family.title}</h3>
+						<p class="words">{family.description}</p>
+					</div>
 
-	<section class="page models" id={MODELS_SECTION}>
-		<!-- A family card holds a square and one line, so the listing takes a column of its own and
-		     the page tone frames it rather than running under half-empty cards. -->
-		<div class="listing">
-			<h2>Models</h2>
+					<!-- A family with nothing trained behind it has nowhere to lead, so it says so instead
+					     of offering a page that cannot answer. -->
+					<div class="ways">
+						{#if family.published}
+							<a class="button" href={familyPath(family)}>Run a prediction</a>
+							<a class="small text-link" href={familyAboutPath(family)}>How these models work</a>
+						{:else}
+							<span class="tag micro">Not published yet</span>
+						{/if}
+					</div>
+				</li>
+			{/each}
+		</ul>
 
-			{#if data.families.length === 0}
-				<Notice>No model is published right now.</Notice>
-			{:else}
-				{#each data.families as family (family.name)}
-					<article class="block family">
-						<!-- Reserves what the family graphic takes, so dropping one in shifts nothing. A
-						     nested image area inside a block is a surface. -->
-						<div class="graphic surface">
-							<Artwork src={familyGraphic(family.name)} />
-						</div>
+		<!-- Not a family and nothing to act on, so it stands under the row as one printed line rather
+		     than as a fourth column with empty stock. -->
+		<p class="more muted">More models <span class="tag micro">Coming soon</span></p>
+	{/if}
 
-						<div class="about">
-							<h3>{family.title}</h3>
-							<p class="muted">{family.description}</p>
-
-							<!-- A family with nothing trained behind it has nowhere to lead, so it says so
-							     instead of offering a page that cannot answer. -->
-							<div class="ways">
-								{#if family.published}
-									<a class="button" href={familyPath(family)}>Predict</a>
-									<a class="small" href={familyAboutPath(family)}>How this model works</a>
-								{:else}
-									<span class="tag micro">Not published yet</span>
-								{/if}
-							</div>
-						</div>
-					</article>
-				{/each}
-
-				<!-- Not a family and nothing to act on, so it is a panel rather than another block. -->
-				<div class="panel more">
-					<h3>More models</h3>
-					<span class="tag micro">Coming soon</span>
-				</div>
-			{/if}
-		</div>
-
-		<AdSlot place="homeModels" />
-	</section>
-</div>
+	<AdSlot place="homeModels" />
+</section>
 
 <style>
-	/*
-	 * Eight rows: three of tiles, the words, three more of tiles, and a strip below the backdrop for
-	 * the tiles that hang off it. The outer columns are the inset the backdrop stops short of, so a
-	 * tile reaching one crosses an edge, and the padding keeps that overhang on the page rather than
-	 * off the side of it.
-	 */
-	.hero {
-		display: grid;
-		grid-template-columns: var(--hero-inset) repeat(6, minmax(0, 1fr)) var(--hero-inset);
-		grid-template-rows: repeat(3, minmax(0, 1fr)) auto repeat(3, minmax(0, 1fr)) var(--space-7);
-		grid-template-areas:
-			't1 t1 t1 .  t2 t2 t2 t2'
-			't1 t1 t1 .  t2 t2 t2 t2'
-			'.  t3 t3 t3 t3 .  .  . '
-			'.  w  w  w  w  w  w  . '
-			'.  .  t4 t4 t4 t4 .  . '
-			't5 t5 t5 .  t6 t6 t6 t6'
-			't5 t5 t5 .  t6 t6 t6 t6'
-			't5 t5 t5 .  t6 t6 t6 t6';
-		gap: var(--collage-gap);
-		padding-inline: var(--hero-inset);
-		min-height: var(--hero-height);
-	}
-
-	/* Sharp edges, and no padding, because what sits on it is placed by the grid rather than by the
-	   backdrop. It is declared first, so every tile paints over it. */
-	.backdrop {
-		grid-area: 2 / 2 / 8 / -2;
-		background: var(--block);
-	}
-
-	/* The cell a picture fills. It carries the ground, so a tile reads the same on and off the
-	   backdrop, and it has sharp edges like the backdrop it is placed on. */
-	.tile {
-		min-width: 0;
-		background: var(--block);
-	}
-
-	/* The entrance is the one place a stagger is used, and the delay each tile takes is its own. */
-	.tile.entering {
-		--arrive-duration: var(--motion-entry);
-	}
-
-	/* The words sit on the backdrop, so everything in them comes from the block family, the accent
-	   included. */
-	.words {
-		grid-area: w;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-4);
-		padding: var(--space-3);
-		color: var(--block-ink);
-		text-align: center;
-		--plane-accent: var(--accent-block);
-		--plane-accent-on: var(--block);
-	}
-
-	.actions {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-5);
-		margin-top: var(--space-2);
-	}
-
-	.actions a:not(.button) {
-		display: inline-flex;
-		align-items: center;
-		min-height: var(--tap-target);
-	}
-
-	/* The words arrive once the first tile has landed. */
-	.words.entering {
-		animation: fade var(--motion-slow) var(--ease-in) var(--motion-entry) backwards;
-	}
-
-	@keyframes fade {
-		from {
-			opacity: 0;
-		}
-	}
-
 	.models {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-5);
+		padding-block-start: var(--space-7);
 	}
 
-	/* Narrower than the page and centred in it. The ad slot below stays on the page width, because
-	   it is not part of the listing. */
-	.listing {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-5);
-		width: 100%;
-		max-width: var(--family-column);
-		margin-inline: auto;
-	}
-
-	/* The graphic is beside the words at every width, and the card is what its size is measured
-	   against. In one column it takes the title beside it and the rest of the words run the full
-	   width underneath, so a narrow card spends its room on the sentence rather than on the square. */
-	.family {
-		container-type: inline-size;
+	/*
+	 * The families as columns of printed stock, meeting along their edges so the row reads as one
+	 * sheet run in three inks rather than as three cards laid out with space between them.
+	 *
+	 * How many fit across is measured against the page, so a family added later takes its place
+	 * without a number here changing.
+	 */
+	.families {
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-		grid-template-areas:
-			'graphic title'
-			'words words'
-			'ways ways';
-		align-items: center;
-		gap: var(--space-4) var(--space-5);
-	}
-
-	/* Square, so the picture is read as a mark for the family rather than as a crop of something. The
-	   picture fills it, so the surface is the ground and nothing else. */
-	.graphic {
-		grid-area: graphic;
-		width: var(--card-graphic);
-		aspect-ratio: var(--graphic-ratio);
+		grid-template-columns: minmax(0, 1fr);
+		margin: 0;
 		padding: 0;
+		list-style: none;
 	}
 
-	/* The words are the card's own rows until there is room to set them as one column. */
-	.about {
-		display: contents;
-	}
-
-	.about h3 {
-		grid-area: title;
-	}
-
-	.about p {
-		grid-area: words;
-	}
-
-	.more {
+	.family {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
+		gap: var(--space-4);
+		padding: var(--space-5);
+	}
+
+	/* Square, because everything printed on this site is. */
+	.graphic {
+		aspect-ratio: var(--graphic-ratio);
+		background: var(--plate-deep);
+	}
+
+	.said {
+		display: flex;
+		flex-direction: column;
 		gap: var(--space-3);
 	}
 
-	/* The ways out sit away from the description rather than under it, so the block reads as a card
-	   with something to do at the bottom of it. */
+	/* Stamped, at the size a column holds rather than the size a whole band does. The plate's own
+	   lettering, because the site's serif never appears on printed stock. */
+	.family h3 {
+		font-size: var(--type-h2);
+	}
+
+	.words {
+		color: var(--plate-ink-muted);
+	}
+
+	/* Held at the foot of the column, so the three ways in line up across the row however long the
+	   names and the lines above them run. */
 	.ways {
-		grid-area: ways;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-4);
-		margin-top: var(--space-2);
+		margin-block-start: auto;
 	}
 
-	.ways a:not(.button) {
-		display: inline-flex;
+	/* A way to read about a family is printed in the one ink rather than in the spot colour, which
+	   belongs to the action rather than to a link beside it. It also clears 4.5:1 on every stock,
+	   which the spot ink does not. */
+	.ways .text-link {
+		--plane-accent: var(--plate-ink);
+	}
+
+	.more {
+		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		min-height: var(--tap-target);
+		gap: var(--space-3);
+		padding-block-start: var(--space-3);
+		border-top: var(--rule-panel);
 	}
 
-	/* Wider tiles, placed further apart, and the family's words set as one column beside its
-	   graphic, once there is room for the composition to breathe. */
-	@media (min-width: 40rem) {
-		.family {
-			grid-template-areas: 'graphic about';
-		}
-
-		.about {
-			grid-area: about;
-			display: flex;
-			flex-direction: column;
-			align-items: flex-start;
-			gap: var(--space-3);
-		}
-
-		.hero {
-			grid-template-areas:
-				't1 t1 .  .  t2 t2 .  . '
-				't1 t1 .  .  t2 t2 t3 t3'
-				't1 t1 .  .  .  .  t3 t3'
-				'.  w  w  w  w  w  w  . '
-				'.  .  t4 t4 .  .  t5 t5'
-				't6 t6 t4 t4 .  .  t5 t5'
-				't6 t6 .  .  .  .  t5 t5'
-				't6 t6 .  .  .  .  t5 t5';
+	@media (min-width: 48rem) {
+		.families {
+			grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 		}
 	}
 </style>

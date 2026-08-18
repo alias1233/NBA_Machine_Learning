@@ -2,8 +2,10 @@
  * Walking the reader to whatever comes next.
  *
  * The controls run down a long column, so after a choice the page moves to the next thing rather
- * than leaving the reader to find it. A scroll runs only when its target is not already fully in
- * view, because scrolling somebody to what they are looking at reads as a twitch.
+ * than leaving the reader to find it. A step forward through a form runs only when its target is not
+ * already fully in view, because scrolling somebody to what they are looking at reads as a twitch. A
+ * choice that changes what the page is about walks whatever was showing, so the thing it opened
+ * starts at the top of the screen rather than halfway down it.
  *
  * It starts at once and follows its target. The choice that asked for it usually sets off a flow,
  * and where that flow moves the target the page is aimed again as it travels rather than corrected
@@ -65,19 +67,32 @@ function fullyVisible(target: HTMLElement): boolean {
 	return box.top >= 0 && box.bottom <= window.innerHeight;
 }
 
+type Walk = {
+	/** Which edge of the target the page is brought to. */
+	block: Block;
+	/**
+	 * How long the flow the choice set off lasts. The wait it buys costs nothing where the target
+	 * does not move, because the page is already on its way by then.
+	 */
+	flowing?: number;
+	/**
+	 * Walk even where the target is already fully in view.
+	 *
+	 * A step forward through a form only wants the page moved when the next thing is off screen. A
+	 * choice that changes what the page is about wants the target put at the top of the screen
+	 * whatever was showing before it, so nothing above it is left standing in the way.
+	 */
+	always?: boolean;
+};
+
 /**
  * Moves the page to the target and follows it for as long as the flow behind it runs.
  *
- * `flowing` is how long that flow lasts, and a choice setting off a longer one than usual says so.
- * The wait it buys costs nothing where the target does not move, because the page is already on its
- * way by then.
- *
  * Awaiting it waits for the page to stop, which is what anything opening at the target needs.
  */
-export async function scrollIntoViewIfOffScreen(
+export async function walkTo(
 	target: HTMLElement | undefined,
-	block: Block,
-	flowing: number = MOTION
+	{ block, flowing = MOTION, always = false }: Walk
 ): Promise<void> {
 	if (!target) return;
 
@@ -113,7 +128,7 @@ export async function scrollIntoViewIfOffScreen(
 
 			// Not worth moving for yet. The flow can still push it off screen, so this keeps watching
 			// until the flow is over rather than giving up on the first frame.
-			if (!travelling && fullyVisible(target)) {
+			if (!travelling && !always && fullyVisible(target)) {
 				if (now >= following) stop();
 				else frame = requestAnimationFrame(step);
 				return;

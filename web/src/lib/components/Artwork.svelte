@@ -1,9 +1,9 @@
 <!--
-	One picture in the site's shared treatment, for the hero collage and for a family graphic.
+	One picture in the site's shared treatment, which today is the graphic at the head of a family.
 
 	It fills the box it is given, so a picture of any size drops in without preparation and none of
-	them can size the screen. The ground belongs to that box, which is what lets a collage tile sit on
-	block paper and a family graphic on a surface without either being restyled here.
+	them can size the screen. The ground belongs to that box, so the same picture sits on any plane
+	without being restyled here.
 
 	It fades in when its own image is ready to paint rather than on a timer, which is what stops a
 	picture appearing at full opacity the instant it decodes. An entrance sets --arrive-duration and
@@ -69,9 +69,10 @@
 			var(--arrive-delay, 0ms) backwards;
 	}
 
-	/* Both stops are block family colours, because a picture here is block paper. */
+	/* Both stops come from the plane the box sits on, so a picture waiting to be dropped in is tinted
+	   to whatever holds it rather than to one plane it no longer always sits on. */
 	.placeholder {
-		background: linear-gradient(160deg, var(--accent-block), var(--block-muted));
+		background: linear-gradient(160deg, var(--plane-accent), var(--ink-muted));
 	}
 
 	/* Out of flow, so the picture's own size never reaches the layout around it. */

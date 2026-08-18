@@ -15,11 +15,8 @@ import type { TransitionConfig } from 'svelte/transition';
 /** `--motion`. A rolling figure, a region opening, and the first phase of the answer column reveal. */
 export const MOTION = 200;
 
-/** `--motion-slow`. The chart drawing in, and the line the answer column opens with. */
+/** `--motion-slow`. The chart drawing in, and how far the page travels to reach the answer. */
 export const MOTION_SLOW = 320;
-
-/** `--motion-reveal`. The answer column widening. */
-export const MOTION_REVEAL = 700;
 
 /** `--ease-in` as a curve a script can run. Both cover half the distance in the first fifth of it. */
 const EASE = cubicOut;

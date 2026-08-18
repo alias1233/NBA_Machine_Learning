@@ -32,11 +32,13 @@ export type ModelFamily = {
 };
 
 export const MODEL_FAMILIES: ModelFamily[] = [
+	// Each description covers everything its family holds. Naming two or three of fourteen models
+	// reads as the whole list to somebody who has not opened the family yet.
 	{
 		name: 'player_stats',
 		slug: 'player-stats',
 		title: 'Player stat models',
-		description: 'Points, rebounds and assists for one player in one game.'
+		description: 'Points, rebounds, assists and other box score numbers for one player.'
 	},
 	{
 		name: 'team_stats',
@@ -48,7 +50,7 @@ export const MODEL_FAMILIES: ModelFamily[] = [
 		name: 'game_stats',
 		slug: 'game-stats',
 		title: 'Game stat models',
-		description: 'The winning margin and the total points of one game.'
+		description: 'How much one team wins by, the total points, and who wins.'
 	}
 ];
 
@@ -65,6 +67,20 @@ export const familyPath = (family: ModelFamily) => `/models/${family.slug}`;
 
 /** How that family predicts, and how well. Every figure about a family lives there. */
 export const familyAboutPath = (family: ModelFamily) => `${familyPath(family)}/about`;
+
+/**
+ * Which stock a page is printed on: the family whose pages it is one of, or null for the site's own.
+ *
+ * Every plate on the site prints in the same two inks and only the ground changes, so this is the
+ * whole of what a family colours. The value is the family's slug, which `app.css` names the grounds
+ * by, and it covers a family's prediction page and its About page alike.
+ */
+export const plateOf = (pathname: string): string | null =>
+	MODEL_FAMILIES.find((family) => {
+		const path = familyPath(family);
+
+		return pathname === path || pathname.startsWith(`${path}/`);
+	})?.slug ?? null;
 
 /**
  * The families to list, and whether each can be predicted with yet.

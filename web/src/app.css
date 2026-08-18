@@ -12,18 +12,22 @@
 	font-display: swap;
 }
 
+/* Cut to the run of weights the site sets, 400 through 800. The weights either side of it were a
+   third of the file and nothing could ever ask for them. */
 @font-face {
 	font-family: 'Inter Tight';
 	src: url('/fonts/inter-tight-latin.woff2') format('woff2');
-	font-weight: 100 900;
+	font-weight: 400 800;
 	font-style: normal;
 	font-display: swap;
 }
 
+/* One weight, because this face sets micro labels and figures and nothing else, all at 500. Its
+   programming ligatures went with the rest: nothing here is code, and a figure must never be one. */
 @font-face {
 	font-family: 'JetBrains Mono';
 	src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
-	font-weight: 100 800;
+	font-weight: 500;
 	font-style: normal;
 	font-display: swap;
 }
@@ -43,6 +47,11 @@
 	--ink-muted: light-dark(#5c574b, #bbb29f);
 	--block-ink: light-dark(#f5f1e8, #1c1a16);
 	--block-muted: light-dark(#b0a896, #5c574b);
+
+	/* Reserved space waiting to be filled, which is what every skeleton on the site is drawn in. A
+	   plane token, so a block hands over its own hairline rather than the sunken page tone, which
+	   would read as a bright bar on block paper. */
+	--waiting: var(--surface-sunken);
 
 	--hairline: light-dark(#e3dccc, #2e2b24);
 	--hairline-panel: light-dark(#d6cdb9, #3d392f);
@@ -81,6 +90,9 @@
 	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
 	--type-display: clamp(3rem, 9vw, 6rem);
+	/* The plate is stamped rather than typeset, so its own headings are set in the interface face at
+	   its heaviest. This is the size a page's band is stamped at, under the hero's own. */
+	--type-plate-display: clamp(2.25rem, 6vw, 5rem);
 	--type-h1: clamp(2rem, 5vw, 3.25rem);
 	--type-h2: clamp(1.5rem, 3vw, 2rem);
 	--type-h3: 1.0625rem;
@@ -119,25 +131,23 @@
 	--radius-full: 999px;
 	/* The box an inline SVG icon is drawn in. */
 	--icon: 1.25rem;
-	--graphic-ratio: 1 / 1;
-	/* A game card, which is square so it reads as an object rather than as a row. */
-	--card-ratio: 1 / 1;
-	--card-max: 12rem;
-	--card-hover-scale: 1.03;
+	/* The picture at the head of a family's column on the home page. */
+	--graphic-ratio: 3 / 2;
 
 	/*
-	 * A card reads at the size it is drawn. These are measured against the card rather than the
-	 * screen, so a card three across on a phone carries small text and one four across on a laptop
-	 * carries large text, and neither is decided by a breakpoint.
+	 * A game dealt as a playing card. Both sides of a game are printed in the two corner indices, the
+	 * way a card prints its own, so the proportion is a real card's and never changes.
 	 *
-	 * They hold `cqi`, so each belongs on something inside a card and nowhere else. Used outside one
-	 * it silently measures the viewport instead.
+	 * The board deals as many whole cards across a row as fit, and how large one may print grows with
+	 * the board between these two. The floor is the narrowest a card is still readable at, which is
+	 * what deals three across a phone. The ceiling is as large as a card wants to be, so a board given
+	 * the whole page deals another row of them rather than four enormous ones.
 	 */
-	--card-padding: clamp(var(--space-2), 9cqi, var(--space-4));
-	--card-matchup: clamp(1.0625rem, 17cqi, var(--type-h2));
-	--card-label: clamp(0.625rem, 8cqi, var(--type-micro));
-	/* The square graphic beside a family's words, against the width of the card holding it. */
-	--card-graphic: min(28cqi, var(--card-max));
+	--play-card-floor: 5.25rem;
+	--play-card-wide: 8.25rem;
+	--play-card-ratio: 5 / 7;
+	/* How far a card lifts off the board when it is hovered, focused or picked. */
+	--play-card-lift: 1rem;
 
 	/* The chart. It is drawn --chart-height tall inside an answer and fills the room it is given in
 	   the detailed view. --chart-axis is the gutter the probability axis is written in, which has to
@@ -161,52 +171,105 @@
 	--motion-fast: 120ms;
 	--motion: 200ms;
 	--motion-slow: 320ms;
-	/* The answer column widening. Longer than slow because the reader is waiting on the service
-	   anyway, so the reveal has the room to be worth watching. */
-	--motion-reveal: 700ms;
-	--motion-entry: 900ms;
 	--loading-pulse: 333ms;
-	--collage-stagger: 120ms;
 	--ease-in: cubic-bezier(0.2, 0, 0, 1);
 	--ease-out: cubic-bezier(0.4, 0, 1, 1);
 	--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
-	/*
-	 * The hero. The backdrop is inset from the page edges, so the page tone frames it and a tile can
-	 * cross its edge.
-	 *
-	 * Its height is the viewport less the three things above and below it: the fixed header, the
-	 * space the page opens with, and a strip of page tone at the fold. That strip is never wider
-	 * than the gap `.sections` leaves, so the Models section starts at the fold or below it at every
-	 * screen size, and a short viewport takes the floor instead and pushes it further down.
-	 */
-	--hero-inset: var(--space-5);
-	--hero-height: max(28rem, calc(100svh - var(--header-height) - var(--space-5) - var(--space-6)));
-	--collage-gap: var(--space-3);
-
-	/* Every picture on the site, the collage tiles and the family graphics alike, is drawn at this
-	   opacity and this filter. That shared treatment is what makes a set of unrelated pictures read
-	   as one piece of art rather than as a mood board, and it is the one place to dial it back. */
+	/* Every picture on the site is drawn at this opacity and this filter. That shared treatment is
+	   what makes a set of unrelated pictures read as one piece rather than as a mood board, and it is
+	   the one place to dial it back. Only the family graphics use it now that the hero is a plate. */
 	--art-opacity: 0.7;
 	--art-filter: saturate(0.8);
 
-	/* Layout */
-	--content-width: 64rem;
-	--content-width-wide: 76rem;
-	/* The Models section, centred in the page. A family card holds a square and one line, so the
-	   full content width would leave most of it empty. */
-	--family-column: 44rem;
+	/*
+	 * The plate world.
+	 *
+	 * The home page is a printed statistical plate with a sheet of wet-erase acetate lying on it. The
+	 * plate is what the model measured: flat spot inks on saturated stock, registered, and never
+	 * hand-made. The acetate is the reader's own question, drawn on in grease pencil. Everything the
+	 * site is sure of is printed; everything the reader is asking is drawn.
+	 *
+	 * These do not vary by theme. A printed plate is one object under any light, and inverting it
+	 * would say the ink changed colour when the room did. The rest of the site is still on the five
+	 * planes above and is migrated separately.
+	 *
+	 * Every value here is sampled from the approved comp rather than chosen again, so what shipped is
+	 * what was approved. Contrast is measured against --plate: bone ink reads 9.5:1, the muted ink
+	 * 6.0:1, and the spot ink and the pencil 3.5:1 and 3.8:1, which is why neither of the last two
+	 * ever sets small text.
+	 */
+	--plate: #0c2c5c;
+	/* A well printed darker than the plate, for a track or an area waiting to be filled. */
+	--plate-deep: #071c3c;
+	/* The one printed ink everything readable is set in. */
+	--plate-ink: #ece3d1;
+	--plate-ink-muted: #a9b9e0;
+	/* The spot colour, printed. It marks the run of outcomes above the line and fills the one action. */
+	--plate-spot: #f35411;
+	--plate-spot-on: #0a1d4a;
+	/* Printed hairlines: the rule that only separates, and the box a figure is printed inside. */
+	--plate-rule: #2a5aa8;
+	--plate-rule-strong: #6d88d4;
+	/* The plate's two printed rules, named the way every other rule on the site is. The strong one is
+	   the box a figure is printed inside and is the only one of the two that carries a meaning. */
+	--rule-plate: 1px solid var(--plate-rule);
+	--rule-plate-strong: 1px solid var(--plate-rule-strong);
+
+	/* The acetate. A real second sheet, so it has a sheen along its top edge and a shadow under it. */
+	--acetate-sheen: rgb(255 255 255 / 0.16);
+	--acetate-shadow: rgb(1 15 48 / 0.5);
+	/*
+	 * Wet-erase magenta: every mark that is the reader's rather than the model's.
+	 *
+	 * It comes in two inks, because one magenta cannot clear 3:1 against both a dark ground and a
+	 * light one. The bright ink marks a dark ground and the deep ink marks a light one, and
+	 * --plane-pencil picks between them exactly the way --plane-accent picks an accent, so a mark is
+	 * correct from where it sits rather than from a rule per place.
+	 */
+	--pencil: #f1589a;
+	--pencil-deep: #c2185b;
+	--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
+
+	/* How thick a drawn mark is. A grease pencil does not draw a hairline. */
+	--pencil-width: 3px;
+	/* The registration crosses the plate is printed with, one per corner. */
+	--registration: 14px;
+
+	/*
+	 * Layout.
+	 *
+	 * One column, wide, and every band and the header sit on it, so a printed name in a band lines up
+	 * with the wordmark above it and with the work below it. Reading text is capped by measure rather
+	 * than by a second, narrower column.
+	 */
+	--content-width: 76rem;
+	--measure: 68ch;
 	--control-column: 40rem;
 	--answer-column: 30rem;
+	/* The index of sections down the side of an explaining page. */
+	--index-column: 13rem;
 
-	/* The narrowest a model card on a family's explaining page is allowed to get before the grid
-	   holding them drops a column. */
-	--model-card: 16rem;
 	/* The widest a data figure can reach, so a readout that changes value moves nothing around it.
 	   Every odds figure and the detailed view's expected figure each sit in one of these, and the
 	   larger box holds a figure set at --type-figure-large. */
 	--figure-column: 5.5rem;
 	--figure-column-large: 7rem;
+
+	/*
+	 * Stacking. Four layers, and nothing outside this file names a bare number.
+	 *
+	 * Floating is a menu, a list or a sheet standing over the page. The header is above all of them,
+	 * because a thing in the page must never cover the way out of it. An overlay is a full screen
+	 * sheet, which is the one thing that covers the header, and the skip link is above the lot.
+	 *
+	 * Anything that only has to stack against its own siblings, such as a card lifted off the board,
+	 * isolates instead, so its order can never reach any of these.
+	 */
+	--layer-floating: 20;
+	--layer-header: 30;
+	--layer-overlay: 40;
+	--layer-skip: 50;
 
 	/* Ads. A slot holds this height whenever ads are on, so nothing shifts when one arrives. */
 	--ad-height: 250px;
@@ -217,6 +280,16 @@
 *::before,
 *::after {
 	box-sizing: border-box;
+}
+
+/*
+ * How far a sprayed mark has reached out from its centre. Registered so it can be animated, which an
+ * unregistered custom property cannot be, and used as the stop of the mask that reveals the mark.
+ */
+@property --spray {
+	syntax: '<percentage>';
+	inherits: false;
+	initial-value: 100%;
 }
 
 /* The page tone is painted on the root, so nothing the browser draws outside the document, including
@@ -295,6 +368,14 @@ a {
 	color: var(--plane-accent);
 	text-decoration-thickness: 1px;
 	text-underline-offset: 2px;
+}
+
+/* A link set as a sentence is still a control, so it holds the same target as one. The height is
+   the whole of it: the words keep the type role and the plane accent they already had. */
+.text-link {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--tap-target);
 }
 
 /* The ring takes the accent of whatever it is drawn on, so it inverts with a block and back with a
@@ -385,8 +466,7 @@ a {
 	white-space: nowrap;
 }
 
-/* Every page sits in one of these. The wide one is a model page with its answer open and nothing
-   else. */
+/* The one column the whole site sits on: every band, the header, and the work under them. */
 .page {
 	width: 100%;
 	max-width: var(--content-width);
@@ -394,15 +474,218 @@ a {
 	padding-inline: var(--space-4);
 }
 
-.page--wide {
-	max-width: var(--content-width-wide);
-}
-
 /* Sections sit far apart and the page tone shows between them. */
 .sections {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
+}
+
+/*
+ * An explaining page: its sections, and beside them the list of what it holds. One column until
+ * there is room for the list to stand next to the reading rather than above it.
+ */
+.indexed {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+/* A rule above a section heading rather than below it, which is what says a rule belongs to what
+   follows it. It runs the whole column while the text under it is capped by measure, so the two
+   together are what marks the start of a section. */
+.section-rule {
+	padding-block-start: var(--space-3);
+	border-top: var(--rule-panel);
+}
+
+@media (min-width: 64rem) {
+	.indexed {
+		display: grid;
+		grid-template-columns: var(--index-column) minmax(0, 1fr);
+		align-items: start;
+		column-gap: var(--space-7);
+	}
+}
+
+/* A column of running text, capped so a 76rem page never sets a line nobody can track back. */
+.measure {
+	max-width: var(--measure);
+}
+
+/*
+ * What one of a prediction page's three regions opens with: a rule, a printed label, and whatever
+ * belongs beside it. It is the same rule and label a group of fields opens with, so the board, the
+ * parameters and the answer all start on one line across the page. What sits beside the label drops
+ * to its own line rather than squeezing where the region is too narrow to hold both.
+ */
+.column-label {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-1) var(--space-4);
+	padding-block-start: var(--space-3);
+	border-top: var(--rule-panel);
+	color: var(--ink);
+}
+
+/*
+ * A band is the page's structural unit. It runs the full width of the screen, carries one register,
+ * printed plate or paper, and holds its content on the page column. Everything that used to be a
+ * box floating in a narrow column is a band now, which is where the site's composition comes from.
+ */
+.band {
+	width: 100%;
+}
+
+/*
+ * The band a page opens with bleeds up under the fixed header, because the header is printed on it
+ * rather than set above it. It takes the header's height back as its own top padding, so the first
+ * thing printed on the band clears the wordmark.
+ *
+ * How much room it leaves above its own printing is --band-lead. A band that has a whole screen to
+ * itself, which is the home page's hero, takes less of it, because every millimetre above the name
+ * there is a millimetre off the answer.
+ */
+main > .band:first-child {
+	margin-top: calc(var(--header-height) * -1);
+	padding-block-start: calc(var(--header-height) + var(--band-lead, var(--space-6)));
+}
+
+/*
+ * A family's own stock.
+ *
+ * The press never changes. Every plate on the site is printed in the same bone ink and the same spot
+ * orange, and only the sheet under them does, so a reader knows which family they are in before they
+ * have read a word. The site's own pages keep the ink blue above.
+ *
+ * Each ground was picked to hold the bone ink above 9:1 and the spot ink above 3:1, which is what
+ * the blue holds, and each carries a muted ink tinted to itself rather than the blue's. The two
+ * printed rules are restated with every ground, because a custom property holding another one is
+ * substituted where it is declared and would otherwise carry the blue's rules down with it.
+ */
+[data-plate='player-stats'] {
+	--plate: #0a3f2d;
+	--plate-deep: #06291d;
+	--plate-ink-muted: #9dc4b1;
+	--plate-spot-on: #08281c;
+	--plate-rule: #1d6f51;
+	--plate-rule-strong: #4f9d7c;
+	--rule-plate: 1px solid var(--plate-rule);
+	--rule-plate-strong: 1px solid var(--plate-rule-strong);
+}
+
+[data-plate='team-stats'] {
+	--plate: #59121f;
+	--plate-deep: #3e0c15;
+	--plate-ink-muted: #d9a5a8;
+	--plate-spot-on: #3a0c14;
+	--plate-rule: #8a2c3a;
+	--plate-rule-strong: #c4636f;
+	--rule-plate: 1px solid var(--plate-rule);
+	--rule-plate-strong: 1px solid var(--plate-rule-strong);
+}
+
+[data-plate='game-stats'] {
+	--plate: #2b1a5e;
+	--plate-deep: #1c1040;
+	--plate-ink-muted: #b9aee2;
+	--plate-spot-on: #1a1040;
+	--plate-rule: #4a3593;
+	--plate-rule-strong: #7c6ad0;
+	--rule-plate: 1px solid var(--plate-rule);
+	--rule-plate-strong: 1px solid var(--plate-rule-strong);
+}
+
+/*
+ * The plate: a printed statistical sheet in flat spot inks on saturated stock. It is the site's own
+ * register, and it does not vary by theme, because a printed plate is one object under any light.
+ *
+ * Everything readable on a plate comes from the remapped tokens below, so a component drawn on one
+ * is correct without a line of plate-specific styling. Remap, never restyle.
+ */
+.plate {
+	background: var(--plate);
+	color: var(--plate-ink);
+	--ink: var(--plate-ink);
+	--ink-muted: var(--plate-ink-muted);
+	--under: var(--plate-ink);
+	--over: var(--plate-spot);
+	--push: var(--pencil);
+	--chart-neutral: var(--plate-rule-strong);
+	--chart-expected: var(--plate-ink);
+	--hairline: var(--plate-rule);
+	--hairline-panel: var(--plate-rule);
+	--panel: var(--plate-deep);
+	--surface: var(--plate-deep);
+	--surface-sunken: var(--plate-deep);
+	--control-border: var(--plate-rule-strong);
+	--waiting: var(--plate-rule);
+	--rule: var(--rule-plate);
+	--rule-accent: 2px solid var(--plate-spot);
+	--plane-accent: var(--plate-spot);
+	--plane-accent-on: var(--plate-spot-on);
+	--plane-pencil: var(--pencil);
+}
+
+/* Selecting text on a printed sheet marks it, so the mark is the wet-erase pencil. Left alone the
+   browser lays its own blue over a blue plate and the selection cannot be seen at all. */
+.plate ::selection {
+	background: var(--pencil);
+	color: var(--plate-spot-on);
+}
+
+/* Plate lettering is stamped in one face. The site's serif never appears on a plate, because a serif
+   here reads as something typeset elsewhere and pasted on. */
+.plate h1,
+.plate h2,
+.plate .type-h2 {
+	font-family: var(--font-ui);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.1;
+}
+
+/* What a page's opening band is stamped with. */
+.plate-display {
+	font-size: var(--type-plate-display);
+	font-weight: 800;
+	letter-spacing: -0.03em;
+	line-height: 0.92;
+	text-transform: uppercase;
+}
+
+/* The crosses a press registers a plate by, one per corner. They say nothing to a reader. They are
+   what makes the ground read as something printed rather than as a coloured box. */
+.registration {
+	position: absolute;
+	width: var(--registration);
+	height: var(--registration);
+	background:
+		linear-gradient(var(--plate-rule-strong), var(--plate-rule-strong)) center / 1px 100% no-repeat,
+		linear-gradient(var(--plate-rule-strong), var(--plate-rule-strong)) center / 100% 1px no-repeat;
+	pointer-events: none;
+}
+
+.registration.top-start {
+	top: var(--space-3);
+	left: var(--space-3);
+}
+
+.registration.top-end {
+	top: var(--space-3);
+	right: var(--space-3);
+}
+
+.registration.bottom-start {
+	bottom: var(--space-3);
+	left: var(--space-3);
+}
+
+.registration.bottom-end {
+	bottom: var(--space-3);
+	right: var(--space-3);
 }
 
 /* An accent rule above the page title. */
@@ -433,6 +716,7 @@ a {
 	background: var(--panel);
 	--plane-accent: var(--accent);
 	--plane-accent-on: var(--accent-on);
+	--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
 }
 
 /* A block is the opposite theme's paper, so everything on it comes from the block family. Its accent
@@ -443,6 +727,8 @@ a {
 	color: var(--block-ink);
 	--plane-accent: var(--accent-block);
 	--plane-accent-on: var(--block);
+	--plane-pencil: light-dark(var(--pencil), var(--pencil-deep));
+	--waiting: var(--hairline-block);
 }
 
 .block .muted {
@@ -458,10 +744,46 @@ a {
 	border-radius: var(--radius);
 	--plane-accent: var(--accent);
 	--plane-accent-on: var(--accent-on);
+	--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
+	--waiting: var(--surface-sunken);
 }
 
 .surface .muted {
 	color: var(--ink-muted);
+}
+
+/*
+ * Reserved space, drawn on the plane's own waiting tone. Empty, loading and answered are the same
+ * size everywhere on this site, so one of these stands wherever a value has not been drawn yet.
+ *
+ * It takes its size from what it is standing in for. A box holding nothing to take one from is given
+ * an explicit width and height where it is used.
+ *
+ * Only .waiting pulses, and it is added exactly while something is on its way. A box standing empty
+ * because nothing has been asked for keeps still, because a pulse would say the page is already
+ * working on an answer the reader has not asked it for.
+ */
+.reserved,
+.waiting {
+	background: var(--waiting);
+	border-radius: var(--radius);
+}
+
+/* Held back, because nothing is on its way. It is the shape the answer will take rather than a thing
+   being filled in, and at full strength a block waiting on a reader reads as a block mid-request. */
+.reserved {
+	opacity: 0.55;
+}
+
+.waiting {
+	opacity: 1;
+	animation: pulse var(--loading-pulse) var(--ease-in-out) infinite alternate;
+}
+
+@keyframes pulse {
+	to {
+		opacity: 0.4;
+	}
 }
 
 /* A whole container that leads somewhere is one link, and shows it as a top edge and nothing
@@ -507,6 +829,92 @@ a.block:focus-visible {
 
 .field > label {
 	color: var(--ink-muted);
+}
+
+/*
+ * A group of fields, marked by a rule and its own printed label rather than by a box.
+ *
+ * A filled, rounded panel around every group is what made a form read as constricted: boxes inside
+ * a box inside a page. A rule and space group just as clearly and leave the page open.
+ */
+.field-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	padding-block-start: var(--space-3);
+	border-top: var(--rule-panel);
+}
+
+/* A group standing directly under a head that already carries a rule. It opens on that rule rather
+   than restating one of its own two lines below it. */
+.field-group.flush {
+	padding-block-start: 0;
+	border-top: none;
+}
+
+/* The name of a group, printed on its rule at full strength. It names the fields under it, so it is
+   not supporting text. */
+.group-label {
+	color: var(--ink);
+}
+
+/* Two fields on one row, once the column holding them has room for both. Measured against that
+   column and not against the screen, the same as the groups below, because the form now stands in
+   one of a page's regions and the screen says nothing about how wide that region is. */
+.field-pair {
+	display: grid;
+	gap: var(--space-4);
+}
+
+@container controls (min-width: 30rem) {
+	.field-pair {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+/* The form a prediction is asked with: its groups of fields, then the action that ends it. Every
+   family asks with the same one, and only the groups in the middle differ. */
+.form-stack {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+/*
+ * The groups themselves. They set as two columns whenever the column holding them is wide enough,
+ * measured against that column rather than against the screen, so the form fills the page while
+ * nothing has been asked and folds to one column as the answer takes its room. No breakpoint
+ * decides it and no class has to be passed down.
+ */
+.form-groups {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-5);
+}
+
+@container controls (min-width: 52rem) {
+	.form-groups {
+		display: block;
+		columns: 2;
+		column-gap: var(--space-6);
+		margin-block-end: calc(var(--space-5) * -1);
+	}
+
+	/* A group is one object, so it never splits across the fold between two columns. */
+	.form-groups > * {
+		break-inside: avoid;
+		margin-block-end: var(--space-5);
+	}
+}
+
+/* The action, and under it the line naming whatever is still missing before it can be pressed. It
+   keeps a little of the page below it when a choice higher up scrolls it into view. */
+.form-submit {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-2);
+	scroll-margin-bottom: var(--space-5);
 }
 
 input,
@@ -639,10 +1047,6 @@ select:disabled {
 }
 
 @media (min-width: 40rem) {
-	:root {
-		--hero-inset: var(--space-7);
-	}
-
 	.sections {
 		gap: var(--space-7);
 	}

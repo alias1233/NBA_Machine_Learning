@@ -6,8 +6,9 @@
 
 <FamilyAbout
 	families={data.families}
+	answering={data.health !== null}
 	models={data.models}
 	family="player_stats"
-	title="Player stat models, how it works"
-	description="How points, rebounds and assists are predicted for one NBA player, and how accurate it is."
+	title="How player stat models work"
+	description="How one NBA player's box score numbers are predicted, and how accurate the models are."
 />

@@ -18,6 +18,15 @@ MODELS_DIRECTORY = DATA_DIRECTORY / "models"
 TRAINING_CACHE_DIRECTORY = DATA_DIRECTORY / "training_cache"
 FEATURE_BUILDS_DIRECTORY = DATA_DIRECTORY / "feature_builds"
 
+SHOWCASE_FILE = DATA_DIRECTORY / "showcase.json"
+"""
+The day's sample predictions, written by a job and read by the service.
+
+One small file rather than a table, because it is written whole once a day and read whole on every
+home page render, and because a file is replaced atomically without a writer and a reader ever
+contending. See nba_ml/showcase.py.
+"""
+
 BACKUP_DIRECTORY = Path(os.environ.get("NBA_ML_BACKUP_DIR", DATA_DIRECTORY / "backups"))
 """
 Where backups are written, which a deployment points at a directory of its own.

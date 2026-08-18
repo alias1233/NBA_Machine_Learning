@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from nba_ml import season, upcoming
+from nba_ml import season, showcase, upcoming
 from nba_ml.api import game_stats, limits, player_stats, team_stats
 from nba_ml.api.schemas import PlayerResponse, TeamResponse, team_id
 from nba_ml.entities import ScheduledGame
@@ -206,6 +206,22 @@ def health() -> HealthResponse:
         newest_stored_game=player_games.latest_game_date(),
         feature_build=None if build is None else build.version
     )
+
+@app.get("/showcase")
+def todays_showcase() -> dict | None:
+    """
+    The day's sample predictions, built by a job rather than by this request.
+
+    Read straight off the published file and passed on as it stands. Nothing is predicted here: this
+    endpoint exists precisely so that a visitor arriving at the home page starts no forward pass, and
+    it is deliberately outside the prediction cap because it costs one file read.
+
+    Null where no set has been published, which is what a machine that has never run the job looks
+    like. A caller draws its page without samples rather than treating it as a failure. See
+    nba_ml/showcase.py.
+    """
+
+    return showcase.read()
 
 @app.get("/teams")
 def all_teams() -> list[TeamResponse]:

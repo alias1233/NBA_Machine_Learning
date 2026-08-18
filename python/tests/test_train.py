@@ -120,6 +120,89 @@ def test_a_training_cache_is_not_shared_between_splits():
     assert classifier_training._describe_build(model, inputs, era, A_SPLIT, chunk_step_size=2) != described
 
 
+def test_only_models_with_nothing_servable_are_selected_by_a_day_in_the_past(monkeypatch):
+    """
+    A day far in the past is what "train whatever nothing can serve" is asked for, so a model with a
+    working file has to be left alone however old that file is.
+    """
+
+    trained = specifications.TEAM_POINTS_MODEL
+    monkeypatch.setattr(
+        train.loading,
+        "trained_at",
+        lambda model: datetime(2020, 1, 1) if model.name == trained.name else None
+    )
+
+    selected = train.models_trained_before(datetime(1900, 1, 1))
+
+    assert trained.name not in [model.name for model in selected]
+    assert len(selected) == len(train.families.ALL_MODEL_NAMES) - 1
+
+
+def test_a_model_trained_before_the_given_day_is_retrained(monkeypatch):
+    monkeypatch.setattr(train.loading, "trained_at", lambda model: datetime(2026, 8, 15))
+
+    assert len(train.models_trained_before(datetime(2026, 8, 16))) == len(train.families.ALL_MODEL_NAMES)
+    assert train.models_trained_before(datetime(2026, 8, 14)) == []
+
+
+def test_retraining_since_a_day_fits_every_selected_model_on_the_same_games(monkeypatch):
+    """
+    One run, many models. The held-back games are worked out once, so a batch crossing midnight
+    scores its last model on the same games as its first.
+    """
+
+    fitted = []
+    monkeypatch.setattr(sys, "argv", ["nba-train", "--retrain-since", "2026-08-16", "--no-cache"])
+    monkeypatch.setattr(train.loading, "trained_at", lambda model: None)
+    for category in train.TRAINERS:
+        monkeypatch.setitem(
+            train.TRAINERS,
+            category,
+            lambda model, **kwargs: fitted.append((model.name, kwargs["evaluation_split"]))
+        )
+
+    train.main()
+
+    assert [name for name, _ in fitted] == [
+        model.name for model in train.models_trained_before(datetime(2026, 8, 16))
+    ]
+    assert len({split for _, split in fitted}) == 1
+
+
+def test_a_model_that_fails_does_not_stop_the_rest_of_a_batch(monkeypatch):
+    """A batch of eighteen models is hours of work, so one failure is reported and not obeyed."""
+
+    fitted = []
+    monkeypatch.setattr(sys, "argv", ["nba-train", "--retrain-since", "2026-08-16"])
+    monkeypatch.setattr(train.loading, "trained_at", lambda model: None)
+
+    def train_one(model, **kwargs):
+        if model.name == "team_points":
+            raise RuntimeError("no data")
+
+        fitted.append(model.name)
+
+    for category in train.TRAINERS:
+        monkeypatch.setitem(train.TRAINERS, category, train_one)
+
+    with pytest.raises(SystemExit, match="team_points"):
+        train.main()
+
+    assert len(fitted) == len(train.families.ALL_MODEL_NAMES) - 1
+
+
+def test_naming_a_model_and_a_day_at_once_is_refused(monkeypatch):
+    """The two answer the same question, so a run taking both would have to pick one silently."""
+
+    monkeypatch.setattr(
+        sys, "argv", ["nba-train", "--model", "team_points", "--retrain-since", "2026-08-16"]
+    )
+
+    with pytest.raises(SystemExit):
+        train.main()
+
+
 def _one_epoch(model_specification):
     """The same model fitted for a single epoch, which is all a test of the plumbing needs."""
 
