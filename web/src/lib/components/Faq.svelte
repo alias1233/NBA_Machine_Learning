@@ -12,7 +12,7 @@
 
 	type Question = {
 		question: string;
-		answer: string;
+		answer: string[];
 	};
 
 	type Props = {
@@ -51,7 +51,11 @@
 			</h3>
 
 			{#if shown}
-				<p id={answerId(index)} class="small answer" transition:flow>{answer}</p>
+				<div id={answerId(index)} class="container">
+					{#each answer as paragraph}
+						<p class="small answer" transition:flow>{paragraph}</p>
+					{/each}
+				</div>
 			{/if}
 		</li>
 	{/each}
@@ -95,7 +99,11 @@
 	}
 
 	.answer {
-		padding: 0 var(--space-5) var(--space-5);
+		padding: 0 var(--space-5) var(--space-3);
+	}
+
+	.container {
+		padding-bottom: var(--space-4);
 	}
 
 	.mark {

@@ -1,11 +1,9 @@
 <!--
 	The home page hero: one screen, printed as a poster.
 
-	The plate is the site talking. It is the blue ground the whole hero is printed on. Lying on it are
-	two sheets of paper. The answer, on the reader's own paper, carries the sample that is up. The
-	slate, on the opposite theme's paper, carries the day's set at the foot. Printed ground, the
-	reader's paper, the opposite paper: that is the whole composition, and it is why the screen is
-	three colours rather than one.
+	The plate is the site talking. A photograph sits under its blue ink, changing with the sample that
+	is up. Lying on it are two sheets of paper. The answer, on the reader's own paper, carries the
+	sample that is up. The slate, on the opposite theme's paper, carries the day's set at the foot.
 
 	It reads down in four printed registers. The nameplate, stamped over the sample's own shape printed
 	to the plate's margins. The answer, given the whole page column, because a distribution is a
@@ -89,6 +87,16 @@
 
 	/** How long a sample stays up before the next comes round. Long enough to read the answer. */
 	const TURN = 7000;
+
+	/** The daily sample order also chooses the printed plate's photograph. */
+	const COLLAGE_IMAGES = [
+		'basketball_through_hoop.jpg',
+		'bizzare_basketball.png',
+		'basketball_on_floor.jpg',
+		'dunk.jpg',
+		'basketball_court.jpg',
+		'basketball_court_artistic.jpg'
+	];
 
 	/** How short a bar of a silhouette may be drawn, as a percentage. Below this it is not a bar. */
 	const FLOOR = 3;
@@ -304,6 +312,16 @@
 	onfocusin={() => (held = true)}
 	onfocusout={releaseTurn}
 >
+	{#if card}
+		{#key picked}
+			<span
+				class="hero-artwork"
+				style:--hero-image={`url("/collage/${COLLAGE_IMAGES[picked % COLLAGE_IMAGES.length]}")`}
+				aria-hidden="true"
+			></span>
+		{/key}
+	{/if}
+
 	<!-- The crosses a press registers the plate by. They say nothing to a reader. They are what makes
 	     the ground read as something printed rather than as a coloured box, and the printing keeps
 	     inside them, the way an image keeps inside a plate's margin. -->
@@ -519,8 +537,9 @@
 <style>
 	/*
 	 * The printed ground, and exactly one screen of it, so whatever the device the page under the
-	 * hero is one scroll away. A minimum rather than a height, because a screen too short to hold the
-	 * answer should grow rather than cut it off.
+	 * hero is one scroll away. Its photograph is the older collage treatment, held under enough blue
+	 * ink for the plate lettering to keep its contrast. A minimum rather than a height, because a
+	 * screen too short to hold the answer should grow rather than cut it off.
 	 *
 	 * The screen it is measured against is the one the reader actually has, which on a phone changes
 	 * as the browser's own bars come and go. A smallest-screen height leaves the band under it showing
@@ -530,6 +549,7 @@
 	 */
 	.hero {
 		position: relative;
+		isolation: isolate;
 		display: flex;
 		flex-direction: column;
 		min-height: 100dvh;
@@ -540,9 +560,27 @@
 		/* How far in from the screen the plate's margin runs, which is the room the registration
 		   crosses stand in and the width every printed thing on the ground keeps inside. */
 		--plate-margin: calc(var(--space-3) * 2 + var(--registration));
-		background: var(--plate);
+		background: var(--plate-deep);
 		color: var(--plate-ink);
 		overflow: clip;
+	}
+
+	/* The shared collage treatment, re-inked as a plate so unrelated photographs read as one ground. */
+	.hero-artwork {
+		position: absolute;
+		z-index: -1;
+		inset: 0;
+		background-image:
+			linear-gradient(
+				115deg,
+				color-mix(in oklab, var(--plate-deep) 86%, transparent),
+				color-mix(in oklab, var(--plate) 74%, transparent)
+			),
+			var(--hero-image);
+		background-position: center;
+		background-size: cover;
+		background-blend-mode: multiply;
+		filter: saturate(0.8) contrast(1.08);
 	}
 
 	/*
@@ -993,23 +1031,8 @@
 		}
 	}
 
-	@keyframes stamp {
-		from {
-			opacity: 0;
-			scale: 1.035;
-			filter: blur(8px);
-		}
-
-		55% {
-			opacity: 1;
-		}
-
-		to {
-			opacity: 1;
-			scale: 1;
-			filter: blur(0);
-		}
-	}
+	/* stamp is the site's own impression and lives in app.css, because the nameplate here and a
+	   landing answer are the same press. */
 
 	@keyframes settle {
 		from {

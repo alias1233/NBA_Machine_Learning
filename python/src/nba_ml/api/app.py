@@ -43,8 +43,8 @@ FAMILY_ROUTERS = [player_stats.router, team_stats.router, game_stats.router]
 for family_router in FAMILY_ROUTERS:
     app.include_router(family_router, dependencies=[Depends(limits.prediction_slot)])
 
-# How far back a team's players are read from. Long enough that the answer survives an off season,
-# since who last played for a team is the only roster this project holds.
+# How far back a team's players are read from, for the players the roster snapshot says nothing
+# about. Long enough that the answer survives an off season.
 ROSTER_WINDOW = timedelta(days=365)
 
 # How recently a team has to have played to be offered as a side of a game. Measured back from the
@@ -78,7 +78,7 @@ class RosterResponse(BaseModel):
 
     team: TeamResponse
     players: list[PlayerResponse]
-    """Everyone who can be named for this team, whether they played its last game or not."""
+    """The team's projected roster, whether or not each of them played its last game."""
 
     without: list[PlayerResponse]
     """Who played the team's last game and is not expected to play this one."""
@@ -302,21 +302,34 @@ def _named(player_ids: Collection[int]) -> list[PlayerResponse]:
 
 def _roster(team: Team, game: Game) -> RosterResponse:
     """
-    One side of a game: everyone who can be named for it, and how it is expected to line up.
+    One side of a game: the roster it is projected to field, and how it is expected to line up.
 
-    Who plays for a team is everyone whose most recent game in the last year was for it, plus
-    everyone the collected roster snapshot now puts on it, which is what names a player traded since
-    their last game. Neither list on its own is the roster: the snapshot leaves out anybody the
-    provider has not listed, and the played games leave out anybody who has not played yet.
+    Everyone the collected snapshot puts on the team, plus everyone whose most recent game in the
+    last year was for it and whom the snapshot does not place elsewhere. Neither half is the roster
+    on its own. The snapshot leaves out anybody the provider has not listed, and the played games go
+    on offering a player who has since been traded away.
+
+    A player the snapshot says nothing about is left where their last game put them, which is how a
+    provider that has simply not listed somebody is told apart from one that has dropped them. With
+    no snapshot held that is every player, so this is the played games alone, exactly as it was
+    before any roster was collected.
+
+    A projected player the archive has never named is not offered, because nothing about their box
+    score line could be predicted anyway.
     """
 
     played_for = player_games.player_ids_on_team(team.id, season.today() - ROSTER_WINDOW)
-    on_team_now = [entry.player_id for entry in rosters.on_team(team.id)]
+    on_team_now = {entry.player_id for entry in rosters.on_team(team.id)}
+    moved_on = {
+        player_id
+        for player_id, entry in rosters.entries_for(played_for).items()
+        if entry.team_id != team.id
+    }
     expected = expected_rosters.expected_scenario(team.id, game.date)
 
     return RosterResponse(
         team=TeamResponse(abbreviation=team.abbreviation, name=team.name),
-        players=_named({*played_for, *on_team_now}),
+        players=_named(on_team_now | (set(played_for) - moved_on)),
         without=_named(expected.without),
         returning=_named(expected.returning)
     )

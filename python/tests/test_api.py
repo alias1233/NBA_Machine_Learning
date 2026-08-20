@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException
 
@@ -247,6 +247,61 @@ def test_a_roster_offers_everyone_the_snapshot_puts_on_the_team():
     _, home = game_rosters(upcoming.id)
 
     assert moved in {player.id for player in home.players}
+
+
+def on_the_day(monkeypatch):
+    """Puts the clock on the upcoming game, so the year of played games behind it is read."""
+
+    monkeypatch.setattr(season, "today", lambda: fake_data.NEXT_GAME_DATE)
+
+
+def test_a_roster_is_the_played_games_while_no_snapshot_is_held(monkeypatch):
+    """Which is what every roster was before any of this was collected."""
+
+    upcoming = stored_league()
+    on_the_day(monkeypatch)
+
+    _, home = game_rosters(upcoming.id)
+
+    assert {player.id for player in home.players} == set(
+        player_games.player_ids_on_team(fake_data.TEAMS[0].id, date(1970, 1, 1))
+    )
+
+
+def test_a_roster_drops_a_player_the_snapshot_puts_on_another_team(monkeypatch):
+    """
+    The projected roster, not everyone who has recently played for the team.
+
+    A traded player goes on being what the old team's box scores last said for a whole year, so
+    nothing played would take him out of its picker.
+    """
+
+    upcoming = stored_league()
+    on_the_day(monkeypatch)
+    traded = fake_data.player_id(fake_data.TEAMS[1].id, 0)
+    rosters.store(fake_data.roster_entries(moved={traded: fake_data.TEAMS[0].id}))
+
+    away, home = game_rosters(upcoming.id)
+
+    assert traded not in {player.id for player in away.players}
+    assert traded in {player.id for player in home.players}
+
+
+def test_a_roster_keeps_a_player_the_snapshot_says_nothing_about(monkeypatch):
+    """
+    A provider that has simply not listed somebody is not a player who has been dropped.
+
+    So the played games go on placing them, which is the same rule the expected lineup follows.
+    """
+
+    upcoming = stored_league()
+    on_the_day(monkeypatch)
+    unlisted = fake_data.player_id(fake_data.TEAMS[0].id, 0)
+    rosters.store(fake_data.roster_entries(left_out={unlisted}))
+
+    _, home = game_rosters(upcoming.id)
+
+    assert unlisted in {player.id for player in home.players}
 
 
 def test_a_roster_carries_the_lineup_change_the_snapshot_expects():

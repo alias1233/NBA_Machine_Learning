@@ -8,10 +8,13 @@
 	A category's name and its chance share a line above a bar of the full width, so the bars are the
 	same size whatever the figures over them are. Bars are neutral, the same as a chart with no line
 	set, because nothing here splits them.
+
+	`Reading` is the surface and owns the swap from the reserved space to the answer, so this holds
+	only the two things being swapped.
 -->
 <script lang="ts">
+	import Reading from '$lib/components/Reading.svelte';
 	import { sentenceCase } from '$lib/models';
-	import { flowingHeight } from '$lib/motion';
 	import { CATEGORY_DECIMALS, sharePercentages } from '$lib/odds';
 
 	import type { CategoryAnswer } from '$lib/odds';
@@ -40,39 +43,34 @@
 	});
 </script>
 
-<div class="surface reading" use:flowingHeight>
-	<div>
-		{#if categories && !loading}
-			<dl>
-				{#each rows as row (row.name)}
-					<div class="row">
-						<dt class="small">{sentenceCase(row.name)}</dt>
-						<dd class="figure">{row.share}%</dd>
-						<div class="track" aria-hidden="true">
-							<div class="bar" style:width={row.width}></div>
-						</div>
+<Reading answered={categories !== null && !loading}>
+	{#snippet answer()}
+		<dl>
+			{#each rows as row (row.name)}
+				<div class="row">
+					<dt class="small">{sentenceCase(row.name)}</dt>
+					<dd class="figure">{row.share}%</dd>
+					<div class="track" aria-hidden="true">
+						<div class="bar" style:width={row.width}></div>
 					</div>
-				{/each}
-			</dl>
-		{:else}
-			<dl aria-hidden="true">
-				{#each Array(RESERVED_ROWS) as _, row (row)}
-					<div class="row">
-						<div class="reserved name" class:waiting={loading}></div>
-						<div class="reserved track" class:waiting={loading}></div>
-					</div>
-				{/each}
-			</dl>
-		{/if}
-	</div>
-</div>
+				</div>
+			{/each}
+		</dl>
+	{/snippet}
+
+	{#snippet skeleton()}
+		<dl aria-hidden="true">
+			{#each Array(RESERVED_ROWS) as _, row (row)}
+				<div class="row">
+					<div class="reserved name" class:waiting={loading}></div>
+					<div class="reserved track" class:waiting={loading}></div>
+				</div>
+			{/each}
+		</dl>
+	{/snippet}
+</Reading>
 
 <style>
-	/* It holds the height of whatever is in it, so the skeleton flows into the answer. */
-	.reading {
-		overflow: clip;
-	}
-
 	dl {
 		display: flex;
 		flex-direction: column;
@@ -102,7 +100,17 @@
 	.bar {
 		height: 100%;
 		background: var(--chart-neutral);
-		transition: width var(--motion-slow) var(--ease-in);
+		/* Run out from the end it is measured from, once, on arrival, the same as every other bar on
+		   the site. A bar that was simply there says nothing about being a length. Its width never
+		   changes after that: there is no line to drag here, and a new answer is a new bar. */
+		transform-origin: left;
+		animation: run var(--motion-slow) var(--ease-in) backwards;
+	}
+
+	@keyframes run {
+		from {
+			transform: scaleX(0);
+		}
 	}
 
 	/* Given its width, because a name it is standing in for has none to take. */

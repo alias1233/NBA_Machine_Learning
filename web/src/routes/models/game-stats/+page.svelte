@@ -263,6 +263,7 @@
 	aboutHref={ABOUT}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
+	hasAnswer={data.prediction !== null || data.error !== null}
 >
 	{#snippet board()}
 		<UpcomingGames

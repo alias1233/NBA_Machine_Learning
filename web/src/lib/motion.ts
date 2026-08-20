@@ -90,7 +90,10 @@ export function flowingHeight(node: HTMLElement) {
 	};
 }
 
-/** A floating panel arriving. It changes nothing under it, so it fades where it stands. */
+/**
+ * Something arriving or leaving where it stands, changing nothing under it. A floating panel, and
+ * the reserved space an answer is printed over.
+ */
 export const appear = (node: Element, { duration = MOTION } = {}): TransitionConfig =>
 	fade(node, { duration: timed(duration) });
 

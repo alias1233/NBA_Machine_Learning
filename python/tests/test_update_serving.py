@@ -2,7 +2,8 @@
 The server only collects and rebuilds around scheduled games.
 
 Two windows, because the job answers two questions. The archive catches up on games that have
-finished, and the roster describes games that have not, so the second reaches further ahead.
+finished, so it waits for one. The roster describes games that have not, and the site offers those
+whenever the schedule holds one, so it does not.
 """
 
 from datetime import timedelta
@@ -53,12 +54,26 @@ def test_the_roster_window_reaches_the_games_the_site_is_about_to_be_asked_about
     assert update_serving.is_roster_window()
 
 
-def test_a_game_further_off_than_the_lookahead_wakes_nothing(monkeypatch):
+def test_a_game_months_off_still_refreshes_the_rosters(monkeypatch):
+    """
+    The site offers that game already, and its player pickers are filled from the snapshot.
+
+    An off season left to itself is what puts a traded player back in his old team's picker, so the
+    roster window does not wait for the game to come near.
+    """
+
     first = fake_data.SEASON_GAMES[0]
-    monkeypatch.setattr(
-        season, "today", lambda: first.day - update_serving.ROSTER_LOOKAHEAD - timedelta(days=1)
-    )
+    monkeypatch.setattr(season, "today", lambda: first.day - timedelta(days=90))
     schedule.store([fake_data.scheduled_game(first, status=GameStatus.SCHEDULED)])
+
+    assert not update_serving.is_game_window()
+    assert update_serving.is_roster_window()
+
+
+def test_a_schedule_with_nothing_left_to_play_wakes_nothing(monkeypatch):
+    last = fake_data.SEASON_GAMES[-1]
+    monkeypatch.setattr(season, "today", lambda: last.day + timedelta(days=2))
+    schedule.store([fake_data.scheduled_game(last)])
 
     assert not update_serving.is_roster_window()
 

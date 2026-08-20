@@ -23,6 +23,9 @@ export type Player = {
 /**
  * One team and who plays for it, for one game. Both sides of a chosen game, away first.
  *
+ * `players` is the roster the team is projected to field, so somebody traded away since their last
+ * game for it is not in it. It is what the player pickers open on.
+ *
  * `without` and `returning` are the lineup change the collected roster and injury snapshot expects
  * of this side, already worked out. The site opens its roster controls on them, so a reader who
  * changes nothing is still answered for the players who will actually take the floor. Both are

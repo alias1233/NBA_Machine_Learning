@@ -25,26 +25,36 @@
 	const QUESTIONS = [
 		{ 
 			question: `Why can't I find a scheduled game in the Upcoming Games section of a prediction page?`, 
-			answer: `To predict the statistics of a target game, the models on this site utilize box scores 
-			and other stats from the previous games as input features. To prevent predictions from
-			being made with premature and inaccurate data, the only games that are shown in the Upcoming 
-			Games section are games between teams that both do not have a sooner scheduled game. This ensures 
-			all predictions are made with accurate and updated information. Simply wait for the teams in your 
-			target game to finish playing the games that they have scheduled before your target game, and 
-			the Upcoming Games section should automatically update soon after.` 
+			answer: [
+				`The site currently does not support predicting on preseason games, and they do not appear
+				in the Upcoming Games section.`,
+				`If your target game is a regular season or playoff game, then simply wait for the teams 
+				in your target game to finish playing the games that they have scheduled before your target 
+				game, and the Upcoming Games section should automatically update soon after.`,
+				`The only games that are shown in the Upcoming Games section are games between teams that both do not 
+				have an earlier scheduled game. This ensures all predictions are made with updated information.`
+			]
 		},
 		{ 
-			question: '', 
-			answer: 'This answer is not written yet.' 
+			question: `Why do some probability distribution graphs contain bars that range over multiple individual values?`, 
+			answer: [
+				`The models assign a probability to every outcome within the predicted statistic's common 
+				range of occurance. However, for statistics which span a wide range, it is challenging for
+				the model to provide accurate probabilities for every single value within the interval,
+				especially if there are fewer data samples to train on.`,
+				`In these cases, the possible outcomes of the statistic are "bucketed", grouping intervals
+				of outcomes together. This lowers the total number of possible outcomes, reducing the
+				complexity of the task that the model has to do, and increasing accuracy.`
+			]
 		},
 		{ 
-			question: 'Third question, not written yet', 
-			answer: 'This answer is not written yet.' 
+			question: 'Can I make predictions on mock trades that have not happened?', 
+			answer: [
+				`Yes! Predicting supports any custom changes to a team's roster. Simply begin typing in the 
+				player selector's input field to search for players league-wide, even if they do not 
+				belong to the current team. You can also remove players from a team arbitrarily as well.`
+			]
 		},
-		{ 
-			question: 'Fourth question, not written yet', 
-			answer: 'This answer is not written yet.' 
-		}
 	];
 
 	// The anchors are fixed. Every answer block on the site links to #reading, so that one in
@@ -53,7 +63,7 @@
 		['what', 'What this is'],
 		['reading', 'Reading a prediction'],
 		['how', 'How it works'],
-		['questions', 'Common questions'],
+		['questions', 'FAQ'],
 		['disclaimers', 'Disclaimers']
 	];
 </script>

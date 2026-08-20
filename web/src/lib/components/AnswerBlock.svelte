@@ -160,7 +160,7 @@
 			     space as well and the block does not change size when the answer lands. -->
 			<div class="figure-row">
 				{#if answered}
-					<p class="figure-lead">{leadFigure}</p>
+					<p class="figure-lead" class:printed={!example}>{leadFigure}</p>
 				{:else}
 					<div class="reserved lead-figure" class:waiting={loading}></div>
 				{/if}
@@ -260,6 +260,13 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--space-3);
+	}
+
+	/* The last thing the press lays down, so the eye ends on the figure the answer came to. It is
+	   held back past the start of the reading beside it, and it is the full impression rather than
+	   the reading's strike, because nothing clips it and a headline figure can afford to land. */
+	.figure-lead.printed {
+		animation: stamp 420ms var(--ease-in) 120ms backwards;
 	}
 
 	/* Given its width, because it holds nothing to take one from. The block plane hands it the

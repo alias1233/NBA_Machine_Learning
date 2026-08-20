@@ -1,47 +1,57 @@
-"""Collect and rebuild only while the stored schedule says NBA games are near."""
+"""
+Collect and rebuild only while the stored schedule gives the server something to do.
+
+Two windows, because the job answers two questions. The archive catches up on games that have
+finished, so it waits for one. The roster describes games that have not, and the site offers those
+the whole year round, so it does not.
+"""
 
 from datetime import date, timedelta
 
 from nba_ml import season, sources
 from nba_ml.cli import build_features, collect
 from nba_ml.data_collection import rosters, source_identity
+from nba_ml.entities import ScheduledGame
 from nba_ml.stores import schedule
 
-ROSTER_LOOKAHEAD = timedelta(days=2)
-"""
-How far ahead a game has to be before who is playing in it stops being worth refreshing.
+def _games_still_to_come(earliest: date) -> list[ScheduledGame]:
+    """The real scheduled games from a date onwards. Mock games are added by hand for testing."""
 
-The site only offers each team's very next game, and an injury report is announced on the day, so
-this has only to reach the games a reader can actually ask about. It exists because the two halves
-of this job answer different questions: the archive catches up on games that have finished, and the
-roster describes games that have not.
-"""
-
-
-def _game_scheduled_between(earliest: date, latest: date) -> bool:
-    return any(
-        not scheduled.is_mock and earliest <= scheduled.game.date <= latest
+    return [
+        scheduled
         for scheduled in schedule.games_on_or_after(earliest)
-    )
+        if not scheduled.is_mock
+    ]
 
 
 def is_game_window() -> bool:
     """Whether a box score could have finalized since the last hourly run."""
 
     today = season.today()
-    return _game_scheduled_between(today - timedelta(days=1), today)
+
+    return any(
+        scheduled.game.date <= today
+        for scheduled in _games_still_to_come(today - timedelta(days=1))
+    )
 
 
 def is_roster_window() -> bool:
-    """Whether a game near enough to be predicted is worth knowing the rosters for."""
+    """
+    Whether the site is offering a game at all, which is when who will play it is worth knowing.
 
-    today = season.today()
-    return _game_scheduled_between(today - timedelta(days=1), today + ROSTER_LOOKAHEAD)
+    Unbounded ahead, unlike the game window. The site offers each team's very next game whenever the
+    schedule holds one, and its player pickers are filled from the roster snapshot, so a snapshot
+    left to go stale out of season would go on offering players who have since been traded. A
+    refresh is a handful of requests and no feature build, so there is nothing to save by waiting
+    for the game to come near. Only a schedule that is empty or entirely played stands the job down.
+    """
+
+    return bool(_games_still_to_come(season.today() - timedelta(days=1)))
 
 
 def main():
     if not is_roster_window():
-        print("No games are scheduled nearby. Nothing collected or rebuilt.")
+        print("The schedule holds no game still to be played. Nothing collected or rebuilt.")
         return
 
     source = sources.get_source()
@@ -50,7 +60,7 @@ def main():
 
     if not is_game_window():
         # Nothing has finished, so nothing to collect or rebuild. Who plays the games in front of us
-        # still changes hour by hour, and that is a handful of requests rather than a feature build.
+        # still changes, and that is a handful of requests rather than a feature build.
         rosters.collect(source)
         return
 

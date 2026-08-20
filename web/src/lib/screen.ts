@@ -13,17 +13,3 @@
 import { MediaQuery } from 'svelte/reactivity';
 
 export const phone = new MediaQuery('width < 40rem', false);
-
-/**
- * Room to print a full batch of a family's models on the home page's index.
- *
- * The index is held to one screen on a landscape device and a reader has to reach the way into every
- * family without scrolling, so how many entries a sheet may print is a question about the screen's
- * height. Portrait always has the room, because there the listing scrolls rather than being held to
- * a screen. It cannot be answered in `app.css`, because the answer is a count of things rather than
- * a size.
- *
- * The fallback is true, because a server rendering the page has no screen and almost every device
- * has the room.
- */
-export const roomForBatch = new MediaQuery('(orientation: portrait) or (height >= 53rem)', true);

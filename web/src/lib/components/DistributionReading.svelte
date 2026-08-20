@@ -2,8 +2,8 @@
 	The reading for an answer that is a chance per whole number outcome, or per short run of them.
 
 	The chart, the line and the odds are one object on one surface, which is what puts data on neutral
-	ground inside an inverted container. The surface holds the height of whatever is in it, so the
-	skeleton flows into the answer and nothing inside it carries a motion of its own.
+	ground inside an inverted container. `Reading` is that surface and owns the swap from the reserved
+	space to the answer, so this holds only the two things being swapped.
 
 	Everything an answer is read with is drawn only while there is an answer. Until then this is
 	reserved space at the size that answer will take, carrying no figure, no line and no way into the
@@ -11,7 +11,7 @@
 -->
 <script lang="ts">
 	import DistributionAnswer from '$lib/components/DistributionAnswer.svelte';
-	import { flowingHeight } from '$lib/motion';
+	import Reading from '$lib/components/Reading.svelte';
 
 	import type { Distribution } from '$lib/odds';
 
@@ -34,41 +34,36 @@
 		$props();
 </script>
 
-<div class="surface reading" use:flowingHeight>
-	<div>
-		{#if distribution && !loading}
-			<DistributionAnswer {distribution} {stat} {openOn} {heading} {subheading} {example} />
-		{:else}
-			<!-- Reserved space at the size the answer will take. It pulses only while one is on its
-			     way: standing before the first prediction it keeps still, because nothing is coming
-			     until the reader asks for it. -->
-			<div class="skeleton" aria-hidden="true">
-				<!-- The tracks the odds land in, in the row they will be read on. Nothing here is named:
-				     the words belong to the answer, and a block standing empty has not been told which
-				     model it is waiting for or whether that model reads against a line at all. -->
-				<div class="odds">
-					{#each [0, 1, 2] as track (track)}
-						<div>
-							<div class="reserved label" class:waiting={loading}></div>
-							<div class="reserved figure" class:waiting={loading}></div>
-						</div>
-					{/each}
-				</div>
+<Reading answered={distribution !== null && !loading} {example}>
+	{#snippet answer()}
+		<DistributionAnswer distribution={distribution!} {stat} {openOn} {heading} {subheading} {example} />
+	{/snippet}
 
-				<div class="reserved chart" class:waiting={loading}></div>
-				<div class="reserved handle" class:waiting={loading}></div>
-				<div class="reserved row" class:waiting={loading}></div>
+	{#snippet skeleton()}
+		<!-- Reserved space at the size the answer will take. It pulses only while one is on its way:
+		     standing between two predictions it keeps still, because nothing is coming until the
+		     reader asks for it. -->
+		<div class="skeleton" aria-hidden="true">
+			<!-- The tracks the odds land in, in the row they will be read on. Nothing here is named:
+			     the words belong to the answer, and a block standing empty has not been told which
+			     model it is waiting for or whether that model reads against a line at all. -->
+			<div class="odds">
+				{#each [0, 1, 2] as track (track)}
+					<div>
+						<div class="reserved label" class:waiting={loading}></div>
+						<div class="reserved figure" class:waiting={loading}></div>
+					</div>
+				{/each}
 			</div>
-		{/if}
-	</div>
-</div>
+
+			<div class="reserved chart" class:waiting={loading}></div>
+			<div class="reserved handle" class:waiting={loading}></div>
+			<div class="reserved row" class:waiting={loading}></div>
+		</div>
+	{/snippet}
+</Reading>
 
 <style>
-	/* The surface holds the height, so what it holds is laid out one level in. */
-	.reading {
-		overflow: clip;
-	}
-
 	.skeleton {
 		display: grid;
 		gap: var(--space-2);

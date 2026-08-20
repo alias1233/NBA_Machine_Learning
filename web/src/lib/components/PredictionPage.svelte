@@ -14,8 +14,12 @@
 	a drawing wants width. The board is given the larger share of that first row: it holds a whole
 	night of cards, and the parameters hold at most a handful of fields.
 
-	All three stand from the first frame, the answer included. Nothing opens, and nothing about the
-	empty answer pulses, because a reader who has not pressed the button is not waiting on anything.
+	The answer is not on the page until one has been asked for. A reader who has not pressed the
+	button is not waiting on anything, and an empty block standing in the room the answer will take is
+	a page of held breath before there is anything to hold it for. The press is what opens the region,
+	so it opens on the reader's own action rather than when the service comes back, and it opens onto
+	the skeleton at the size the answer will land in. From then on it stands, because a region that
+	closed again under a reader reading it would be worse than one that never opened.
 
 	Narrow, the three lie on top of each other in the same order, so the page is read down rather than
 	across and nothing is dropped.
@@ -25,9 +29,12 @@
 	Everything here is the shared layout.
 -->
 <script lang="ts">
+	import { tick } from 'svelte';
+
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
+	import { flow, MOTION_SLOW } from '$lib/motion';
 	import { walkTo } from '$lib/scroll';
 	import { pageTitle } from '$lib/site';
 
@@ -43,6 +50,12 @@
 		hasModels: boolean;
 		/** False where the service did not answer at all, which is not the same as nothing published. */
 		answering: boolean;
+		/**
+		 * True where the address bar already names a request that was answered or refused, which
+		 * stands the answer region up on arrival rather than opening it. A shared link and a reload
+		 * both land that way, and neither is a reveal the reader watched.
+		 */
+		hasAnswer: boolean;
 		/** The night's games, the first region. Omitted by a family that predicts on something else. */
 		board?: Snippet;
 		/** The head naming the game the parameters are about. Omitted where there is no board. */
@@ -58,6 +71,7 @@
 		aboutHref,
 		hasModels,
 		answering,
+		hasAnswer,
 		board,
 		matchup,
 		controls,
@@ -67,18 +81,32 @@
 	let answerColumn = $state<HTMLElement>();
 	let controlsColumn = $state<HTMLElement>();
 
+	/** Whether the reader has asked for an answer on this page, which is what opens the region. */
+	let asked = $state(false);
+
+	const showingAnswer = $derived(hasAnswer || asked);
+
 	/**
-	 * Walks the reader to the answer when it is not already in front of them.
+	 * Opens the answer region and walks the reader to it.
 	 *
-	 * Beside the parameters it almost always is, so this does nothing there. Under them, which is
-	 * every narrow screen, the answer is a page away from the button that asked for it. Nothing is
-	 * awaited by the caller, because the request it is answering goes out in the same breath.
+	 * The region is opened by the press rather than by the answer, so the reader watches the room the
+	 * answer will land in arrive with the skeleton already on it. Nothing is awaited by the caller,
+	 * because the request it is answering goes out in the same breath.
+	 *
+	 * The walk waits a tick for the region to be in the page, because until it is there is nothing to
+	 * walk to. Beside the parameters the answer almost always ends up in front of the reader anyway,
+	 * so the walk does nothing there. Under them, which is every narrow screen, it is a page away
+	 * from the button that asked for it.
 	 *
 	 * The request is the flow, so it is handed over and the page holds the answer at the top of the
 	 * screen until it lands. An answer changes the height of everything it touches, and a page that
 	 * stopped travelling when the button was pressed is left wherever that leaves it.
 	 */
-	export function reveal(asking?: Promise<unknown>): void {
+	export async function reveal(asking?: Promise<unknown>): Promise<void> {
+		asked = true;
+
+		await tick();
+
 		walkTo(answerColumn, { block: 'start', flowing: asking });
 	}
 
@@ -120,26 +148,43 @@
 			</Notice>
 		{/if}
 	{:else}
-		<div class="columns" class:boardless={!board}>
-			{#if board}
-				<div class="board-column">{@render board()}</div>
-			{/if}
+		<div class="request">
+			<div class="columns" class:boardless={!board}>
+				{#if board}
+					<div class="board-column">{@render board()}</div>
+				{/if}
+
+				<!--
+					The head, the game it is about, then the fields. This region is what the form's groups
+					are measured against, so how many columns they set as follows the width it has rather
+					than the width of the screen.
+				-->
+				<section class="controls" aria-labelledby="controls-column" bind:this={controlsColumn}>
+					<h2 class="column-label micro" id="controls-column">What to predict</h2>
+					{@render matchup?.()}
+					{@render controls()}
+				</section>
+			</div>
 
 			<!--
-				The head, the game it is about, then the fields. This region is what the form's groups are
-				measured against, so how many columns they set as follows the width it has rather than
-				the width of the screen.
-			-->
-			<section class="controls" aria-labelledby="controls-column" bind:this={controlsColumn}>
-				<h2 class="column-label micro" id="controls-column">What to predict</h2>
-				{@render matchup?.()}
-				{@render controls()}
-			</section>
+				Only once one has been asked for. It carries the room it stands off in its own margin
+				rather than taking it from a gap, so the region opens out of nothing and the page under
+				it is carried rather than dropped a gap's worth the moment the button is pressed.
 
-			<section class="answer" aria-labelledby="answer-column" bind:this={answerColumn}>
-				<h2 class="column-label micro" id="answer-column">Answer</h2>
-				{@render result()}
-			</section>
+				A page that arrived already carrying an answer renders it standing, because a transition
+				does not run on the first frame and nothing about a shared link was revealed to anyone.
+			-->
+			{#if showingAnswer}
+				<section
+					class="answer"
+					aria-labelledby="answer-column"
+					bind:this={answerColumn}
+					transition:flow={{ duration: MOTION_SLOW }}
+				>
+					<h2 class="column-label micro" id="answer-column">Answer</h2>
+					{@render result()}
+				</section>
+			{/if}
 		</div>
 	{/if}
 
@@ -158,6 +203,13 @@
 	.columns {
 		display: grid;
 		gap: var(--space-6);
+	}
+
+	/* No gap of its own. The answer carries the room it stands off in its margin, so that room opens
+	   with the region rather than standing empty before it. */
+	.request {
+		display: flex;
+		flex-direction: column;
 	}
 
 	.board-column,
@@ -180,6 +232,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
+		margin-block-start: var(--space-6);
 		container-type: inline-size;
 		container-name: answer-column;
 	}
@@ -202,10 +255,6 @@
 
 		.columns.boardless {
 			grid-template-columns: minmax(0, 1fr);
-		}
-
-		.answer {
-			grid-column: 1 / -1;
 		}
 	}
 </style>
