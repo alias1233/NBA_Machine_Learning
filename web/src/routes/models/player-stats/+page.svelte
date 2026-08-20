@@ -11,7 +11,9 @@
 	one list were thirty of them with the second team's players a scroll below the first.
 
 	The roster is the one thing the schedule does not decide, so it stays the reader's to change: who
-	is sitting this game out, and who has joined the team since its last one. Somebody who has just
+	is sitting this game out, and who is playing who did not play the team's last game. It opens
+	already filled in from the injury report and the collected rosters, so a reader who changes
+	nothing is still answered about the game that will actually be played. Somebody who has just
 	joined is on no roster yet, which is what the search in the picker is for, and the list says so
 	where a reader looking for a missing name will read it.
 
@@ -28,9 +30,9 @@
 	import AnswerBlock from '$lib/components/AnswerBlock.svelte';
 	import MatchupHead from '$lib/components/MatchupHead.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import PlayerPills from '$lib/components/PlayerPills.svelte';
 	import PlayerSearch from '$lib/components/PlayerSearch.svelte';
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
+	import RosterControls from '$lib/components/RosterControls.svelte';
 	import TeamChoice from '$lib/components/TeamChoice.svelte';
 	import UpcomingGames from '$lib/components/UpcomingGames.svelte';
 	import { longGameDay } from '$lib/games';
@@ -38,6 +40,17 @@
 	import { flow } from '$lib/motion';
 	import { readAnswer } from '$lib/odds';
 	import { askPrediction, gameHref as buildGameHref } from '$lib/predictions';
+	import {
+		expectedAround,
+		fetchRosters,
+		joinedParameter,
+		outParameter,
+		playersOf,
+		rosterOf,
+		ROSTER_PARAMETER,
+		ROSTER_VALUE
+	} from '$lib/rosters';
+	import { phone } from '$lib/screen';
 	import { walkTo } from '$lib/scroll';
 
 	import type { Player, Roster, ScheduledGame, Team } from '$lib/types';
@@ -56,18 +69,19 @@
 		model: data.model,
 		player: data.player,
 		team: data.playerTeam,
-		out: data.out,
-		joined: data.joined
+		out: data.scenario.out,
+		joined: data.scenario.joined
 	});
 
 	let form = $state(seed());
 	// svelte-ignore state_referenced_locally
 	let rosters = $state<Roster[]>(data.rosters);
 	let loadingRosters = $state(false);
-	let shell = $state<{ reveal: () => void; revealControls: () => void }>();
+	let shell = $state<{ reveal: (asking?: Promise<unknown>) => void; revealControls: () => void }>();
 	let submitButton = $state<HTMLElement>();
 	let teamChoice = $state<{ focus: () => void }>();
 	let playerPicker = $state<{ focus: () => void; clear: () => void }>();
+	let playerField = $state<HTMLElement>();
 
 	/** The card under the reader's pointer, which the head above the fields writes out in full. */
 	let previewed = $state<ScheduledGame | null>(null);
@@ -114,17 +128,20 @@
 
 		let live = true;
 
-		fetch(`/api/rosters?game=${game.id}`)
-			.then((response) => (response.ok ? response.json() : []))
-			.then((loaded: Roster[]) => {
-				if (!live) return;
+		fetchRosters(game.id).then((loaded) => {
+			if (!live) return;
 
-				rosters = loaded;
-			})
-			.catch(() => {})
-			.finally(() => {
-				if (live) loadingRosters = false;
-			});
+			rosters = loaded;
+			loadingRosters = false;
+
+			// A player picked out of the league search before the rosters landed has none of the lineup
+			// expected around them yet, so it is filled in the moment it arrives.
+			if (form.player !== null) {
+				const expected = expectedAround(rosterOf(loaded, form.team), form.player.id);
+				form.out = expected.out;
+				form.joined = expected.joined;
+			}
+		});
 
 		return () => {
 			live = false;
@@ -147,24 +164,33 @@
 		const url = new URL(location.href);
 
 		url.searchParams.delete('player');
-		url.searchParams.delete('out');
-		url.searchParams.delete('joined');
+		url.searchParams.delete(outParameter());
+		url.searchParams.delete(joinedParameter());
+		// The mark saying the roster is the reader's own goes with it, or the next player would open
+		// on empty fields rather than on who is expected to play around them.
+		url.searchParams.delete(ROSTER_PARAMETER);
 		if (!keepTeam) url.searchParams.delete('team');
 
 		if (url.search !== location.search) replaceState(url, page.state);
 	}
 
-	/** The named team's roster, which is who the picker offers and who can be sat out. */
-	const playerRoster = $derived(
-		rosters.find((roster) => roster.team.abbreviation === form.team) ?? null
+	/** Who can be sat out: the player's own team, less the player themselves. */
+	const outCandidates = $derived(
+		playersOf(rosters, form.team).filter((candidate) => candidate.id !== form.player?.id)
 	);
 
-	/** Who can be sat out: the player's own team, less the player and whoever is already out. */
-	const outCandidates = $derived(
-		(playerRoster?.players ?? []).filter(
-			(candidate) =>
-				candidate.id !== form.player?.id && !form.out.some(({ id }) => id === candidate.id)
-		)
+	/**
+	 * The lineup expected around the chosen player, which is what the roster fields open on.
+	 *
+	 * The player themselves is never in it. A statistic is about somebody taking the floor, so a
+	 * suggestion that sits them out is a question with no answer. A reader naming them out by hand is
+	 * still answered as they asked.
+	 */
+	const expectedRoster = $derived(expectedAround(rosterOf(rosters, form.team), form.player?.id ?? null));
+
+	/** The named team's roster, which is who the player picker opens on. */
+	const namedRoster = $derived(
+		rosters.find((roster) => roster.team.abbreviation === form.team) ?? null
 	);
 
 	const predicting = $derived(navigating.to?.route.id === '/models/player-stats');
@@ -219,7 +245,6 @@
 		data.models.find(({ name }) => name === (predicting ? form.model : data.model)) ?? null
 	);
 
-	const customRoster = $derived(data.out.length > 0 || data.joined.length > 0);
 
 	// A new game, player or stat is a new answer, so the block starts from its own line.
 	const answerKey = $derived(JSON.stringify([data.selectedGame?.id, data.player?.id, data.model]));
@@ -271,11 +296,16 @@
 			replaceState(url, page.state);
 		}
 
-		walkTo(submitButton, { block: 'end' });
-
-		// The picker arrives with the team, so it is there to be emptied and put the reader in only
-		// once the page has caught up with the choice that opened it.
+		// The picker arrives with the team, so it is there to be walked to, emptied and put the reader
+		// in only once the page has caught up with the choice that opened it.
 		await tick();
+
+		// On a phone the picker and the roster it opens on take the whole screen and the button is a
+		// page below them, so the page is put on the picker itself. Its list opens downward, which is
+		// why it goes to the top of the screen rather than merely into view. Wider, everything left to
+		// answer fits at once, so the reader is walked to the end of the form instead.
+		if (phone.current) walkTo(playerField, { block: 'start', always: true });
+		else walkTo(submitButton, { block: 'end' });
 
 		playerPicker?.clear();
 		playerPicker?.focus();
@@ -283,23 +313,12 @@
 
 	function choosePlayer(player: Player) {
 		form.player = player;
-		form.out = [];
 
-		walkTo(submitButton, { block: 'end' });
-	}
-
-	function addOut(event: Event & { currentTarget: HTMLSelectElement }) {
-		const sittingOut = outCandidates.find(({ id }) => id === Number(event.currentTarget.value));
-
-		if (sittingOut) form.out = [...form.out, sittingOut];
-
-		event.currentTarget.value = '';
-
-		walkTo(submitButton, { block: 'end' });
-	}
-
-	function addJoined(player: Player) {
-		if (!form.joined.some(({ id }) => id === player.id)) form.joined = [...form.joined, player];
+		// Whatever was in the fields was measured against whoever was chosen before, so the lineup
+		// expected around this one takes its place, exactly as it does when a game is chosen.
+		const expected = expectedAround(rosterOf(rosters, form.team), player.id);
+		form.out = expected.out;
+		form.joined = expected.joined;
 
 		walkTo(submitButton, { block: 'end' });
 	}
@@ -363,14 +382,14 @@
 					     instead, which is how somebody who has just joined and is on no roster yet is
 					     reached. The list says so itself, where a reader missing a name will read it. -->
 					{#if form.team !== ''}
-						<div transition:flow>
+						<div bind:this={playerField} transition:flow>
 							{#key pickerKey}
 								<PlayerSearch
 									bind:this={playerPicker}
 									id="player"
 									label="Player"
 									initial={form.player}
-									rosters={playerRoster ? [playerRoster] : []}
+									rosters={namedRoster ? [namedRoster] : []}
 									{loadingRosters}
 									onchoose={choosePlayer}
 								/>
@@ -395,42 +414,28 @@
 				     next prediction, with the rest of the form, and nothing here fires a request on its
 				     own. -->
 				{#if form.player !== null}
-					<div class="field-group" role="group" aria-labelledby="roster-group" transition:flow>
-						<p class="micro group-label" id="roster-group">Roster</p>
+					<!-- The mark that says both lists are the reader's own rather than the ones the page
+					     suggested. Without it a reader who cleared every name would be answered with the
+					     suggestions back, because an empty field submits nothing to tell them apart.
 
-						<div class="field-pair">
-							<div class="field">
-								<label class="micro" for="out">Out</label>
-								<select id="out" onchange={addOut}>
-									<option value="">Add a player</option>
-									{#each outCandidates as candidate (candidate.id)}
-										<option value={candidate.id}>{candidate.name}</option>
-									{/each}
-								</select>
-								<p class="small muted">Players on this team who will not play.</p>
-								<PlayerPills
-									players={form.out}
-									name="out"
-									onremove={(player) => (form.out = form.out.filter(({ id }) => id !== player.id))}
-								/>
-							</div>
+					     It waits for the roster, because until it lands the fields are empty for want of an
+					     answer rather than by choice, and a prediction asked for in that moment should be
+					     the expected one. -->
+					{#if rosters.length > 0}
+						<input type="hidden" name={ROSTER_PARAMETER} value={ROSTER_VALUE} />
+					{/if}
 
-							<div class="field">
-								<PlayerSearch id="joined" label="New teammates" clearOnChoose onchoose={addJoined} />
-								<p class="small muted">Players who joined this team since its last game.</p>
-								<PlayerPills
-									players={form.joined}
-									name="joined"
-									onremove={(player) =>
-										(form.joined = form.joined.filter(({ id }) => id !== player.id))}
-								/>
-							</div>
-						</div>
-
-						{#if form.out.length === 0 && form.joined.length === 0}
-							<p class="small muted" transition:flow>No change from the last game.</p>
-						{/if}
-					</div>
+					<RosterControls
+						id="roster"
+						label="Roster"
+						candidates={outCandidates}
+						bind:out={form.out}
+						bind:joined={form.joined}
+						expected={expectedRoster}
+						outName={outParameter()}
+						joinedName={joinedParameter()}
+						onchange={() => walkTo(submitButton, { block: 'end' })}
+					/>
 				{/if}
 			</div>
 
@@ -468,7 +473,7 @@
 						headingLevel={3}
 						subheading={shown.subheading}
 						openOn={data.line}
-						{customRoster}
+						customRoster={data.customRoster}
 						pastGames={data.prediction?.past_games ?? null}
 					/>
 				{/key}

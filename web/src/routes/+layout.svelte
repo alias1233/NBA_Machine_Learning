@@ -390,6 +390,7 @@
 <footer>
 	<div class="page notes small muted">
 		<p>Predictions are a model's estimate, published for information. This is not betting advice.</p>
+		<p>This site is not affiliated with, endorsed by, or sponsored by the National Basketball Association.</p>
 
 		{#if collectedThrough}
 			<p>Built from games played through {collectedThrough}.</p>

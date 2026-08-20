@@ -15,19 +15,20 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from enum import Enum
-from typing import Collection, Iterable
+from typing import Iterable
 
 import pandas as pd
 import numpy as np
 
 from nba_ml import season
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.feature_engineering import (
     feature_store,
     game_columns,
     placeholders,
     player_columns,
     rolling,
+    roster_columns,
     schedule_columns,
     season_columns,
     situations,
@@ -62,7 +63,7 @@ HISTORICAL_WINDOW_LENGTH_YEARS = 5
 BUILD_NAME = "player_stats"
 """Names the directory this family's published whole-league builds are kept under."""
 
-ROSTER_GAMES_READ = player_columns.CORE_ROTATION_WINDOW
+ROSTER_GAMES_READ = roster_columns.CORE_ROTATION_WINDOW
 """
 How many of the team's last games a prediction reads the whole roster of.
 
@@ -556,7 +557,7 @@ def build_feature_set(
     # Who the team gained, lost and is missing around the player, measured in the same recent
     # averages the player's own form is measured in.
     core_teammate_stat_columns = [category.column_name for category in player_mean_categories]
-    core_teammate_columns = player_columns.get_core_teammate_columns(core_teammate_stat_columns)
+    core_teammate_columns = roster_columns.core_roster_columns(core_teammate_stat_columns)
 
     # How much the opponent lets teams beat their own averages is read off the game being predicted
     # and not off each past game. Measured on 2026-08-11: shuffling those ten columns away inside the
@@ -858,17 +859,24 @@ def build_histories(
     )
 
     # Last, because it reads the player's finished rolling means and the team's game order.
-    player_game_data = player_columns.add_core_teammate_columns(
+    player_game_data = roster_columns.add_core_teammate_columns(
         player_game_data,
-        team_game_data,
+        roster_columns.core_roster_totals(
+            player_game_data,
+            team_game_data,
+            player_games.PLAYER_ID.category_name,
+            player_games.GAME_ID.category_name,
+            player_games.TEAM_ID.category_name,
+            player_games.MINUTES_PLAYED.category_name,
+            PAST_MEAN_PREFIX + player_games.MINUTES_PLAYED.category_name,
+            team_games.GAME_ID.category_name,
+            team_games.TEAM_ID.category_name,
+            team_games.GAME_DATE.category_name,
+            features.core_teammate_stat_columns
+        ),
         player_games.PLAYER_ID.category_name,
         player_games.GAME_ID.category_name,
         player_games.TEAM_ID.category_name,
-        player_games.MINUTES_PLAYED.category_name,
-        PAST_MEAN_PREFIX + player_games.MINUTES_PLAYED.category_name,
-        team_games.GAME_ID.category_name,
-        team_games.TEAM_ID.category_name,
-        team_games.GAME_DATE.category_name,
         features.core_teammate_stat_columns
     )
 
@@ -1081,8 +1089,7 @@ def build_target_game_row(
     target_player_id: int,
     target_player_team_id: int,
     target_game: Game,
-    removed_core_teammate_player_ids: Collection[int],
-    added_core_teammate_player_ids: Collection[int],
+    scenario: RosterScenario,
     window_start_date: date | None,
     print_debug: bool = False
     ) -> TargetGameRow:
@@ -1100,9 +1107,8 @@ def build_target_game_row(
     whole league's, so they come from a build every request shares.
 
     Args:
-        removed_core_teammate_player_ids are core players from the team's last game who are out for
-        this one. added_core_teammate_player_ids are the reverse, players expected back in. Core
-        means the minutes cutoff in player_columns.
+        scenario is the change the request made to the team's last lineup: who is out for this game
+        and who is expected back in. Core means the minutes cutoff in roster_columns.
         window_start_date is how far back to read, and None reads everything stored. It comes from
         the build the games behind this row came from, so both halves describe the same history.
 
@@ -1143,7 +1149,7 @@ def build_target_game_row(
         target_player_team_id,
         recent_game_ids.tail(ROSTER_GAMES_READ).tolist()
     )
-    roster_player_ids |= set(added_core_teammate_player_ids)
+    roster_player_ids |= set(scenario.returning)
     roster_player_ids.add(target_player_id)
 
     player_game_data = season_columns.drop_incomplete_game_rows(
@@ -1169,8 +1175,7 @@ def build_target_game_row(
         ][player_games.PLAYER_ID.category_name]
     )
     playing_player_ids = (
-        previous_game_player_ids.union(added_core_teammate_player_ids)
-        .difference(removed_core_teammate_player_ids)
+        previous_game_player_ids.union(scenario.returning).difference(scenario.without)
     )
     playing_player_ids.add(target_player_id)
 
@@ -1184,7 +1189,7 @@ def build_target_game_row(
                 target_game,
                 target_player_team_id,
                 playing_player_ids,
-                added_core_teammate_player_ids
+                scenario.returning
             )
         ],
         ignore_index=True
@@ -1276,8 +1281,7 @@ def get_inference_data(
     target_player_id: int,
     target_player_team_id: int,
     target_game: Game,
-    removed_core_teammate_player_ids: Collection[int],
-    added_core_teammate_player_ids: Collection[int],
+    scenario: RosterScenario,
     print_debug: bool = False
     ) -> tuple[GameSequences, SequenceInputSamples]:
     """
@@ -1286,7 +1290,7 @@ def get_inference_data(
 
     The predicted game's row is built first, because it is the cheap half and it holds every reason a
     request cannot be answered from what is stored. See build_target_game_row for what the roster
-    arguments mean.
+    scenario means.
     """
 
     build = feature_store.current(BUILD_NAME)
@@ -1296,8 +1300,7 @@ def get_inference_data(
         target_player_id,
         target_player_team_id,
         target_game,
-        removed_core_teammate_player_ids,
-        added_core_teammate_player_ids,
+        scenario,
         _window_start_date(build, target_game),
         print_debug
     )

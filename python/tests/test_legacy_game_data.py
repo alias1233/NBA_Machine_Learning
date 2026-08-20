@@ -1,6 +1,6 @@
 """Compatibility with game rows collected before season phase was stored explicitly."""
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.models.player_stats import features as player_features
 from nba_ml.models.player_stats import specifications as player_specifications
 from nba_ml.models.team_stats import features as team_features
@@ -25,7 +25,8 @@ def test_legacy_nba_api_rows_can_build_prediction_histories():
     _, team_sample = team_features.get_inference_data(
         team_specification.get_feature_set(),
         target_game.home_team_id,
-        target_game
+        target_game,
+        {}
     )
     player_id = fake_data.player_id(target_game.home_team_id, 0)
     player_specification = player_specifications.ALL_MODEL_SPECIFICATIONS["points"]
@@ -34,8 +35,7 @@ def test_legacy_nba_api_rows_can_build_prediction_histories():
         player_id,
         target_game.home_team_id,
         target_game,
-        [],
-        []
+        RosterScenario()
     )
 
     assert team_sample.sequence_end_indices[0].tolist() == [6, 6]

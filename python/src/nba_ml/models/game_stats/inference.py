@@ -8,9 +8,12 @@ margin.
 This is the half that deploys. It never imports the trainer or the evaluation graphs.
 """
 
+from types import MappingProxyType
+from typing import Mapping
+
 import torch
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.machine_learning import datasets, trainer
 from nba_ml.models import loading, requests
 from nba_ml.models.game_stats import features
@@ -20,6 +23,7 @@ from nba_ml.models.outputs import Prediction
 def predict(
     model_specs: GameStatModelSpecification,
     target_game: Game,
+    rosters: Mapping[int, RosterScenario] = MappingProxyType({}),
     print_debug: bool = True
     ) -> Prediction:
     """
@@ -28,6 +32,10 @@ def predict(
 
     The count is the home team's, which is the side the answer is read off. Both sides had to clear
     the same floor for the game to be answerable at all.
+
+    Args:
+        rosters is who each side is playing without or with, keyed by team id. A game statistic is
+        decided by both teams, so both sides are read.
 
     Raises:
         PredictionRefused if the game has already been played.
@@ -40,6 +48,7 @@ def predict(
     team_game_sequences, samples = features.get_inference_data(
         model_specs.get_feature_set(),
         target_game,
+        rosters,
         print_debug=print_debug
     )
 

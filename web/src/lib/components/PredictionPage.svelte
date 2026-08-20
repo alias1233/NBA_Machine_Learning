@@ -73,9 +73,13 @@
 	 * Beside the parameters it almost always is, so this does nothing there. Under them, which is
 	 * every narrow screen, the answer is a page away from the button that asked for it. Nothing is
 	 * awaited by the caller, because the request it is answering goes out in the same breath.
+	 *
+	 * The request is the flow, so it is handed over and the page holds the answer at the top of the
+	 * screen until it lands. An answer changes the height of everything it touches, and a page that
+	 * stopped travelling when the button was pressed is left wherever that leaves it.
 	 */
-	export function reveal(): void {
-		walkTo(answerColumn, { block: 'start' });
+	export function reveal(asking?: Promise<unknown>): void {
+		walkTo(answerColumn, { block: 'start', flowing: asking });
 	}
 
 	/**

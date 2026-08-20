@@ -13,7 +13,7 @@ from argparse import Namespace
 from typing import Callable
 
 from nba_ml import season
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.models import families
 from nba_ml.models.errors import PredictionRefused
 from nba_ml.models.game_stats import inference as game_stat_inference
@@ -24,7 +24,7 @@ from nba_ml.models.player_stats import specifications as player_stat_specificati
 from nba_ml.models.specifications import ModelSpecification
 from nba_ml.models.team_stats import inference as team_stat_inference
 from nba_ml.models.team_stats import specifications as team_stat_specifications
-from nba_ml.stores import players, teams
+from nba_ml.stores import player_games, players, teams
 
 SEASON_TYPES = {season_type.name.lower(): season_type for season_type in season.SeasonType}
 
@@ -59,22 +59,52 @@ def _predict_player_stat(
         specification,
         _player_id(arguments.player),
         game,
-        {_player_id(name) for name in arguments.without},
-        {_player_id(name) for name in arguments.returning},
+        RosterScenario.of(
+            (_player_id(name) for name in arguments.without),
+            (_player_id(name) for name in arguments.returning)
+        ),
         target_player_team_id=None if arguments.team is None else _team_id(arguments.team),
         print_debug=not arguments.quiet
     )
 
-def _refuse_player_arguments(specification: ModelSpecification, arguments: Namespace):
-    """Neither family below reads a player, so naming one is a mistake worth saying out loud."""
+def _refuse_a_named_player(specification: ModelSpecification, arguments: Namespace):
+    """Neither family below is asked about a player, so naming one is a mistake worth saying out loud."""
 
-    for value, name in (
-        (arguments.player, "--player"),
-        (arguments.without, "--without"),
-        (arguments.returning, "--returning")
-    ):
-        if value:
-            raise SystemExit(f"{name} is only read by a player game statistics model, not {specification.name}.")
+    if arguments.player:
+        raise SystemExit(
+            f"--player is only read by a player game statistics model, not {specification.name}."
+        )
+
+def _side_of(player_id: int, name: str, game: Game) -> int:
+    """
+    Which side of the game a named player belongs to, taken from the team they last played for.
+
+    A team or game model reads both rosters, so a name has to land on one of them. Nothing stored
+    says which team somebody has just joined, which is what the site's own team pickers are for.
+    """
+
+    team_id = player_games.latest_team_id(player_id, before=game.date)
+
+    if team_id not in game.team_ids:
+        raise SystemExit(f"{name} did not last play for either team in this game.")
+
+    return team_id
+
+def _rosters(game: Game, arguments: Namespace) -> dict[int, RosterScenario]:
+    """Who each side is playing without or with, keyed by team id."""
+
+    without: dict[int, set[int]] = {team_id: set() for team_id in game.team_ids}
+    returning: dict[int, set[int]] = {team_id: set() for team_id in game.team_ids}
+
+    for names, named in ((arguments.without, without), (arguments.returning, returning)):
+        for name in names:
+            player_id = _player_id(name)
+            named[_side_of(player_id, name, game)].add(player_id)
+
+    return {
+        team_id: RosterScenario.of(without[team_id], returning[team_id])
+        for team_id in game.team_ids
+    }
 
 def _predict_team_stat(
     specification: ModelSpecification,
@@ -85,7 +115,7 @@ def _predict_team_stat(
     if arguments.team is None:
         raise SystemExit(f"The {specification.name} model answers about one team, so it needs --team.")
 
-    _refuse_player_arguments(specification, arguments)
+    _refuse_a_named_player(specification, arguments)
 
     target_team_id = _team_id(arguments.team)
     if target_team_id not in (game.home_team_id, game.away_team_id):
@@ -95,6 +125,7 @@ def _predict_team_stat(
         specification,
         target_team_id,
         game,
+        _rosters(game, arguments),
         print_debug=not arguments.quiet
     )
 
@@ -110,9 +141,14 @@ def _predict_game_stat(
             "An answer with a direction, such as a point differential or a win, is the home team's."
         )
 
-    _refuse_player_arguments(specification, arguments)
+    _refuse_a_named_player(specification, arguments)
 
-    return game_stat_inference.predict(specification, game, print_debug=not arguments.quiet)
+    return game_stat_inference.predict(
+        specification,
+        game,
+        _rosters(game, arguments),
+        print_debug=not arguments.quiet
+    )
 
 PREDICTORS: dict[str, Callable[[ModelSpecification, Game, Namespace], Prediction]] = {
     player_stat_specifications.MODEL_CATEGORY: _predict_player_stat,
@@ -178,14 +214,18 @@ def main():
         nargs="*",
         default=[],
         metavar="PLAYER",
-        help="Core teammates who played the last game and are out for this one."
+        help=(
+            "Core players who played the last game and are out for this one. A player model reads "
+            "the subject's own team. A team or game model reads both, and a name lands on whichever "
+            "of the two sides that player last played for."
+        )
     )
     parser.add_argument(
         "--returning",
         nargs="*",
         default=[],
         metavar="PLAYER",
-        help="Core teammates who missed the last game and are expected to play this one."
+        help="Core players who missed the last game and are expected to play this one."
     )
     parser.add_argument("--quiet", action="store_true", help="Only print the result.")
     arguments = parser.parse_args()

@@ -8,18 +8,12 @@ answers it. Another family is another module of the same shape, mounted alongsid
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from nba_ml.api.schemas import GameRequest, PredictionResponse, team_id
+from nba_ml.api.schemas import GameRequest, PredictionResponse, ScenarioRequest, team_id
 from nba_ml.models import loading
 from nba_ml.models.player_stats import inference, specifications
 from nba_ml.stores import players
 
 router = APIRouter(prefix="/predictions/player-stats", tags=["player_stats"])
-
-class ScenarioRequest(BaseModel):
-    """Which core players are on the floor, when that differs from the team's last game."""
-
-    without: list[int] = Field(default_factory=list)
-    returning: list[int] = Field(default_factory=list)
 
 class PredictionRequest(BaseModel):
     player_id: int
@@ -45,8 +39,7 @@ def predict_player_stat(model: str, request: PredictionRequest) -> PredictionRes
         specification,
         request.player_id,
         request.game.to_game(),
-        set(request.scenario.without),
-        set(request.scenario.returning),
+        request.scenario.to_scenario(),
         target_player_team_id=None if request.player_team is None else team_id(request.player_team),
         print_debug=False
     )

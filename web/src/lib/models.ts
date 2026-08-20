@@ -44,19 +44,29 @@ export const MODEL_FAMILIES: ModelFamily[] = [
 		name: 'team_stats',
 		slug: 'team-stats',
 		title: 'Team stat models',
-		description: 'How many points one team scores in a game.'
+		description: 'Points, rebounds, assists and three-pointers for one team.'
 	},
 	{
 		name: 'game_stats',
 		slug: 'game-stats',
 		title: 'Game stat models',
-		description: 'How much one team wins by, the total points, and who wins.'
+		description: 'How much one team wins by, the game totals, and who wins.'
 	}
 ];
+
+/**
+ * What a model is printed as wherever it is listed rather than run.
+ *
+ * The words are the model's own, authored beside it in the service, so the home page's index and a
+ * family's About page name it identically without either writing the words down again.
+ */
+export type ListedModel = Pick<Model, 'name' | 'title' | 'description' | 'published'>;
 
 export type ListedFamily = ModelFamily & {
 	/** Whether the service holds a trained model in it, which is what makes it predictable. */
 	published: boolean;
+	/** Everything in the family, in the order the service names it. */
+	models: ListedModel[];
 };
 
 /** Where every family is listed. The Models tab, the hero's button and /models all lead here. */
@@ -90,12 +100,24 @@ export const plateOf = (pathname: string): string | null =>
  * trained is listed and marked, because a family on the way is worth knowing about.
  */
 export const listedFamilies = (models: Model[]): ListedFamily[] =>
-	MODEL_FAMILIES.filter((family) => models.some((model) => model.family === family.name)).map(
-		(family) => ({
+	MODEL_FAMILIES.map((family) => {
+		// Only the four words a listing prints. The rest of a model is what a prediction page needs,
+		// and carrying it into every page's data is weight nothing on them reads.
+		const held: ListedModel[] = models
+			.filter((model) => model.family === family.name)
+			.map(({ name, title, description, published }) => ({
+				name,
+				title,
+				description,
+				published
+			}));
+
+		return {
 			...family,
-			published: models.some((model) => model.family === family.name && model.published)
-		})
-	);
+			models: held,
+			published: held.some((model) => model.published)
+		};
+	}).filter((family) => family.models.length > 0);
 
 /**
  * What a model predicts, written out. The service names it in lowercase already, so one model reads

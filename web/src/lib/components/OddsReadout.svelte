@@ -97,11 +97,16 @@
 	/* Read from across a screen rather than from a column, so the figures are set larger and each
 	   takes the box that size of figure needs. */
 	dl.large {
+		container-type: inline-size;
 		grid-template-columns: repeat(3, minmax(0, var(--figure-column-large)));
 		gap: var(--space-4);
 	}
 
+	/* Measured against the three tracks themselves rather than against the screen, so the readout is
+	   set at the full large size wherever they have their whole width and steps back towards the
+	   ordinary figure size as a narrow screen squeezes them. The coefficient is what puts a full-width
+	   set of tracks past the ceiling, so having the room at all is what settles it there. */
 	dl.large dd {
-		font-size: var(--type-figure-large);
+		font-size: clamp(var(--type-figure), 8cqi, var(--type-figure-large));
 	}
 </style>

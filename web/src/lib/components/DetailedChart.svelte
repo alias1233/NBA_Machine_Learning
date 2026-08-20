@@ -280,12 +280,14 @@
 	   the height it is drawn at in an answer. Every row is placed rather than flowed, because the
 	   chart and the panel that opens over it share one cell. */
 	.view {
+		--view-gutter: var(--space-4);
+
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-rows: auto minmax(var(--chart-height), 1fr) auto;
 		gap: var(--space-4);
 		height: 100%;
-		padding: var(--space-5) var(--space-4);
+		padding: var(--space-5) var(--view-gutter);
 		overflow-y: auto;
 	}
 
@@ -428,9 +430,24 @@
 		height: 1em;
 	}
 
+	/*
+	 * On a phone the drawing and the handle reach out through the view's left gutter, so the only
+	 * thing between the bars and the edge of the screen is the probability axis itself and its
+	 * figures stop a hair short of that edge. Every pixel that buys goes to the bars.
+	 *
+	 * The right edge keeps its gutter. The last outcome's mark is centred on the last bar and hangs
+	 * past it, so a drawing flush to that edge would cut the number off.
+	 */
+	@media (width < 40rem) {
+		.drawing,
+		.handle {
+			margin-left: calc(var(--view-gutter) * -1);
+		}
+	}
+
 	@media (min-width: 40rem) {
 		.view {
-			padding-inline: var(--space-5);
+			--view-gutter: var(--space-5);
 		}
 	}
 </style>

@@ -1,8 +1,11 @@
 <!--
 	The game statistics page.
 
-	A request names one of the games on the board and nothing else, so choosing a card is the whole of
-	it and the reader is walked straight to the button.
+	A request names one of the games on the board, so choosing a card is most of it and the reader is
+	walked straight to the button. What the schedule does not decide is who is playing, so both teams'
+	rosters arrive with the game, already filled in with who is expected to take the floor, and stay
+	the reader's to change. A game statistic is decided by both sides, so either roster changes the
+	answer.
 
 	A request names no team, so a model whose answer belongs to one side of the game says which side
 	that is. The stat control names that team before a prediction and the answer names it beside the
@@ -20,6 +23,7 @@
 	import MatchupHead from '$lib/components/MatchupHead.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
+	import RosterControls from '$lib/components/RosterControls.svelte';
 	import UpcomingGames from '$lib/components/UpcomingGames.svelte';
 	import { longGameDay } from '$lib/games';
 	import {
@@ -32,9 +36,22 @@
 	import { flow } from '$lib/motion';
 	import { readAnswer } from '$lib/odds';
 	import { askPrediction, gameHref as buildGameHref } from '$lib/predictions';
+	import {
+		expectedOf,
+		fetchRosters,
+		joinedParameter,
+		outParameter,
+		playersOf,
+		rosterOf,
+		ROSTER_PARAMETER,
+		ROSTER_VALUE,
+		sidesOf
+	} from '$lib/rosters';
+	import { walkTo } from '$lib/scroll';
 
 	import type { GameSides } from '$lib/models';
-	import type { ScheduledGame } from '$lib/types';
+	import type { RosterSide } from '$lib/rosters';
+	import type { Roster, ScheduledGame } from '$lib/types';
 
 	let { data } = $props();
 
@@ -47,17 +64,91 @@
 	 */
 	const seed = () => ({
 		game: data.selectedGame?.id ?? null,
-		model: data.model
+		model: data.model,
+		rosters: {
+			home: { out: data.scenarios.home.out, joined: data.scenarios.home.joined },
+			away: { out: data.scenarios.away.out, joined: data.scenarios.away.joined }
+		}
 	});
 
 	let form = $state(seed());
-	let shell = $state<{ reveal: () => void; revealControls: () => void }>();
+	// svelte-ignore state_referenced_locally
+	let rosters = $state<Roster[]>(data.rosters);
+	let shell = $state<{ reveal: (asking?: Promise<unknown>) => void; revealControls: () => void }>();
+	let submitButton = $state<HTMLElement>();
+
+	// Bookkeeping, not state: which game the player lists on the page belong to.
+	// svelte-ignore state_referenced_locally
+	let rostersFor = data.selectedGame?.id ?? null;
 
 	/** The card under the reader's pointer, which the head above the fields writes out in full. */
 	let previewed = $state<ScheduledGame | null>(null);
 
 	/** The game the form names, which is the one card standing lifted off the board. */
 	const chosen = $derived(data.games.find((game) => game.id === form.game) ?? null);
+
+	/** The two sides of the chosen game, away first, which is the order the board deals them. */
+	const rosterSides = $derived(sidesOf(chosen));
+
+	/**
+	 * A chosen game brings both rosters with it. Nothing navigates, so they are fetched rather than
+	 * loaded, and the Out list of each side opens on the players it just brought.
+	 */
+	$effect(() => {
+		const game = chosen;
+
+		if (game === null) {
+			rosters = [];
+			rostersFor = null;
+			return;
+		}
+
+		if (game.id === rostersFor) return;
+
+		rostersFor = game.id;
+		rosters = [];
+		clearRosters();
+
+		let live = true;
+
+		fetchRosters(game.id).then((loaded) => {
+			if (!live) return;
+
+			rosters = loaded;
+			// A roster arrives with the lineup its side expects, and the fields open on that, exactly
+			// as they would on a name the reader had chosen.
+			form.rosters = {
+				home: expectedOf(rosterOf(loaded, game.home_team.abbreviation)),
+				away: expectedOf(rosterOf(loaded, game.away_team.abbreviation))
+			};
+		});
+
+		return () => {
+			live = false;
+		};
+	});
+
+	/**
+	 * Every roster change, dropped. A new game has two different sides, so none of it still stands,
+	 * and the lineups it expects are not known until its rosters arrive.
+	 *
+	 * The mark saying the roster is the reader's own goes with them. Without that, the new game
+	 * would open on empty fields rather than on who is expected to play in it.
+	 */
+	function clearRosters() {
+		form.rosters = { home: { out: [], joined: [] }, away: { out: [], joined: [] } };
+
+		const url = new URL(location.href);
+
+		for (const side of ['home', 'away'] as RosterSide[]) {
+			url.searchParams.delete(outParameter(side));
+			url.searchParams.delete(joinedParameter(side));
+		}
+
+		url.searchParams.delete(ROSTER_PARAMETER);
+
+		if (url.search !== location.search) replaceState(url, page.state);
+	}
 
 	const predicting = $derived(navigating.to?.route.id === '/models/game-stats');
 
@@ -160,13 +251,15 @@
 
 	afterNavigate(({}) => {
 		form = seed();
+		rosters = data.rosters;
+		rostersFor = data.selectedGame?.id ?? null;
 	});
 </script>
 
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
-	description="The chance of every final margin, every points total, and each team winning one NBA game."
+	description="The chance of every final margin, every points, rebounds, assists and three-pointer total, and each team winning one NBA game."
 	aboutHref={ABOUT}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
@@ -209,9 +302,37 @@
 						{/if}
 					</div>
 				</div>
+
+				<!-- The one thing the schedule does not decide. Both sides are offered, because both
+				     teams decide a game statistic. A change takes effect on the next prediction, with
+				     the rest of the form, so nothing here fires a request on its own. -->
+				{#if rosters.length > 0}
+					<!-- The mark that says both lists are the reader's own rather than the ones the page
+					     suggested. Without it a reader who cleared every name would be answered with the
+					     suggestions back, because an empty field submits nothing to tell them apart.
+
+					     It waits for the rosters, because until they land the fields are empty for want of
+					     an answer rather than by choice, and a prediction asked for in that moment should
+					     be the expected one. -->
+					<input type="hidden" name={ROSTER_PARAMETER} value={ROSTER_VALUE} />
+				{/if}
+
+				{#each rosterSides as { side, team } (team.abbreviation)}
+					<RosterControls
+						id="{side}-roster"
+						label={team.name}
+						candidates={playersOf(rosters, team.abbreviation)}
+						bind:out={form.rosters[side].out}
+						bind:joined={form.rosters[side].joined}
+						expected={expectedOf(rosterOf(rosters, team.abbreviation))}
+						outName={outParameter(side)}
+						joinedName={joinedParameter(side)}
+						onchange={() => walkTo(submitButton, { block: 'end' })}
+					/>
+				{/each}
 			</div>
 
-			<div class="form-submit">
+			<div class="form-submit" bind:this={submitButton}>
 				<!-- The button carries the reason it is disabled, so it is not left to a line beside it that
 				     a screen reader has no reason to reach. -->
 				<button
@@ -247,7 +368,7 @@
 						categoryNames={shown.categoryNames}
 						subheading={shown.subheading}
 						openOn={data.line}
-						customRoster={false}
+						customRoster={data.customRoster}
 						pastGames={data.prediction?.past_games ?? null}
 					/>
 				{/key}

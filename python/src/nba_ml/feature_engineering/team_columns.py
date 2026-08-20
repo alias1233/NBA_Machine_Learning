@@ -10,6 +10,7 @@ worth carrying over.
 
 import pandas as pd
 
+from nba_ml.feature_engineering import game_columns
 from nba_ml.feature_engineering.game_columns import BUILT_COLUMN_TYPE, encode_equality_as_integer
 
 POSSESSIONS = 'POSSESSIONS'
@@ -28,22 +29,47 @@ def add_possessions_column(
     return team_game_data
 
 POINT_DIFFERENTIAL = 'POINT_DIFFERENTIAL'
-GAME_TOTAL = 'GAME_TOTAL'
-def add_game_result_columns(
+def add_point_differential_column(
     team_game_data: pd.DataFrame,
     points_column: str,
     opponent_points_column: str
     ) -> pd.DataFrame:
     """
-    How much the team won or lost the game by, and how many points the two teams scored together.
+    How much the team won or lost the game by.
 
-    Both need the opposing team's points already on the row, so this runs after they are copied over.
+    The opposing team's points have to be on the row already, so this runs after they are copied over.
     """
 
-    points = team_game_data[points_column]
-    opponent_points = team_game_data[opponent_points_column]
-    team_game_data[POINT_DIFFERENTIAL] = points - opponent_points
-    team_game_data[GAME_TOTAL] = points + opponent_points
+    team_game_data[POINT_DIFFERENTIAL] = (
+        team_game_data[points_column] - team_game_data[opponent_points_column]
+    )
+    return team_game_data
+
+COMBINED_PREFIX = 'TOTAL_'
+def combined_column(stat: str) -> str:
+    """What both teams recorded together, which is the column a game total is read off."""
+
+    return COMBINED_PREFIX + stat
+
+GAME_TOTAL = combined_column(game_columns.POINTS)
+"""The points both teams scored together, named because so much reads it."""
+
+def add_combined_stat_columns(
+    team_game_data: pd.DataFrame,
+    stats: list[str]
+    ) -> pd.DataFrame:
+    """
+    Adds what both teams recorded together for each of the given stats.
+
+    Each needs the opposing team's own line already on the row, so this runs after it is copied over.
+    A combined stat is the same number on both rows of a game, which is what makes it a statistic of
+    the game rather than of either side.
+    """
+
+    for stat in stats:
+        team_game_data[combined_column(stat)] = (
+            team_game_data[stat] + team_game_data[OPPONENT_PREFIX + stat]
+        )
     return team_game_data
 
 def encode_win_loss_column_as_integer(

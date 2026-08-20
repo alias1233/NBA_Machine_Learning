@@ -168,11 +168,52 @@ the same question. This is the better answer of the two: adding up the positive 
 differential is a worse reading than a model fit to give the figure outright.
 """
 
+# The three totals below are picked the way the game total was: each end class folds in about 1% of
+# the games played since 2015, and the bucket width is chosen so a class in the middle carries about
+# as much data as one of the game total's does, which is what bucket_width exists to control. Adding
+# two teams' lines together spreads a statistic about half as much again, so a class per whole number
+# already leaves each class as much data as a game total class has.
+TOTAL_REBOUNDS_MODEL = GameStatModelSpecification(
+    name="total_rebounds",
+    title="Total rebounds",
+    description="The rebounds both teams take together.",
+    # 68 to 110, one class per rebound. Folds 1.0% below and 1.1% above, against 4.5% in the middle.
+    output=IntegerDistribution(minimum_value=68, outcomes=43),
+    target=TargetValue.TOTAL_REBOUNDS,
+    predicted="total rebounds"
+    )
+"""How many rebounds both teams take together."""
+
+TOTAL_ASSISTS_MODEL = GameStatModelSpecification(
+    name="total_assists",
+    title="Total assists",
+    description="The assists both teams record together.",
+    # 31 to 68, one class per assist. Folds 0.9% below and 1.0% above, against 5.3% in the middle.
+    output=IntegerDistribution(minimum_value=31, outcomes=38),
+    target=TargetValue.TOTAL_ASSISTS,
+    predicted="total assists"
+    )
+"""How many assists both teams record together."""
+
+TOTAL_THREE_POINTERS_MODEL = GameStatModelSpecification(
+    name="total_three_pointers",
+    title="Total three-pointers",
+    description="The three-pointers both teams make together.",
+    # 10 to 38, one class per make. Folds 0.6% below and 1.0% above, against 6.5% in the middle.
+    output=IntegerDistribution(minimum_value=10, outcomes=29),
+    target=TargetValue.TOTAL_THREE_POINTERS,
+    predicted="total three-pointers"
+    )
+"""How many three-pointers both teams make together."""
+
 ALL_MODEL_SPECIFICATIONS = {
     specification.name: specification
     for specification in (
         POINT_DIFFERENTIAL_MODEL,
         GAME_TOTAL_MODEL,
-        WIN_PROBABILITY_MODEL
+        WIN_PROBABILITY_MODEL,
+        TOTAL_REBOUNDS_MODEL,
+        TOTAL_ASSISTS_MODEL,
+        TOTAL_THREE_POINTERS_MODEL
     )
 }

@@ -7,9 +7,9 @@ would be a different number for the other one.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from nba_ml.api.schemas import GameRequest, PredictionResponse, team_id
+from nba_ml.api.schemas import GameRequest, GameRostersRequest, PredictionResponse, team_id
 from nba_ml.models import loading
 from nba_ml.models.team_stats import inference, specifications
 
@@ -20,6 +20,11 @@ class PredictionRequest(BaseModel):
     """Which side of the game to answer for, as a tricode such as LAL or a full team name."""
 
     game: GameRequest
+    rosters: GameRostersRequest = Field(default_factory=GameRostersRequest)
+    """
+    Who each side is playing without or with. Both sides are read, because a team's row carries what
+    the side it faces has available and a defence missing its best player changes what a team scores.
+    """
 
 @router.post("/{model}")
 def predict_team_stat(model: str, request: PredictionRequest) -> PredictionResponse:
@@ -36,7 +41,13 @@ def predict_team_stat(model: str, request: PredictionRequest) -> PredictionRespo
     if not loading.can_load(specification):
         raise HTTPException(503, f"The {specification.name} model has no published file yet.")
 
-    prediction = inference.predict(specification, target_team_id, game, print_debug=False)
+    prediction = inference.predict(
+        specification,
+        target_team_id,
+        game,
+        request.rosters.to_scenarios(game),
+        print_debug=False
+    )
 
     return PredictionResponse(
         model=specification.name,

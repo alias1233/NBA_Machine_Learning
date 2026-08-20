@@ -8,9 +8,9 @@ decides.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from nba_ml.api.schemas import GameRequest, PredictionResponse
+from nba_ml.api.schemas import GameRequest, GameRostersRequest, PredictionResponse
 from nba_ml.models import loading
 from nba_ml.models.game_stats import inference, specifications
 
@@ -18,6 +18,8 @@ router = APIRouter(prefix="/predictions/game-stats", tags=["game_stats"])
 
 class PredictionRequest(BaseModel):
     game: GameRequest
+    rosters: GameRostersRequest = Field(default_factory=GameRostersRequest)
+    """Who each side is playing without or with. A game statistic is decided by both teams."""
 
 @router.post("/{model}")
 def predict_game_stat(model: str, request: PredictionRequest) -> PredictionResponse:
@@ -28,7 +30,13 @@ def predict_game_stat(model: str, request: PredictionRequest) -> PredictionRespo
     if not loading.can_load(specification):
         raise HTTPException(503, f"The {specification.name} model has no published file yet.")
 
-    prediction = inference.predict(specification, request.game.to_game(), print_debug=False)
+    game = request.game.to_game()
+    prediction = inference.predict(
+        specification,
+        game,
+        request.rosters.to_scenarios(game),
+        print_debug=False
+    )
 
     return PredictionResponse(
         model=specification.name,

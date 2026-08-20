@@ -514,6 +514,66 @@ def test_non_rate_limit_client_errors_are_fatal_without_retrying():
     assert len(session.calls) == 1
 
 
+def test_rosters_read_the_active_list_and_lay_the_injury_report_over_it():
+    """
+    Neither fetch is enough alone: the active list says who is rostered and nothing about fitness,
+    and the report says who is hurt without naming everybody who is not.
+    """
+
+    active = [
+        {"id": 10, "team": {"id": 1}},
+        {"id": 11, "team": {"id": 2}}
+    ]
+    injuries = [
+        {"player": {"id": 11, "team_id": 2}, "status": "Out"},
+        {"player": {"id": 12, "team_id": 1}, "status": "Doubtful"}
+    ]
+    source = BallDontLieSource(
+        0,
+        api_key="key",
+        session=Session(
+            Response({"data": active, "meta": {}}),
+            Response({"data": injuries, "meta": {}})
+        )
+    )
+
+    held = {entry.player_id: entry for entry in source.rosters()}
+
+    assert held[10].team_id == 1 and held[10].playing
+    assert held[11].team_id == 2 and not held[11].playing
+    # Named only by the report, and placed by the team the report itself gives them.
+    assert held[12].team_id == 1 and not held[12].playing
+
+
+def test_an_injured_player_on_no_roster_and_no_team_is_dropped():
+    source = BallDontLieSource(
+        0,
+        api_key="key",
+        session=Session(
+            Response({"data": [{"id": 10, "team": {"id": 1}}], "meta": {}}),
+            Response({"data": [{"player": {"id": 12}, "status": "Out"}], "meta": {}})
+        )
+    )
+
+    assert {entry.player_id for entry in source.rosters()} == {10}
+
+
+def test_a_roster_listing_the_service_will_not_answer_for_stops_the_run():
+    """An empty roster table would read as a league with nobody on it, so nothing is written."""
+
+    source = BallDontLieSource(0, api_key="key", session=Session(Response({}, status=500)))
+    source.retries = 1
+
+    with pytest.raises(SourceDataError):
+        source.rosters()
+
+
+def test_nba_api_publishes_no_roster_feed():
+    """nba.com carries none, so an archive collected through it predicts as it always did."""
+
+    assert NBAApiSource().rosters() is None
+
+
 def test_schedule_maps_status_tipoff_and_playoff_phase():
     scheduled = {
         "id": 7,

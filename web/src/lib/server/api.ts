@@ -111,22 +111,13 @@ export const getShowcase = () => request<Showcase | null>('/showcase', { patienc
 
 export const getPlayer = (id: number) => request<Player>(`/players/${id}`);
 
-/** Who plays for a team, which is the player list once a game has been chosen. */
-export const getTeamPlayers = (abbreviation: string) =>
-	request<Player[]>(`/teams/${encodeURIComponent(abbreviation)}/players`);
-
-/** Both sides of a chosen game, away first, which is the order a matchup is written in. */
-export async function getRosters(game: ScheduledGame): Promise<Roster[]> {
-	const [away, home] = await Promise.all([
-		getTeamPlayers(game.away_team.abbreviation),
-		getTeamPlayers(game.home_team.abbreviation)
-	]);
-
-	return [
-		{ team: game.away_team, players: away },
-		{ team: game.home_team, players: home }
-	];
-}
+/**
+ * Both sides of a chosen game, away first, which is the order a matchup is written in.
+ *
+ * Each side arrives with the lineup change the collected roster and injury snapshot expects of it,
+ * so the roster controls open on who will actually play rather than on an empty form.
+ */
+export const getRosters = (gameId: number) => request<Roster[]>(`/games/${gameId}/rosters`);
 
 /**
  * The games that can be predicted right now, soonest first. A game stays off this list until every

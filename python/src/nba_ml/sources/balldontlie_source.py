@@ -12,7 +12,7 @@ import requests
 from dotenv import load_dotenv
 
 from nba_ml import season
-from nba_ml.entities import Game, GameStatus, Player, ScheduledGame, Team
+from nba_ml.entities import Game, GameStatus, Player, RosterEntry, ScheduledGame, Team
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import (
     DataSource,
@@ -617,6 +617,64 @@ class BallDontLieSource(DataSource):
         self._report_rejected_player_games(season_year, season_type, rejected_games)
 
         return games
+
+    def _listing(self, endpoint: str, description: str) -> list[Any]:
+        """One whole paged listing, or a stop. Neither of the roster fetches can be part of a run."""
+
+        rows = self._fetch(
+            lambda: self._pages(endpoint, description=description),
+            description,
+            pace=False
+        )
+        if rows is None:
+            raise SourceDataError(f"BALLDONTLIE would not answer for the {description}.")
+
+        return rows
+
+    def rosters(self) -> list[RosterEntry]:
+        """
+        Who is on each team right now, out of the active player list, with the injury report on top.
+
+        The two are read together because neither is enough on its own. The active list says who is
+        on a roster and nothing about whether they are fit, and the report says who is hurt without
+        naming the sixteen players who are not. A player the report names who is on no active roster
+        is placed by the team the report itself gives them, and dropped when it gives none.
+        """
+
+        active = self._listing("players/active", "active player list")
+        injuries = self._listing("player_injuries", "injury report")
+
+        try:
+            entries = {}
+            for row in active:
+                team = row.get("team")
+                if not isinstance(team, dict) or "id" not in team:
+                    continue
+
+                player_id = _whole_number(row["id"], 1)
+                entries[player_id] = RosterEntry(player_id, _whole_number(team["id"], 1))
+
+            for row in injuries:
+                player = row["player"]
+                player_id = _whole_number(player["id"], 1)
+                held = entries.get(player_id)
+                team_id = held.team_id if held is not None else player.get("team_id")
+                if team_id is None:
+                    continue
+
+                status = row.get("status")
+                entries[player_id] = RosterEntry(
+                    player_id,
+                    _whole_number(team_id, 1),
+                    str(status) if status else None
+                )
+        except (KeyError, TypeError, ValueError) as error:
+            raise SourceDataError("BALLDONTLIE returned malformed roster rows.") from error
+
+        if not entries:
+            raise SourceDataError("BALLDONTLIE named no rostered players at all.")
+
+        return list(entries.values())
 
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
         rows = self._season_games(season_year)

@@ -11,10 +11,11 @@ feature_engineering/team_game_rows.py and shared with game statistics.
 """
 
 from datetime import datetime
+from typing import Mapping
 
 import pandas as pd
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.feature_engineering import placeholders, season_columns, team_game_rows
 from nba_ml.feature_engineering.samples import (
     EvaluationSplit,
@@ -76,7 +77,12 @@ def get_all_labeled_data(
         team_game_store.get_all_team_game_data(),
         team_game_store.SEASON_TYPE.category_name
     )
-    histories = team_game_rows.build_histories(features, all_team_game_data, print_debug=print_debug)
+    histories = team_game_rows.build_histories(
+        features,
+        all_team_game_data,
+        team_game_rows.stored_roster_totals(all_team_game_data),
+        print_debug=print_debug
+    )
 
     if print_debug:
         print("Arranging data into training chunks...")
@@ -121,6 +127,7 @@ def get_inference_data(
     features: FeatureSet,
     target_team_id: int,
     target_game: Game,
+    rosters: Mapping[int, RosterScenario],
     print_debug: bool = False
     ) -> tuple[GameSequences, SequenceInputSamples]:
     """
@@ -132,6 +139,8 @@ def get_inference_data(
 
     Args:
         target_team_id is the side the answer belongs to, so its row is the static half of the input.
+        rosters is who each side is playing without or with, keyed by team id. Both sides are read,
+        because the named team's row carries what the side it faces has available too.
     """
 
     if print_debug:
@@ -139,6 +148,7 @@ def get_inference_data(
 
     team_game_data = team_game_rows.read_history_window(target_game)
     opponent_team_id = target_game.opponent_of(target_team_id)
+    roster_totals = team_game_rows.prediction_roster_totals(target_game, rosters)
 
     if print_debug:
         print("Creating placeholder rows...")
@@ -151,7 +161,7 @@ def get_inference_data(
     if print_debug:
         print("Processing data...")
 
-    histories = team_game_rows.build_histories(features, team_game_data)
+    histories = team_game_rows.build_histories(features, team_game_data, roster_totals)
 
     # Both sides are checked even where only the named one is read, because the row holds each side's
     # recent form and a team with nothing behind it reads as one averaging zero rather than as one

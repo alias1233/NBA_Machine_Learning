@@ -1,11 +1,18 @@
 <!--
-	The home page hero: one screen, printed in three fields.
+	The home page hero: one screen, printed as a poster.
 
-	The plate is the site talking. It is the blue ground the whole hero is printed on, and the name is
-	stamped straight onto it. Lying on that plate are two sheets of paper. The slate, on the opposite
-	theme's paper, carries the day's samples. The answer, on the reader's own paper, carries the one
-	that is up. Printed ground, opposite paper, the reader's paper: that is the whole composition, and
-	it is why the screen is three colours rather than one.
+	The plate is the site talking. It is the blue ground the whole hero is printed on. Lying on it are
+	two sheets of paper. The answer, on the reader's own paper, carries the sample that is up. The
+	slate, on the opposite theme's paper, carries the day's set at the foot. Printed ground, the
+	reader's paper, the opposite paper: that is the whole composition, and it is why the screen is
+	three colours rather than one.
+
+	It reads down in four printed registers. The nameplate, stamped over the sample's own shape printed
+	to the plate's margins. The answer, given the whole page column, because a distribution is a
+	drawing and every pixel of width is another outcome a reader can tell apart. The one action of the
+	site, stamped in spot ink between two printed rules, which is the middle of the screen and the
+	whole point of it. Then the slate, which is the day's index rather than the day's answer, so it
+	lies under the action rather than over it.
 
 	Everything the site is sure of is printed and everything the reader is asking is drawn. The drawn
 	part is the wet-erase X over the sample they picked and the line they set across the answer.
@@ -15,9 +22,17 @@
 	See python/src/nba_ml/showcase.py.
 
 	Left alone, the samples come up one after another on a timer, so a reader who touches nothing
-	still sees the site answer several different questions. Picking one settles it there for the
-	visit, focus resting anywhere in the hero holds it where it is, and reduced motion never starts
-	it, which is the standing way to turn it off.
+	still sees the site answer several different questions. A thin run of spot ink along the top edge
+	of the answer says how much of the turn is left, emptying from the right, so nothing on the screen
+	changes without the reader having seen it coming. Picking one settles it there for the visit, focus
+	resting anywhere in the hero holds it where it is, and reduced motion never starts it, which is the
+	standing way to turn it off. The run is drawn only while the turn is actually running, so it never
+	claims a change that is not coming.
+
+	The sample that is up is also printed across the plate behind the name, as large as the ground can
+	carry it, and it is the same shape the slate carries small. That is the one graphic on the ground:
+	it is real model output rather than ornament, it says the answer is a shape before a word has been
+	read, and it is redrawn on every turn, which is where the screen's movement comes from.
 
 	The hero is exactly one screen tall at every size, so the page under it is always one scroll away.
 	That is what decides the slate: a phone screen cannot hold the samples and a readable answer at
@@ -69,8 +84,14 @@
 	/** How many bars a silhouette draws. Enough to read a shape, few enough to stay a mark. */
 	const SILHOUETTE_BARS = 24;
 
+	/** How many the shape printed across the plate draws. It has a screen to fill rather than a tile. */
+	const PRINTED_BARS = 48;
+
 	/** How long a sample stays up before the next comes round. Long enough to read the answer. */
 	const TURN = 7000;
+
+	/** How short a bar of a silhouette may be drawn, as a percentage. Below this it is not a bar. */
+	const FLOOR = 3;
 
 	type Card = {
 		sample: ShowcaseSample;
@@ -81,22 +102,28 @@
 		subject: string | null;
 		stat: string;
 		heading: string;
+		/** What a sample is called on the slate, which is whose number it is or else the statistic. */
+		who: string;
+		/** What it answers and which game, in that order, so a narrow tile gives up the game first. */
+		where: string;
 		/** The bar heights of the silhouette, as fractions of its tallest. */
 		silhouette: number[];
+		/** The same shape at the density the plate prints it across a whole screen. */
+		printed: number[];
 	};
 
 	/**
 	 * Bar heights as fractions of the tallest, which is what makes a silhouette a shape rather than a
 	 * scale. Both kinds of answer are drawn this way, so a sample is read the same whichever it holds.
 	 */
-	const silhouetteOf = (probabilities: number[]): number[] => {
+	const silhouetteOf = (probabilities: number[], bars: number): number[] => {
 		const tallest = Math.max(...probabilities, 0);
 
 		if (tallest <= 0) return [];
 
 		// Thinned by taking every nth outcome rather than by summing runs of them, because this is a
 		// shape to recognise the answer by and not a figure anything is read off.
-		const step = Math.max(Math.ceil(probabilities.length / SILHOUETTE_BARS), 1);
+		const step = Math.max(Math.ceil(probabilities.length / bars), 1);
 
 		return probabilities
 			.filter((_, index) => index % step === 0)
@@ -121,19 +148,23 @@
 				// A game statistic names no side, so it has no subject at all and the statistic is what
 				// the sample is called. Everything else was asked about somebody.
 				const subject = sample.player?.name ?? sample.team?.name ?? null;
+				const matchup = `${away_team.abbreviation} at ${home_team.abbreviation}`;
+				const shape =
+					answer.kind === 'integer_distribution'
+						? outcomes(answer.distribution).map(({ probability }) => probability)
+						: answer.categories.probabilities;
 
 				return {
 					sample,
 					answer,
-					matchup: `${away_team.abbreviation} at ${home_team.abbreviation}`,
+					matchup,
 					subject,
 					stat,
 					heading: subject ? `${subject}, ${stat}` : sentenceCase(stat),
-					silhouette: silhouetteOf(
-						answer.kind === 'integer_distribution'
-							? outcomes(answer.distribution).map(({ probability }) => probability)
-							: answer.categories.probabilities
-					)
+					who: subject ?? sentenceCase(stat),
+					where: subject ? `${stat} · ${matchup}` : matchup,
+					silhouette: silhouetteOf(shape, SILHOUETTE_BARS),
+					printed: silhouetteOf(shape, PRINTED_BARS)
 				};
 			})
 			.filter((card): card is Card => card !== null)
@@ -179,12 +210,12 @@
 	$effect(() => {
 		if (settled || held || cards.length < 2 || prefersReducedMotion.current) return;
 
-		const turning = setInterval(() => {
+		const coming = setInterval(() => {
 			chosen = (chosen + 1) % cards.length;
 			dragged = null;
 		}, TURN);
 
-		return () => clearInterval(turning);
+		return () => clearInterval(coming);
 	});
 
 	const distribution = $derived(
@@ -218,6 +249,14 @@
 		announced = cards[index] ? `${cards[index].heading}. ${cards[index].matchup}.` : '';
 	}
 
+	/**
+	 * Whether the samples are actually coming round, which is the one thing the indicator may say.
+	 *
+	 * The same four conditions the timer above runs under, read rather than restated, so a run of ink
+	 * along the answer can never promise a change that is not on its way.
+	 */
+	const turning = $derived(!settled && !held && cards.length > 1 && !prefersReducedMotion.current);
+
 	const odds = $derived(distribution ? calculateOdds(distribution, line) : null);
 	const range = $derived(distribution ? chartRange(distribution, line) : null);
 
@@ -247,7 +286,6 @@
 	 * sentence rewrite itself on arrival.
 	 */
 	const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-	const COUNT = new Intl.NumberFormat('en-US');
 
 	/** A day as a reader reads it. A date the site cannot read is written as it came, never as an error. */
 	const dayOf = (iso: string) => {
@@ -259,28 +297,70 @@
 
 <!-- Focus landing anywhere in the hero holds the turn, because somebody dragging the line or moving
      across the slate is working on the sample that is up. -->
-<section class="band hero" data-hero onfocusin={() => (held = true)} onfocusout={releaseTurn}>
-	<!-- The plate's own printing: the crosses a press registers it by, and its number. Neither says
-	     anything to a reader. They are what makes the ground read as something printed rather than as
-	     a coloured box. -->
+<section
+	class="band hero"
+	data-hero
+	style:--turn-duration="{TURN}ms"
+	onfocusin={() => (held = true)}
+	onfocusout={releaseTurn}
+>
+	<!-- The crosses a press registers the plate by. They say nothing to a reader. They are what makes
+	     the ground read as something printed rather than as a coloured box, and the printing keeps
+	     inside them, the way an image keeps inside a plate's margin. -->
 	<span class="registration top-start" aria-hidden="true"></span>
 	<span class="registration top-end" aria-hidden="true"></span>
 	<span class="registration bottom-start" aria-hidden="true"></span>
 	<span class="registration bottom-end" aria-hidden="true"></span>
-	<span class="plate-number micro" aria-hidden="true">
-		BB-{cards.length.toString().padStart(3, '0')}
-	</span>
+
+	<!-- The one action of the screen, and the most important thing on it. Written once, because a day
+	     with no samples leads to exactly the same place as a day with them. The arrow points down
+	     because that is where the listing is: the next thing on this page rather than another one. -->
+	{#snippet intoModels()}
+		<div class="act plate">
+			<a class="button button--lead" href={MODELS_PATH}>
+				See the models
+				<svg class="arrow" viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M12 4.5v14M5.5 12.5 12 19l6.5-6.5" />
+				</svg>
+			</a>
+		</div>
+	{/snippet}
 
 	<div class="page composition">
-		<div class="masthead plate">
-			<div class="name">
-				<h1 class="display">{SITE_NAME}</h1>
-				<p class="lede">{SITE_DESCRIPTION}</p>
-			</div>
+		<div class="nameplate plate">
+			<!-- The sample that is up, printed to the plate's margins behind the name and redrawn every
+			     time the turn brings another one round. It is the same shape the slate carries small, so
+			     the two say one thing at two sizes. Keyed on the pick, because a shape arriving is the
+			     point of it. -->
+			{#if card}
+				{#key picked}
+					<span class="printed" aria-hidden="true">
+						{#each card.printed as height, bar (bar)}
+							<span
+								class="printed-bar"
+								style="height: {Math.max(height * 100, FLOOR)}%"
+								style:--bar={bar}
+							></span>
+						{/each}
+					</span>
+				{/key}
+			{/if}
 
-			<!-- The header holds itself away over this screen, so the hero carries the one way out of
-			     it that is not the models listed under it. -->
-			<a class="masthead-link text-link small" href="/about">About this site</a>
+			<h1>{SITE_NAME}</h1>
+		</div>
+
+		<!-- The plate's own foot line: what the site does, what press sheet this is, and the one way out
+		     of the screen that is not the listing under it. The header holds itself away over the hero,
+		     so this carries it. The printed shape above stands on this rule. -->
+		<div class="colophon plate">
+			<p class="lede">{SITE_DESCRIPTION}</p>
+
+			<span class="ways">
+				<span class="micro number" aria-hidden="true">
+					BB-{cards.length.toString().padStart(3, '0')}
+				</span>
+				<a class="text-link small" href="/about">About this site</a>
+			</span>
 		</div>
 
 		{#if cards.length === 0}
@@ -294,7 +374,6 @@
 						Samples are drawn once a day, from games the models can already answer. There are none
 						today, which is what an off day looks like.
 					</p>
-					<a class="button button--lead" href={MODELS_PATH}>See the models</a>
 				{:else}
 					<p class="micro muted">Nothing to show</p>
 					<p>
@@ -303,111 +382,136 @@
 					</p>
 				{/if}
 			</div>
-		{:else}
-			<div class="slate block">
-				<p class="micro label" id="slate-label">
-					{heldOver ? `Drawn ${dayOf(heldOver)}` : 'Today'}, {cards.length}
-					{cards.length === 1 ? 'sample' : 'samples'}
-				</p>
 
-				<ul aria-labelledby="slate-label">
-					{#each cards as entry, index (entry.sample.model + index)}
-						<li>
-							<button
-								type="button"
-								class="game"
-								class:picked={index === picked}
-								aria-label={named(entry)}
-								aria-pressed={index === picked}
-								onclick={() => pick(index)}
-							>
-								<span class="words">
-									<span class="matchup">{entry.matchup}</span>
-									{#if entry.subject}<span class="who small">{entry.subject}</span>{/if}
-									<span class="stat micro">{entry.stat}</span>
-								</span>
-
-								<!-- The shape of the answer, which is what the sample is picked by. Narrow, it is
-								     the whole of the sample, and the drawn mark goes across it either way rather
-								     than across the words above it. -->
-								<span class="shape" aria-hidden="true">
-									{#each entry.silhouette as height, bar (bar)}
-										<span class="bar" style="height: {Math.max(height * 100, 3)}%"></span>
-									{/each}
-
-									<!-- The one drawn mark on the slate. It is the reader's pick, so it is grease
-									     pencil rather than print, and it arrives as though it were sprayed on. -->
-									{#if index === picked}
-										<PencilMark bleed="var(--space-1)" />
-									{/if}
-								</span>
-							</button>
-						</li>
-					{/each}
-				</ul>
-			</div>
-
+			{#if answering}
+				{@render intoModels()}
+			{/if}
+		{:else if card}
 			<!-- The reader's own paper, with a real answer lying on it. Everything here is a component a
 			     prediction page draws, on the plane it draws it on, so the hero teaches the page it
 			     leads to rather than resembling it. -->
-			{#if card}
-				<div class="answer">
-					<!-- The heading carries its own weight. Nothing is set above it: the game, the day and
-					     what answered are facts about the answer, so they read under it. -->
-					<div class="answer-head">
+			<div class="answer">
+				<!-- How much of the turn is left, emptying from the right along the sheet's top edge.
+				     Drawn only while the turn is actually running, and keyed on the pick so each turn
+				     starts its own run rather than carrying the last one's. -->
+				{#if turning}
+					{#key picked}
+						<span class="turn" aria-hidden="true"><span class="turn-left"></span></span>
+					{/key}
+				{/if}
+
+				<!-- The heading carries its own weight. Nothing is set above it: the game, the day and
+				     what answered are facts about the answer, so they read under it. The three figures
+				     stand at the other end of that line, because on a sheet this wide they are what the
+				     reader is here for and they roll as the line under the chart is dragged. -->
+				<div class="answer-head">
+					<div class="titles">
 						<h2 class="type-h2">{card.heading}</h2>
 						<p class="small note">
 							{card.matchup}, {dayOf(card.sample.game.date)}. The {card.sample.title.toLowerCase()}
-							model, built from {COUNT.format(card.sample.past_games)} earlier games.
+							model.
 						</p>
 					</div>
 
-					<p class="visually-hidden" role="status">{announced}</p>
-
-					{#if distribution && range && odds}
-						<!-- Keyed on the pick, so a new answer is drawn in rather than snapping from the shape
-						     of the last one. It is a different model answering a different game, and the draw
-						     is what says so. -->
-						{#key picked}
-							<div class="plot">
-								<DistributionChart {distribution} stat={card.stat} {line} {range} {summary} />
-							</div>
-						{/key}
-
-						<LineControl
-							id="hero-line"
-							bind:line={() => line, (value) => (dragged = value)}
-							{distribution}
-							{range}
-						/>
-
-						<OddsReadout {odds} />
-					{:else if card.answer.kind === 'category_distribution'}
-						<!-- A model answering in named categories has no number line, so there is nothing to
-						     draw a line across. It is printed as what it is: a chance per category. -->
-						<dl class="categories">
-							{#each card.answer.categories.names as name, index (name)}
-								<div>
-									<dt class="small">{name}</dt>
-									<dd class="figure">
-										{sharePercentages(card.answer.categories.probabilities, 1)[index]}%
-									</dd>
-								</div>
-							{/each}
-						</dl>
+					{#if odds}
+						<OddsReadout {odds} large />
 					{/if}
-
-					<div class="ways">
-						<a class="button button--lead" href={MODELS_PATH}>See the models</a>
-						<a class="text-link small" href={READING_PATH}>How to read this</a>
-					</div>
-
-					<p class="caveat small muted">
-						A sample, drawn at random {heldOver ? `on ${dayOf(heldOver)}` : 'this morning'}. A
-						prediction is not a promise about one game.
-					</p>
 				</div>
-			{/if}
+
+				<p class="visually-hidden" role="status">{announced}</p>
+
+				{#if distribution && range && odds}
+					<!-- Keyed on the pick, so a new answer is drawn in rather than snapping from the shape
+					     of the last one. It is a different model answering a different game, and the draw
+					     is what says so. -->
+					{#key picked}
+						<div class="plot">
+							<DistributionChart {distribution} stat={card.stat} {line} {range} {summary} />
+						</div>
+					{/key}
+
+					<LineControl
+						id="hero-line"
+						bind:line={() => line, (value) => (dragged = value)}
+						{distribution}
+						{range}
+					>
+						<a class="text-link small" href={READING_PATH}>How to read this</a>
+					</LineControl>
+				{:else if card.answer.kind === 'category_distribution'}
+					<!-- A model answering in named categories has no number line, so there is nothing to
+					     draw a line across. It is printed as what it is: a chance per category. -->
+					<dl class="categories">
+						{#each card.answer.categories.names as name, index (name)}
+							<div>
+								<dt class="small">{name}</dt>
+								<dd class="figure">
+									{sharePercentages(card.answer.categories.probabilities, 1)[index]}%
+								</dd>
+							</div>
+						{/each}
+					</dl>
+				{/if}
+
+				<p class="caveat small muted">
+					A sample, drawn at random {heldOver ? `on ${dayOf(heldOver)}` : 'this morning'}. A
+					prediction is not a promise about one game.
+				</p>
+			</div>
+
+			{@render intoModels()}
+
+			<!-- The day's index, at the foot of the plate: every sample as the shape of its own answer,
+			     with the reader's X on the one that is up. It lies under the action rather than over it,
+			     because the listing is what the screen is for and the set is how a reader changes what
+			     it is answering. -->
+			<div class="slate-region">
+				<!-- What the slate holds rather than how much of it. How many there are is counted by the
+				     tiles under this line, and the day only needs saying where it is not today's. -->
+				<p class="micro slate-label" id="slate-label">
+					{heldOver ? `Sampled predictions from ${dayOf(heldOver)}` : "Today's sampled predictions"}
+				</p>
+
+				<div class="slate block">
+					<ul aria-labelledby="slate-label">
+						{#each cards as entry, index (entry.sample.model + index)}
+							<li>
+								<button
+									type="button"
+									class="game"
+									class:picked={index === picked}
+									aria-label={named(entry)}
+									aria-pressed={index === picked}
+									onclick={() => pick(index)}
+								>
+									<span class="words">
+										<span class="who">{entry.who}</span>
+										<span class="where micro">{entry.where}</span>
+									</span>
+
+									<!-- The shape of the answer, which is what the sample is picked by, and the
+									     room the drawn mark goes in rather than over the words above it. -->
+									<span class="shape" aria-hidden="true">
+										{#each entry.silhouette as height, bar (bar)}
+											<span
+												class="bar"
+												style="height: {Math.max(height * 100, FLOOR)}%"
+												style:--bar={bar}
+											></span>
+										{/each}
+
+										<!-- The one drawn mark on the slate. It is the reader's pick, so it is grease
+										     pencil rather than print, and it arrives as though it were sprayed on. -->
+										{#if index === picked}
+											<PencilMark bleed="var(--space-1)" />
+										{/if}
+									</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
 		{/if}
 	</div>
 </section>
@@ -417,66 +521,85 @@
 	 * The printed ground, and exactly one screen of it, so whatever the device the page under the
 	 * hero is one scroll away. A minimum rather than a height, because a screen too short to hold the
 	 * answer should grow rather than cut it off.
+	 *
+	 * The screen it is measured against is the one the reader actually has, which on a phone changes
+	 * as the browser's own bars come and go. A smallest-screen height leaves the band under it showing
+	 * along the bottom edge whenever those bars are away, and the first screen of the site is the one
+	 * place a seam like that cannot be allowed. What the name is set against stays the smallest
+	 * screen, so the lettering holds still while the ground follows the bars.
 	 */
 	.hero {
 		position: relative;
 		display: flex;
 		flex-direction: column;
-		min-height: 100svh;
-		padding-block-end: var(--space-5);
+		min-height: 100dvh;
+		padding-block-end: var(--space-3);
 		/* Only what a returning header needs, rather than the room a band gives its own printing. The
 		   hero is one screen and every millimetre above the name is a millimetre off the answer. */
-		--band-lead: var(--space-3);
+		--band-lead: var(--space-2);
+		/* How far in from the screen the plate's margin runs, which is the room the registration
+		   crosses stand in and the width every printed thing on the ground keeps inside. */
+		--plate-margin: calc(var(--space-3) * 2 + var(--registration));
 		background: var(--plate);
 		color: var(--plate-ink);
 		overflow: clip;
 	}
 
 	/*
-	 * The masthead across the top and the two sheets under it. They meet along one edge rather than
-	 * standing apart, so the pair reads as one composition laid on the plate and not as two cards
-	 * floating on it.
+	 * Four printed registers down one screen: the nameplate, the plate's foot line, the answer, the
+	 * action, and the day's index under it. The answer takes whatever the screen has left, so the
+	 * chart is as tall as the device allows and the four never add up to more than a screen.
 	 */
 	.composition {
 		display: grid;
 		flex: 1;
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: auto minmax(0, 1fr);
-		gap: var(--space-4);
+		grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+		gap: var(--space-2);
 		min-height: 0;
 	}
 
 	/*
-	 * The plate's own trim marks need a margin to sit in, and a narrow screen has none: the sheets
-	 * run to the gutter. So the foot of the plate is printed only where there is room for it.
+	 * Printed straight onto the plate, so it brings the plate's inks and no ground of its own. It is
+	 * also what the shape behind it is printed on, so it stacks on its own: the shape is ordered
+	 * behind the name and the isolation stops that order reaching anything outside the nameplate.
 	 */
-	.plate-number,
-	.registration.bottom-start,
-	.registration.bottom-end {
-		display: none;
-	}
-
-	.plate-number {
-		position: absolute;
-		bottom: var(--space-3);
-		left: calc(var(--space-3) + var(--registration) + var(--space-3));
-		color: var(--plate-rule-strong);
-	}
-
-	/* Printed straight onto the plate, so it brings the plate's inks and no ground of its own. */
-	.masthead {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: var(--space-2) var(--space-5);
+	.nameplate {
+		position: relative;
+		padding-block-end: var(--space-1);
 		background: none;
+		isolation: isolate;
 	}
 
-	.name {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
+	/*
+	 * The sample that is up, printed across the plate behind the name. It stands on the foot line
+	 * under the nameplate and rises past the top of the lettering, so the screen says the answer is a
+	 * shape before a word of it has been read.
+	 *
+	 * It runs to the plate's margin rather than to the edge of the screen, the way an image on a real
+	 * plate keeps inside its registration. Centred on the viewport rather than on the page column,
+	 * which is what the page column being centred itself makes possible.
+	 *
+	 * The ink is the plate's rule tone let down into the ground, which keeps the bone ink above 5:1
+	 * over the bars and keeps a printed shape from reading as a second chart.
+	 */
+	.printed {
+		display: none;
+		position: absolute;
+		z-index: -1;
+		inset: auto auto 0 50%;
+		translate: -50% 0;
+		align-items: flex-end;
+		gap: 2px;
+		width: calc(100vw - var(--plate-margin) * 2);
+		height: 112%;
+	}
+
+	.printed-bar {
+		flex: 1;
+		min-width: 0;
+		background: color-mix(in oklab, var(--plate-rule) 88%, var(--plate));
+		transform-origin: bottom;
 	}
 
 	/*
@@ -490,13 +613,13 @@
 	 * Its size is held against the screen's height as well as its width, because the hero is one
 	 * screen and a name set by width alone takes the answer's room on a short one.
 	 */
-	.masthead h1 {
+	.nameplate h1 {
 		color: var(--plate-ink);
 		font-family: var(--font-ui);
-		font-size: clamp(2.5rem, min(10vw, 13svh), 8rem);
+		font-size: clamp(2.5rem, min(13vw, 12svh), 9rem);
 		font-weight: 800;
-		letter-spacing: -0.035em;
-		line-height: 0.86;
+		letter-spacing: -0.038em;
+		line-height: 0.84;
 		text-transform: uppercase;
 		/* Never broken inside a word. A name too long for the screen wraps between its words, and
 		   letting it break inside one would cut the mark itself in half. */
@@ -504,145 +627,116 @@
 	}
 
 	.lede {
-		max-width: 34ch;
+		max-width: 40ch;
 		color: var(--plate-ink);
 		font-size: var(--type-note);
+		font-weight: 500;
 	}
 
-	.masthead-link {
+	.colophon .ways {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+	}
+
+	/* The rule the printed shape stands on, with the sheet number at one end and the way out at the
+	   other. It is the plate's foot line, so it is printed in the separating rule rather than in the
+	   stronger one, which is a box a figure sits in and carries a meaning of its own. */
+	.colophon {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0 var(--space-4);
+		padding-block-start: var(--space-2);
+		background: none;
+		border-top: var(--rule-plate);
+	}
+
+	.colophon .number {
+		color: var(--plate-ink-muted);
+	}
+
+	.colophon a {
 		color: var(--plate-ink);
 	}
 
-	.label {
-		color: var(--block-muted);
-	}
-
 	/*
-	 * The slate: the opposite theme's paper, with the day's samples lying on it. A field of the
-	 * composition rather than a container, so it takes the block's plane and none of its shape.
-	 * Square, because everything the plate carries is.
-	 *
-	 * It stands only where the screen has room for it beside a readable answer. Narrow, the answer
-	 * takes the whole sheet and the turn is what moves between samples.
-	 */
-	.slate {
-		display: none;
-		flex-direction: column;
-		gap: var(--space-3);
-		padding: var(--space-4);
-		border-top: none;
-		border-radius: 0;
-	}
-
-	/* As many samples across as the sheet has room for, measured against the page, so a set of four
-	   and a set of eight both lie on the slate in as few rows as they fit in. */
-	.slate ul {
-		display: grid;
-		flex: 1;
-		grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
-		gap: var(--space-3);
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	/* A sample fills its place on the slate, so the sheet is covered whatever the day's set holds. */
-	.slate li {
-		display: flex;
-		min-width: 0;
-	}
-
-	/* The words, then the shape taking whatever the tile has left, so the slate fills its sheet and
-	   every silhouette on it is drawn as large as the day's set allows. */
-	.game {
-		position: relative;
-		display: grid;
-		grid-template-rows: auto minmax(var(--space-5), 1fr);
-		align-items: stretch;
-		gap: var(--space-3);
-		width: 100%;
-		padding: var(--space-3);
-		background: none;
-		color: var(--block-ink);
-		border: 1px solid var(--hairline-block);
-		border-radius: 0;
-		text-align: start;
-		cursor: pointer;
-		transition: border-color var(--motion-fast) var(--ease-in);
-	}
-
-	.game:hover,
-	.game.picked {
-		border-color: var(--block-ink);
-	}
-
-	.words {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-	}
-
-	.matchup {
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.stat {
-		color: var(--block-muted);
-	}
-
-	/* The shape of the answer, and the room the words leave, which is where the reader's mark goes.
-	   Sharp edges, like every bar on this site. */
-	.shape {
-		position: relative;
-		display: flex;
-		align-items: flex-end;
-		gap: 1px;
-		width: 100%;
-	}
-
-	.bar {
-		flex: 1;
-		min-width: 0;
-		background: var(--block-muted);
-	}
-
-	.game.picked .bar {
-		background: var(--block-ink);
-	}
-
-	/*
-	 * The answer, on the reader's own paper. It is the page plane, so the chart, the handle and the
-	 * three figures are drawn exactly as a prediction page draws them, in the over, under and push
-	 * colours the whole site reads a distribution in.
+	 * The answer, on the reader's own paper, given the whole page column. It is the page plane, so the
+	 * chart, the handle and the three figures are drawn exactly as a prediction page draws them, in
+	 * the over, under and push colours the whole site reads a distribution in.
 	 */
 	.answer {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
 		min-height: 0;
-		padding: var(--space-3);
+		padding: var(--space-4);
 		background: var(--page);
 		color: var(--ink);
+		box-shadow: var(--sheet-shadow);
 		/* The drawing takes whatever the screen has left once everything around it is set. */
 		--chart-height: 100%;
 	}
 
-	.empty {
-		align-items: flex-start;
-		justify-content: center;
-		gap: var(--space-4);
+	/*
+	 * How much of the turn is left, printed along the top edge of the sheet the answer is on. The
+	 * track is the whole turn and the run inside it is what is left of it, emptying from the right,
+	 * which is the direction the next sample comes from.
+	 *
+	 * Spot ink, because the turn is the site's own doing rather than the reader's, and a bar rather
+	 * than a figure, because a countdown in numbers on a page nobody asked to wait on is pressure.
+	 */
+	.turn {
+		position: absolute;
+		inset: 0 0 auto;
+		height: 3px;
+		background: color-mix(in oklab, var(--plate-spot) 28%, transparent);
+		overflow: clip;
 	}
 
+	.turn-left {
+		display: block;
+		height: 100%;
+		background: var(--plate-spot);
+		transform-origin: left center;
+		animation: empty var(--turn-duration) linear;
+	}
+
+	/* A day with nothing drawn is the same hero rather than a shorter one, but a whole screen of empty
+	   paper is a void. The sheet takes the height its words need and lies in the middle of the plate,
+	   which reads as a note left on the ground rather than as an answer that failed to arrive. */
+	.empty {
+		align-self: center;
+		align-items: flex-start;
+		gap: var(--space-3);
+	}
+
+	.empty p {
+		max-width: var(--measure);
+	}
+
+	/* What the answer is of at one end and what it came to at the other, on one line wherever the
+	   sheet has room for both. */
 	.answer-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: var(--space-3) var(--space-5);
+	}
+
+	.titles {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
+		min-width: 0;
 	}
 
 	/* A heading here is a person's whole name and everything the model answers about them, so it runs
 	   to two or three lines often enough that where those lines break is part of the setting. */
-	.answer-head h2 {
+	.titles h2 {
 		overflow-wrap: break-word;
 		text-wrap: balance;
 	}
@@ -651,15 +745,13 @@
 		color: var(--ink-muted);
 	}
 
-	/* What the screen has left, between a floor the shape stays readable at and a ceiling past which
-	   a sample is drawn larger than a sample needs to be. */
+	/* What the sheet has left, down to a floor the shape stays readable at. */
 	.plot {
 		display: flex;
 		flex: 1 1 auto;
 		flex-direction: column;
 		min-width: 0;
-		min-height: 7.5rem;
-		max-height: 26rem;
+		min-height: 5rem;
 	}
 
 	.plot > :global(figure) {
@@ -686,67 +778,291 @@
 		margin: 0;
 	}
 
-	/* The one action of the screen, held at the foot of the sheet whatever height the drawing above
-	   it settles at, so it is in the same place on every device. */
-	.ways {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--space-4);
-		margin-block-start: auto;
-	}
-
 	.caveat {
 		max-width: var(--measure);
 	}
 
 	/*
-	 * Wider: the masthead takes the top and the two sheets stand side by side under it, meeting on
-	 * one edge and running to the bottom of the screen. This is where the slate stands, because it is
-	 * where the screen has room for the samples and a readable answer at once.
+	 * The one action of the site, stamped in spot ink on the plate between two printed rules. It is
+	 * the middle of the screen and the whole point of it, so nothing else on the ground competes: the
+	 * rules run out to both edges of the column and leave it standing alone in the centre.
 	 */
-	@media (min-width: 64rem) {
-		.composition {
-			grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-			grid-template-rows: auto minmax(0, 1fr);
-			gap: var(--space-4) 0;
-		}
+	.act {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+		align-items: center;
+		gap: var(--space-4);
+		background: none;
+	}
 
-		.masthead {
-			grid-column: 1 / -1;
-		}
+	.act::before,
+	.act::after {
+		content: '';
+		border-top: var(--rule-plate-strong);
+	}
 
-		.plate-number {
-			display: block;
-		}
-
-		.registration.bottom-start,
-		.registration.bottom-end {
-			display: block;
-		}
-
-		.slate {
+	/* Narrow, there is no room either side of the block for a rule to run, so the block takes the whole
+	   column and the rules that centred it come off. */
+	@media (width < 48rem) {
+		.act {
 			display: flex;
-			grid-column: 1;
 		}
 
-		/* Lower than the floor a phone holds, because here the slate beside it decides the height of
-		   the row and the drawing has to be able to give way to it. */
-		.plot {
-			min-height: 6rem;
+		.act::before,
+		.act::after {
+			display: none;
 		}
 
+		.button--lead {
+			flex: 1;
+		}
+	}
+
+	/* Down the page, which is where the listing is. It travels on the way in, so the control says
+	   what it does before it is read. */
+	.arrow {
+		width: var(--icon);
+		height: var(--icon);
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		transition: translate var(--motion) var(--ease-in);
+	}
+
+	.button--lead:hover .arrow {
+		translate: 0 4px;
+	}
+
+	/*
+	 * The slate: the opposite theme's paper, with the day's samples lying on it as a strip at the foot
+	 * of the plate. A field of the composition rather than a container, so it takes the block's plane
+	 * and none of its shape. Square, because everything the plate carries is.
+	 *
+	 * It stands only where the screen has room for it under a readable answer. Narrow, the answer takes
+	 * the whole sheet and the turn is what moves between samples.
+	 */
+	.slate-region {
+		display: none;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.slate-label {
+		padding-block-start: var(--space-1);
+		color: var(--plate-ink-muted);
+		border-top: var(--rule-plate);
+	}
+
+	.slate {
+		padding: var(--space-2);
+		border-top: none;
+		border-radius: 0;
+		box-shadow: var(--sheet-shadow);
+	}
+
+	/* As many samples across as the strip has room for, measured against the page, so a set of four
+	   and a set of eight both lie on it in as few rows as they fit in. */
+	.slate ul {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		gap: var(--space-2);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	/* A sample fills its place on the strip, so the sheet is covered whatever the day's set holds. */
+	.slate li {
+		display: flex;
+		min-width: 0;
+	}
+
+	/* The words, then the shape taking whatever the tile has left, so every silhouette on the strip is
+	   drawn as large as the day's set allows. */
+	.game {
+		position: relative;
+		display: grid;
+		grid-template-rows: auto minmax(clamp(1.5rem, 3.5svh, 2.5rem), 1fr);
+		align-items: stretch;
+		gap: var(--space-2);
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		background: none;
+		color: var(--block-ink);
+		border: 1px solid var(--hairline-block);
+		border-radius: 0;
+		text-align: start;
+		cursor: pointer;
+		transition:
+			border-color var(--motion-fast) var(--ease-in),
+			background var(--motion-fast) var(--ease-in);
+	}
+
+	.game:hover,
+	.game.picked {
+		border-color: var(--block-ink);
+	}
+
+	.words {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+	}
+
+	/* A name is held to one line, because a tile is wide enough for one and a name broken across two
+	   is the wrong thing to give the strip's height to. What it answers and which game wrap instead,
+	   because cutting the tail off a statistic would leave a sample nobody can tell from another. */
+	.who {
+		overflow: hidden;
+		font-size: var(--type-small);
+		font-weight: 600;
+		line-height: 1.2;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.where {
+		color: var(--block-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* The shape of the answer, and the room the words leave, which is where the reader's mark goes.
+	   Sharp edges, like every bar on this site. */
+	.shape {
+		position: relative;
+		display: flex;
+		align-items: flex-end;
+		gap: 1px;
+		width: 100%;
+	}
+
+	.bar {
+		flex: 1;
+		min-width: 0;
+		background: var(--block-muted);
+		transform-origin: bottom;
+	}
+
+	/* The tile the turn is on takes the full ink, and nothing about its shape moves. A silhouette on
+	   the slate is the same shape before and after the turn reaches it, so drawing it in would say a
+	   value had changed when none had. Only the print behind the name is drawn in, because that one
+	   really is a new shape each turn. */
+	.game.picked .bar {
+		background: var(--block-ink);
+	}
+
+	/*
+	 * The plate prints itself, once, on arrival, and in the order a press would lay it down: the name
+	 * is stamped, the shape behind it is printed bar by bar, what is said under it and the foot line
+	 * follow, the sheets are laid on the ink, and the action is stamped on last, which is where the
+	 * screen means the reader to end up.
+	 */
+	@media (prefers-reduced-motion: no-preference) {
+		.nameplate h1 {
+			animation: stamp 520ms var(--ease-in) both;
+		}
+
+		.lede {
+			animation: settle var(--motion-slow) var(--ease-in) 200ms both;
+		}
+
+		.colophon {
+			animation: settle var(--motion-slow) var(--ease-in) 280ms both;
+		}
+
+		/* The shape is printed on, bar by bar from the left, every time the turn brings one round. */
+		.printed-bar {
+			animation: draw var(--motion-slow) var(--ease-in) calc(var(--bar) * 9ms) backwards;
+		}
+
+		/* Laid onto the ink rather than faded up, which is what a sheet of paper landing on a plate
+		   does. Both sheets, in the order they are read. */
 		.answer {
-			grid-column: 2;
-			grid-row: 2;
-			gap: var(--space-3);
-			padding: var(--space-5);
+			animation: lay 420ms var(--ease-in) 260ms both;
 		}
 
-		/* A day with nothing drawn has no slate to stand beside, so what is said instead takes the
-		   whole sheet rather than one column of it. */
-		.answer.empty {
-			grid-column: 1 / -1;
+		.slate-region {
+			animation: lay 420ms var(--ease-in) 420ms both;
+		}
+
+		.act {
+			animation: stamp 420ms var(--ease-in) 560ms both;
+		}
+	}
+
+	@keyframes stamp {
+		from {
+			opacity: 0;
+			scale: 1.035;
+			filter: blur(8px);
+		}
+
+		55% {
+			opacity: 1;
+		}
+
+		to {
+			opacity: 1;
+			scale: 1;
+			filter: blur(0);
+		}
+	}
+
+	@keyframes settle {
+		from {
+			opacity: 0;
+			translate: 0 var(--space-2);
+		}
+	}
+
+	@keyframes lay {
+		from {
+			opacity: 0;
+			translate: 0 var(--space-4);
+		}
+	}
+
+	@keyframes draw {
+		from {
+			scale: 1 0;
+		}
+	}
+
+	@keyframes empty {
+		to {
+			scale: 0 1;
+		}
+	}
+
+	/* Where the plate has a margin to print its own shape in. Narrow, the nameplate wraps and every
+	   word on it would be set over a bar. */
+	@media (min-width: 40rem) {
+		.printed {
+			display: flex;
+		}
+	}
+
+	/* Wider: the sheet has room for both ends of the answer's head line and for the day's index under
+	   the action, which is the one thing a narrow screen cannot hold beside a readable answer. */
+	@media (min-width: 64rem) {
+		.answer {
+			gap: var(--space-3);
+			padding: var(--space-4) var(--space-5);
+		}
+	}
+
+	/*
+	 * The day's index stands only where the screen has both the width for six samples across and the
+	 * height to spare under a readable answer. A short laptop is given the answer alone for the same
+	 * reason a phone is: the hero is one screen, and a drawing squeezed to a sliver to make room for
+	 * an index of six is the wrong half to keep.
+	 */
+	@media (min-width: 64rem) and (min-height: 53rem) {
+		.slate-region {
+			display: flex;
 		}
 	}
 </style>

@@ -9,7 +9,6 @@ Every builder takes column names rather than assuming them, so nothing here deci
 model wants.
 """
 
-import numpy as np
 import pandas as pd
 
 from nba_ml.feature_engineering.game_columns import BUILT_COLUMN_TYPE, column_or_grouped_column
@@ -86,126 +85,6 @@ def add_availability_columns(
         (window / played_over).clip(upper=1.0).fillna(1.0).reindex(player_game_data.index)
     ).astype(BUILT_COLUMN_TYPE)
     return player_game_data
-
-GAINED_CORE_TEAMMATE_PREFIX = "GAINED_CORE_TEAMMATE_"
-LOST_CORE_TEAMMATE_PREFIX = "LOST_CORE_TEAMMATE_"
-ABSENT_CORE_TEAMMATE_PREFIX = "ABSENT_CORE_TEAMMATE_"
-CORE_PLAYER_MINUTES_CUTOFF = 25
-CORE_ROTATION_WINDOW = 10
-def get_core_teammate_columns(stat_columns: list[str]) -> list[str]:
-    return [
-        prefix + column
-        for prefix in (GAINED_CORE_TEAMMATE_PREFIX, LOST_CORE_TEAMMATE_PREFIX, ABSENT_CORE_TEAMMATE_PREFIX)
-        for column in stat_columns
-    ]
-def add_core_teammate_columns(
-    player_game_data: pd.DataFrame,
-    team_game_data: pd.DataFrame,
-    player_id_column: str,
-    game_id_column_player: str,
-    team_id_column_player: str,
-    minutes_played_column: str,
-    recent_minutes_column: str,
-    game_id_column_team: str,
-    team_id_column_team: str,
-    game_date_column_team: str,
-    stat_columns: list[str],
-    rotation_window: int = CORE_ROTATION_WINDOW
-    ) -> pd.DataFrame:
-    """
-    Adds, per player game, three readings of the players around them, each totalled over
-    stat_columns. Those columns should hold what a player was averaging going into the game rather
-    than what they did in it, so a total says what the team has, not what it got.
-
-    Gained and lost compare this game's roster to the previous one, and leave the player's own
-    numbers out of their own row. Absent is the shortfall against what the team normally has
-    available over its last rotation_window games, which is what carries a star's whole absence
-    rather than only the first game of it.
-
-    Args:
-        minutes_played_column decides who was core in a game that was played.
-        recent_minutes_column decides who counts as core when only a roster is known, which is what
-        a prediction has, so absent reads the same during training and during a prediction.
-
-    team_game_data supplies the order of a team's games and needs its date column in datetime form.
-    Neither frame needs to be sorted.
-    """
-
-    FOUND = "FOUND_IN_OTHER_GAME"
-
-    team_games = number_team_games(
-        team_game_data, game_id_column_team, team_id_column_team, game_date_column_team
-    ).rename(columns={game_id_column_team: game_id_column_player, team_id_column_team: team_id_column_player})
-    every_team_game = pd.MultiIndex.from_frame(team_games[[team_id_column_player, TEAM_GAME_NUMBER]])
-
-    roster_columns = [player_id_column, team_id_column_player, minutes_played_column, recent_minutes_column]
-    roster_columns += [column for column in stat_columns if column not in roster_columns]
-
-    roster = player_game_data[roster_columns].copy()
-    roster[TEAM_GAME_NUMBER] = (
-        team_games.set_index([game_id_column_player, team_id_column_player])[TEAM_GAME_NUMBER]
-        .reindex(pd.MultiIndex.from_arrays([
-            player_game_data[game_id_column_player],
-            player_game_data[team_id_column_player]
-        ]))
-        .to_numpy()
-    )
-    roster = roster.dropna(subset=[TEAM_GAME_NUMBER])
-    roster[TEAM_GAME_NUMBER] = roster[TEAM_GAME_NUMBER].astype(np.int64)
-
-    keys = [team_id_column_player, player_id_column, TEAM_GAME_NUMBER]
-    core = roster[roster[minutes_played_column] >= CORE_PLAYER_MINUTES_CUTOFF]
-    team_key = pd.MultiIndex.from_arrays([roster[team_id_column_player], roster[TEAM_GAME_NUMBER]])
-
-    def keyed_to_next_game(rows: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-        """The given rows, renumbered so they line up with the game that came after them."""
-
-        rows = rows[keys + columns].copy()
-        rows[TEAM_GAME_NUMBER] += 1
-        return rows
-
-    def missing_from(rows: pd.DataFrame, other_game: pd.DataFrame) -> pd.DataFrame:
-        found = other_game[keys].assign(**{FOUND: True})
-        merged = rows.merge(found, on=keys, how='left')
-        return merged[merged[FOUND].isna()]
-
-    def totals_per_game(rows: pd.DataFrame) -> pd.DataFrame:
-        return rows.groupby(by=[team_id_column_player, TEAM_GAME_NUMBER], sort=False)[stat_columns].sum()
-
-    gained = missing_from(core[keys + stat_columns], keyed_to_next_game(roster, []))
-    lost = missing_from(keyed_to_next_game(core, stat_columns), roster)
-
-    own_gained = gained.set_index(keys)[stat_columns].reindex(pd.MultiIndex.from_frame(roster[keys])).fillna(0)
-
-    # Every team game in order, so a team's rolling level below reads consecutive games even when a
-    # game had nobody the roster counts as core.
-    present = totals_per_game(roster[roster[recent_minutes_column] >= CORE_PLAYER_MINUTES_CUTOFF])
-    present = present.reindex(every_team_game).fillna(0.0).sort_index()
-    usual = (
-        present.groupby(level=team_id_column_player, sort=False).shift(1)
-        .groupby(level=team_id_column_player, sort=False)
-        .rolling(rotation_window, min_periods=1)
-        .mean()
-        .reset_index(level=0, drop=True)
-    )
-    absent = (usual - present).clip(lower=0)
-
-    # Cast a reading at a time rather than the three together, so the widest thing held here is one
-    # of them rather than all of them twice over.
-    def totalled(rows: pd.DataFrame) -> np.ndarray:
-        return totals_per_game(rows).reindex(team_key).fillna(0).to_numpy(dtype=BUILT_COLUMN_TYPE)
-
-    columns = pd.DataFrame(
-        np.hstack([
-            totalled(gained) - own_gained.to_numpy(dtype=BUILT_COLUMN_TYPE),
-            totalled(lost),
-            absent.reindex(team_key).fillna(0).to_numpy(dtype=BUILT_COLUMN_TYPE)
-        ]),
-        index=roster.index,
-        columns=get_core_teammate_columns(stat_columns)
-    )
-
-    return pd.concat([player_game_data, columns.reindex(player_game_data.index, fill_value=0.0)], axis=1)
 
 NBA_EXPERIENCE_DURING_GAME = 'NBA_EXPERIENCE_DURING_GAME'
 def add_years_NBA_experience_during_game_column(

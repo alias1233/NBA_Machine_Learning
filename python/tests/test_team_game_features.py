@@ -22,18 +22,22 @@ import pandas as pd
 import pytest
 
 from nba_ml import season
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.feature_engineering import (
     game_columns,
     placeholders,
+    roster_columns,
     schedule_columns,
     season_columns,
     team_columns,
-    team_game_rows
+    team_game_rows,
+    team_rosters
 )
 from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey, build_split_samples
 from nba_ml.feature_engineering.team_game_rows import TargetValue
 from nba_ml.models.game_stats import features as game_stat_features
+from nba_ml.models.team_stats import features as team_stat_features
+from nba_ml.stores import player_games as player_game_store
 from nba_ml.stores import team_games as team_game_store
 
 import fake_data
@@ -50,10 +54,22 @@ BUILD_COLUMNS = {
 EVERYTHING_TRAINS = EvaluationSplit(start_date=datetime(2030, 1, 1))
 """A split whose evaluation period starts after the made up league ends, so every game trains."""
 
+def roster_totals(games=fake_data.SEASON_GAMES, player_rows: pd.DataFrame | None = None):
+    """Who each team had available in the given games. See feature_engineering/team_rosters.py."""
+
+    return team_rosters.totals_of(
+        fake_data.player_game_frame(games) if player_rows is None else player_rows,
+        fake_data.team_game_frame(games)
+    )
+
+TOTALS = roster_totals()
+
 def built_rows(games=fake_data.SEASON_GAMES) -> pd.DataFrame:
     """Every engineered row of the given games, indexed by team and game so a test can name one."""
 
-    rows = team_game_rows.build_rows(FEATURES, fake_data.team_game_frame(games))
+    rows = team_game_rows.build_rows(
+        FEATURES, fake_data.team_game_frame(games), roster_totals(games)
+    )
 
     return rows.set_index([team_game_rows.TEAM_ID, team_game_rows.GAME_ID])
 
@@ -189,7 +205,7 @@ def test_the_season_a_column_of_dates_falls_in_matches_the_season_one_date_falls
 
 # WHAT A MODEL IS HANDED: #
 def test_a_history_holds_one_team_in_the_order_its_games_were_played():
-    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame(), TOTALS)
 
     assert set(histories) == {team.id for team in fake_data.TEAMS}
 
@@ -217,13 +233,15 @@ def test_a_team_statistic_is_one_sample_per_side_and_a_game_statistic_one_per_ga
     games = fake_data.team_game_frame()
 
     _, (per_side, _, _) = build_split_samples(
-        team_game_rows.build_histories(FEATURES, games),
+        team_game_rows.build_histories(FEATURES, games, TOTALS),
         EVERYTHING_TRAINS,
         team_game_rows.MINIMUM_PAST_GAMES,
         **BUILD_COLUMNS
     )
     _, (per_game, _, _) = build_split_samples(
-        team_game_rows.build_histories(FEATURES, games, sample_row_column=team_game_rows.IS_HOME_ROW),
+        team_game_rows.build_histories(
+            FEATURES, games, TOTALS, sample_row_column=team_game_rows.IS_HOME_ROW
+        ),
         EVERYTHING_TRAINS,
         team_game_rows.MINIMUM_PAST_GAMES,
         read_opponent_history=True,
@@ -253,7 +271,7 @@ def test_a_blank_left_in_a_column_stops_training_and_names_the_column():
     knows which column did it.
     """
 
-    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame(), TOTALS)
     blank_column = FEATURES.sequence_columns.index(game_columns.POINTS)
 
     for history in histories.values():
@@ -270,7 +288,7 @@ def test_a_blank_left_in_a_column_stops_training_and_names_the_column():
 def test_a_training_era_removes_older_games_from_sequences_and_scaling():
     start = datetime(2024, 10, 30)
     evaluation_starts = datetime(2024, 11, 3)
-    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame(), TOTALS)
 
     sequences, (training, _, _) = build_split_samples(
         histories,
@@ -301,7 +319,7 @@ def test_validation_and_test_span_the_same_days_and_share_no_game():
 
     evaluation_starts = datetime(2024, 10, 25)
     histories = team_game_rows.build_histories(
-        FEATURES, fake_data.team_game_frame(), sample_row_column=team_game_rows.IS_HOME_ROW
+        FEATURES, fake_data.team_game_frame(), TOTALS, sample_row_column=team_game_rows.IS_HOME_ROW
     )
 
     _, (training, validation, test) = build_split_samples(
@@ -328,7 +346,7 @@ def test_validation_and_test_span_the_same_days_and_share_no_game():
 def test_the_two_evaluation_splits_hold_the_games_of_different_subjects():
     """A team is only ever in one of the two, where a family splits on the subject."""
 
-    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame(), TOTALS)
 
     _, (_, validation, test) = build_split_samples(
         histories,
@@ -340,7 +358,7 @@ def test_the_two_evaluation_splits_hold_the_games_of_different_subjects():
     assert not set(validation.sequence_indices.flatten()) & set(test.sequence_indices.flatten())
 
 def test_the_validation_fraction_decides_which_way_a_whole_split_leans():
-    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame())
+    histories = team_game_rows.build_histories(FEATURES, fake_data.team_game_frame(), TOTALS)
     evaluation_starts = datetime(2024, 10, 25)
 
     def sizes(validation_fraction: float) -> tuple[int, int]:
@@ -365,14 +383,60 @@ def test_a_validation_fraction_outside_a_share_is_refused():
     with pytest.raises(ValueError, match="validation fraction"):
         EvaluationSplit(start_date=datetime(2024, 10, 25), validation_fraction=1.5)
 
+# WHO WAS AVAILABLE: #
+def _roster_column(prefix: str) -> str:
+    """One reading of the minutes a team's core players were averaging."""
+
+    return prefix + team_rosters.PAST_MEAN_PREFIX + fake_data.player_games.MINUTES_PLAYED.category_name
+
+def test_a_row_totals_what_the_core_players_a_team_is_missing_were_averaging():
+    """
+    What the roster columns are for. A box score says what a team did and nothing about who was on
+    the floor to do it, so a side missing its best player would read as the side that played last
+    week. Both rows of a game carry it, so each side also knows who the other is missing.
+    """
+
+    team_id = 1
+    played = fake_data.games_of(team_id)
+    star = fake_data.player_id(team_id, 0)
+    last_game = played[-1]
+
+    player_rows = fake_data.player_game_frame()
+    sat_out = (
+        (player_rows[fake_data.player_games.PLAYER_ID.category_name] == star)
+        & (player_rows[fake_data.player_games.GAME_ID.category_name] == last_game.id)
+    )
+    rows = team_game_rows.build_rows(
+        FEATURES,
+        fake_data.team_game_frame(),
+        roster_totals(player_rows=player_rows[~sat_out])
+    ).set_index([team_game_rows.TEAM_ID, team_game_rows.GAME_ID])
+
+    lost = _roster_column(roster_columns.LOST_CORE_TEAMMATE_PREFIX)
+    absent = _roster_column(roster_columns.ABSENT_CORE_TEAMMATE_PREFIX)
+
+    # Everyone plays thirty minutes in this league, so that is what the team is short of.
+    assert row_of(rows, team_id, last_game)[lost] == pytest.approx(30)
+    assert row_of(rows, team_id, last_game)[absent] > 0
+
+    # Nobody had missed a game before that one.
+    assert row_of(rows, team_id, played[-2])[lost] == 0
+    assert row_of(rows, team_id, played[-2])[absent] == 0
+
+    # The side it is playing reads the same shortfall off its own row.
+    opponent_id = fake_data.opponent_in(last_game, team_id)
+
+    assert row_of(rows, opponent_id, last_game)[team_columns.OPPONENT_PREFIX + lost] == pytest.approx(30)
+
 # THE GAME BEING PREDICTED: #
 def test_a_prediction_reads_the_home_team_first_and_only_the_games_before_the_one_asked_about():
     team_game_store.store(fake_data.team_game_frame())
+    player_game_store.store(fake_data.player_game_frame())
 
     features = game_stat_features.build_feature_set(TargetValue.POINT_DIFFERENTIAL)
     target = Game(fake_data.NEXT_GAME_DATE, home_team_id=1, away_team_id=2)
 
-    sequences, sample = game_stat_features.get_inference_data(features, target)
+    sequences, sample = game_stat_features.get_inference_data(features, target, {})
 
     assert len(sequences.sequences) == 2
     assert list(sample.sequence_end_indices[0]) == [len(fake_data.games_of(1)), len(fake_data.games_of(2))]
@@ -395,7 +459,7 @@ def test_the_placeholder_row_of_a_game_not_yet_played_is_built_from_the_games_be
         ignore_index=True
     )
 
-    histories = team_game_rows.build_histories(FEATURES, with_placeholder)
+    histories = team_game_rows.build_histories(FEATURES, with_placeholder, TOTALS)
     found = team_game_rows.find_target_game(histories, 1, target)
 
     assert found is not None
@@ -410,6 +474,80 @@ def test_the_placeholder_row_of_a_game_not_yet_played_is_built_from_the_games_be
 
     assert history.static_values[index][column] == pytest.approx(np.mean(scored))
 
+def test_naming_a_side_without_a_core_player_changes_the_predicted_game_and_nothing_behind_it():
+    """
+    A game statistic is read off the home team's row, and both teams decide it, so a request has to
+    be able to say either side is missing somebody. The games already played are what they were.
+    """
+
+    team_game_store.store(fake_data.team_game_frame())
+    player_game_store.store(fake_data.player_game_frame())
+
+    features = game_stat_features.build_feature_set(TargetValue.POINT_DIFFERENTIAL)
+    target = Game(fake_data.NEXT_GAME_DATE, home_team_id=1, away_team_id=2)
+    away_star = fake_data.player_id(2, 0)
+
+    everyone_sequences, everyone = game_stat_features.get_inference_data(features, target, {})
+    without_sequences, without = game_stat_features.get_inference_data(
+        features, target, {2: RosterScenario.of(without=[away_star])}
+    )
+
+    for side in range(len(everyone_sequences.sequences)):
+        np.testing.assert_array_equal(
+            without_sequences.sequences[side],
+            everyone_sequences.sequences[side]
+        )
+
+    assert not np.array_equal(without.static_inputs, everyone.static_inputs)
+
+def test_a_team_statistic_reads_the_roster_of_both_sides():
+    """
+    A team's row carries what the side it faces has available, so naming either team's absence has
+    to move the answer. Only reading the named team's would leave a defence missing its best player
+    reading as a defence at full strength.
+    """
+
+    team_game_store.store(fake_data.team_game_frame())
+    player_game_store.store(fake_data.player_game_frame())
+
+    features = team_stat_features.build_feature_set(TargetValue.TEAM_POINTS)
+    target = Game(fake_data.NEXT_GAME_DATE, home_team_id=1, away_team_id=2)
+    named, facing = 1, 2
+
+    _, everyone = team_stat_features.get_inference_data(features, named, target, {})
+
+    for team_id in (named, facing):
+        _, without = team_stat_features.get_inference_data(
+            features,
+            named,
+            target,
+            {team_id: RosterScenario.of(without=[fake_data.player_id(team_id, 0)])}
+        )
+
+        assert not np.array_equal(without.static_inputs, everyone.static_inputs)
+
+def test_naming_a_player_as_joining_moves_the_predicted_game_too():
+    """
+    The other half of the control. Somebody expected back is read as a core player in a game nobody
+    has played yet, so a team gains what they were averaging rather than being read as it was.
+    """
+
+    team_game_store.store(fake_data.team_game_frame())
+    player_game_store.store(fake_data.player_game_frame())
+
+    features = game_stat_features.build_feature_set(TargetValue.POINT_DIFFERENTIAL)
+    target = Game(fake_data.NEXT_GAME_DATE, home_team_id=1, away_team_id=2)
+
+    # A player of a team that is not in this game, which is who a signing looks like to the build.
+    joining = fake_data.player_id(3, 0)
+
+    _, everyone = game_stat_features.get_inference_data(features, target, {})
+    _, joined = game_stat_features.get_inference_data(
+        features, target, {1: RosterScenario.of(returning=[joining])}
+    )
+
+    assert not np.array_equal(joined.static_inputs, everyone.static_inputs)
+
 def test_a_team_with_nothing_behind_the_predicted_game_cannot_be_answered_for():
     """One past game is the floor, because the sequence a model reads cannot be empty."""
 
@@ -420,6 +558,8 @@ def test_a_team_with_nothing_behind_the_predicted_game_cannot_be_answered_for():
         ignore_index=True
     )
 
-    histories = team_game_rows.build_histories(FEATURES, with_placeholder)
+    histories = team_game_rows.build_histories(
+        FEATURES, with_placeholder, roster_totals([first_game])
+    )
 
     assert team_game_rows.find_target_game(histories, 1, target) is None

@@ -12,7 +12,7 @@ from datetime import date
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.models.outputs import DISCRIMINATOR, ModelOutput
 from nba_ml.season import SeasonType
 from nba_ml.stores import teams
@@ -39,6 +39,39 @@ class PredictionResponse(BaseModel):
 
     past_games: int
     """How many earlier games the answer was built from, so a caller can say it rests on very little."""
+
+class ScenarioRequest(BaseModel):
+    """
+    Which core players take the floor for one team, where that differs from its last game.
+
+    Nothing collected says who will play, so a team plays whoever played its last game unless a
+    request says otherwise. Both lists are stored player ids.
+    """
+
+    without: list[int] = Field(default_factory=list)
+    returning: list[int] = Field(default_factory=list)
+
+    def to_scenario(self) -> RosterScenario:
+        return RosterScenario.of(self.without, self.returning)
+
+class GameRostersRequest(BaseModel):
+    """
+    The roster change each side of a game is making, named by which side it is.
+
+    Both sides are read by every model built on team game rows, because one row carries what the team
+    it faces has available as well as its own.
+    """
+
+    home: ScenarioRequest = Field(default_factory=ScenarioRequest)
+    away: ScenarioRequest = Field(default_factory=ScenarioRequest)
+
+    def to_scenarios(self, game: Game) -> dict[int, RosterScenario]:
+        """The same change keyed by team id, which is how a build asks for it."""
+
+        return {
+            game.home_team_id: self.home.to_scenario(),
+            game.away_team_id: self.away.to_scenario()
+        }
 
 class GameRequest(BaseModel):
     date: date

@@ -8,7 +8,14 @@
 
 	The figures are not on the page. Opening a row is what asks for that one model's, so a reader who
 	opens none costs the service nothing, and what has been fetched is kept for the rest of the visit
-	rather than asked for again.
+	rather than asked for again. The row itself says it is reading while they are on their way, and
+	the panel opens on the figures rather than ahead of them.
+
+	Every figure is read against the baseline beside it, and the panel says which of the two won it: a
+	drawn check against the better of the pair, in the same green a chart reads an over in, and the word
+	in the row's own heading for anybody who cannot see the mark. Which direction counts as better is
+	the model's own to say, because on some of these figures a smaller number is the good one. A measure
+	the baseline could not be scored on has no winner, and neither does a tie.
 -->
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
@@ -34,22 +41,32 @@
 	 * because only one of them is worth trying again.
 	 */
 	const scores = new SvelteMap<string, ModelEvaluation | null | 'unreachable'>();
+	/** The model whose figures are on their way, which is the one row saying it is being read. */
 	let loading = $state<string | null>(null);
 
 	const measured = $derived(opened ? (scores.get(opened.name) ?? null) : null);
 	const unreachable = $derived(measured === 'unreachable');
 	const scored = $derived(measured === 'unreachable' ? null : measured);
-	const fetching = $derived(opened !== null && loading === opened.name);
 
 	// The dialog is only in the page while a model is open, so mounting it is what opening means.
 	$effect(() => {
 		if (dialog && !dialog.open) dialog.showModal();
 	});
 
+	/**
+	 * Reads what a model measured, and opens on it once it is there.
+	 *
+	 * The figures are what the panel is for, so it waits for them rather than opening on a line
+	 * saying it is working and then growing under the reader. The row that was pressed says it is
+	 * reading instead, which is where the reader is looking.
+	 */
 	async function open(model: FamilyAboutModel) {
-		opened = model;
+		if (scores.has(model.name)) {
+			opened = model;
+			return;
+		}
 
-		if (scores.has(model.name)) return;
+		if (loading === model.name) return;
 
 		loading = model.name;
 
@@ -57,7 +74,12 @@
 		const response = await fetch(`/api/evaluations?${query}`).catch(() => null);
 
 		scores.set(model.name, response?.ok ? await response.json() : 'unreachable');
+
+		// A row pressed while this one was on its way owns the panel now.
+		if (loading !== model.name) return;
+
 		loading = null;
+		opened = model;
 	}
 
 	/** A figure written the way its unit asks to be read. */
@@ -67,17 +89,48 @@
 		return value.toFixed(3);
 	}
 
+	/**
+	 * Which of the two figures on a row is the better one, or null where nothing was won.
+	 *
+	 * Compared on the figures as written rather than as held, so a pair that reads the same in the
+	 * panel is never marked as though one of them beat the other. Which direction is better comes from
+	 * the model, because a miss and a share of right answers are read opposite ways.
+	 */
+	function won(metric: Metric): 'model' | 'baseline' | null {
+		if (metric.floor === null) return null;
+
+		const mine = figure(metric.value, metric.unit);
+		const theirs = figure(metric.floor, metric.unit);
+
+		if (mine === theirs) return null;
+
+		const ahead = metric.higher_is_better
+			? metric.value > metric.floor
+			: metric.value < metric.floor;
+
+		return ahead ? 'model' : 'baseline';
+	}
+
 	const day = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString();
 </script>
 
 <ul class="index">
 	{#each models as model (model.name)}
 		<li>
-			<button type="button" class="entry" onclick={() => open(model)}>
+			<button
+				type="button"
+				class="entry"
+				aria-busy={loading === model.name || undefined}
+				onclick={() => open(model)}
+			>
 				<span class="name type-h3">{model.title}</span>
 				<span class="what small muted">{model.description}</span>
 
-				{#if !model.published}
+				<!-- While the figures are on their way the row says so, because the press has to be
+				     answered somewhere and this is where the reader is looking. -->
+				{#if loading === model.name}
+					<span class="state"><span class="tag micro">Reading…</span></span>
+				{:else if !model.published}
 					<span class="state"><span class="tag micro">Not published yet</span></span>
 				{/if}
 			</button>
@@ -86,17 +139,16 @@
 </ul>
 
 {#if opened}
-	<dialog bind:this={dialog} onclose={() => (opened = null)}>
+	<!-- Named by the model it is about, so a reader who cannot see the panel is told what opened. -->
+	<dialog bind:this={dialog} aria-labelledby="opened-model" onclose={() => (opened = null)}>
 		<header>
-			<h3>{opened.title}</h3>
+			<h3 id="opened-model">{opened.title}</h3>
 			<button type="button" class="button button--quiet" onclick={() => dialog?.close()}>
 				Close
 			</button>
 		</header>
 
-		{#if fetching}
-			<p class="small muted">Reading what this model measured…</p>
-		{:else if unreachable}
+		{#if unreachable}
 			<p class="small muted">What this model measured could not be read. Try again in a moment.</p>
 		{:else if !scored}
 			<p class="small muted">This model has not been scored yet.</p>
@@ -119,15 +171,37 @@
 				</thead>
 				<tbody>
 					{#each scored.metrics as metric (metric.key)}
+						{@const better = won(metric)}
 						<tr>
 							<th scope="row">
 								{metric.label}
+								<!-- Said in the row's own heading, so the winner is carried by words as well as by
+								     the mark beside the figure. -->
+								{#if better}
+									<span class="visually-hidden">
+										{better === 'model' ? 'The model is better here.' : 'The baseline is better here.'}
+									</span>
+								{/if}
 								<span class="small muted">{metric.description}</span>
 							</th>
-							<td>{figure(metric.value, metric.unit)}</td>
+							<td>
+								<span class="read" class:won={better === 'model'}>
+									{figure(metric.value, metric.unit)}
+									{#if better === 'model'}{@render check()}{/if}
+								</span>
+							</td>
 							<!-- Words rather than a dash, because a reader should never have to read a
 							     punctuation mark to learn that nothing was scored here. -->
-							<td>{metric.floor === null ? 'Not scored' : figure(metric.floor, metric.unit)}</td>
+							<td>
+								{#if metric.floor === null}
+									Not scored
+								{:else}
+									<span class="read" class:won={better === 'baseline'}>
+										{figure(metric.floor, metric.unit)}
+										{#if better === 'baseline'}{@render check()}{/if}
+									</span>
+								{/if}
+							</td>
 						</tr>
 					{/each}
 				</tbody>
@@ -135,6 +209,13 @@
 		{/if}
 	</dialog>
 {/if}
+
+<!-- Drawn rather than typed, in the one stroke weight every mark on this site is drawn in. -->
+{#snippet check()}
+	<svg class="check" viewBox="0 0 24 24" aria-hidden="true">
+		<path d="M4.5 13 10 18.5 19.5 6" />
+	</svg>
+{/snippet}
 
 <style>
 	/* An index, not a grid. Rows in two runs once there is room for two, which is where a family of
@@ -221,6 +302,32 @@
 		padding: var(--space-2);
 		vertical-align: top;
 		text-align: start;
+	}
+
+	/* A figure and, where it won, the mark that says so. The mark hangs off the end of the figure
+	   rather than in a column of its own, so a row stays as wide as its two numbers. */
+	.read {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		white-space: nowrap;
+	}
+
+	/* The better of the pair, marked the way the site marks an over: green, and never green alone. The
+	   figure also takes full-strength ink and the row says which side won it in words. */
+	.read.won {
+		color: var(--over);
+		font-weight: 600;
+	}
+
+	.check {
+		width: 0.9375rem;
+		height: 0.9375rem;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 
 	/* The label and the sentence saying what it means, stacked, so the row stays two columns wide. */

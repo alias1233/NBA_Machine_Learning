@@ -1,14 +1,18 @@
 <!--
-	How one model family predicts, and how well.
+	What one model family predicts, and how well.
 
 	It exists so a reader can decide whether to trust that family's numbers, and it is where every
-	figure about the family lives. Nothing here moves to /about, whatever the family is.
+	figure about the family lives.
 
-	The sections and their order are the same for every family, so they are here and a family brings
-	only its own name and its own words. They are listed down the side of the page, so a reader who
-	came for one of them can go straight to it and can see what else the page holds. The bodies are
-	placeholders. Writing them is the user's to settle, and an accuracy table waits on a trained model
-	and a held-out score.
+	The page is two sections. The first is the family's own words, which no two families share, so it
+	is a snippet the family page writes rather than copy kept here. The second is every model in the
+	family and what each one measured, which is the same shape for all of them and so is built here.
+	Anything true of every family belongs on /about instead, because a family page would otherwise
+	restate it once per family.
+
+	A family with more of its own to say passes `extra`: further whole sections, each with its own
+	anchor and heading, listed down the side with the rest. They follow the family's words and come
+	before the models, because the models are what a reader scrolls to the end for.
 -->
 <script lang="ts">
 	import ModelIndex from '$lib/components/ModelIndex.svelte';
@@ -18,8 +22,17 @@
 	import { familyPath } from '$lib/models';
 	import { pageTitle } from '$lib/site';
 
+	import type { Snippet } from 'svelte';
 	import type { ListedFamily } from '$lib/models';
 	import type { FamilyAboutModel } from '$lib/types';
+
+	/** A section a family adds to the two every family has. */
+	type ExtraSection = {
+		/** Its place on the page, which is what the index and any link to it use. */
+		anchor: string;
+		heading: string;
+		body: Snippet;
+	};
 
 	type Props = {
 		/** Every family the service names, which is what says whether this one can be predicted with. */
@@ -33,9 +46,22 @@
 		/** The document title, which names the family rather than repeating the page heading. */
 		title: string;
 		description: string;
+		/** This family's own account of itself, written by the family's page. */
+		overview: Snippet;
+		/** Whole sections this family alone holds, between its overview and its models. */
+		extra?: ExtraSection[];
 	};
 
-	let { families, answering, models, family, title, description }: Props = $props();
+	let {
+		families,
+		answering,
+		models,
+		family,
+		title,
+		description,
+		overview,
+		extra = []
+	}: Props = $props();
 
 	const listed = $derived(families.find(({ name }) => name === family) ?? null);
 
@@ -44,14 +70,13 @@
 	//
 	// Plural throughout, because a family page covers every model in the family and lists all of
 	// them under Models in this family.
-	const SECTIONS = [
-		['how', 'How a prediction is made'],
-		['which-games', 'Which games can be predicted'],
-		['models', 'Models in this family'],
-		['inputs', 'What the models read'],
-		['accuracy', 'How accurate they are'],
-		['limits', 'What they do not do']
-	];
+	const sections = $derived([
+		{ anchor: 'overview', heading: 'What these models predict', body: overview },
+		...extra,
+		{ anchor: 'models', heading: 'Models in this family', body: undefined }
+	]);
+
+	const index = $derived(sections.map(({ anchor, heading }) => [anchor, heading]));
 </script>
 
 <svelte:head>
@@ -82,23 +107,19 @@
 			</Notice>
 		{/if}
 	{:else}
-		<SectionIndex sections={SECTIONS} label="Sections of this page" />
+		<SectionIndex sections={index} label="Sections of this page" />
 
 		<div class="sections">
-			{#each SECTIONS as [anchor, heading] (anchor)}
+			{#each sections as { anchor, heading, body } (anchor)}
 				<section id={anchor}>
 					<h2 class="section-rule">{heading}</h2>
 
-					{#if anchor === 'models'}
-						{#if models.length === 0}
-							<Notice>Model details could not be read right now. Try again in a few minutes.</Notice>
-						{:else}
-							<ModelIndex {models} {family} />
-						{/if}
-					{:else if anchor === 'accuracy'}
-						<Notice>Accuracy is not published yet. The models are still being trained.</Notice>
+					{#if body}
+						{@render body()}
+					{:else if models.length === 0}
+						<Notice>Model details could not be read right now. Try again in a few minutes.</Notice>
 					{:else}
-						<Notice>This section is not written yet.</Notice>
+						<ModelIndex {models} {family} />
 					{/if}
 				</section>
 			{/each}
@@ -120,5 +141,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
+	}
+
+	/* A 76rem page would set a line nobody can track back, so running text is capped by measure. */
+	section :global(p),
+	section :global(h3) {
+		max-width: var(--measure);
 	}
 </style>

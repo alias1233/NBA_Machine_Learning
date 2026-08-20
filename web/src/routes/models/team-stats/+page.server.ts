@@ -8,6 +8,9 @@
  * to that side and would be a different number for the other one. The game is named by its id alone,
  * because the schedule is the only source of a game.
  *
+ * Both sides' rosters are read as well. A team's row carries what the side it faces has available,
+ * so who is missing from either team changes the answer.
+ *
  * A model is offered only if it has a trained file and answers in a shape this page has a reading
  * for. A reader is never shown a stat that cannot answer.
  */
@@ -16,7 +19,13 @@ import { isHttpError } from '@sveltejs/kit';
 
 import { DRAWN_KINDS } from '$lib/odds';
 import { gameRequest, readGameId, readLine, reasonFor } from '$lib/predictions';
-import { getModels, getUpcomingGames, predictTeamStat } from '$lib/server/api';
+import { getModels, getRosters, getUpcomingGames, predictTeamStat } from '$lib/server/api';
+import {
+	expectedScenarios,
+	isGameChanged,
+	readGameScenarios,
+	scenarioRequest
+} from '$lib/server/rosters';
 
 import type { Model, Prediction, ScheduledGame } from '$lib/types';
 import type { PageServerLoad } from './$types';
@@ -56,6 +65,12 @@ export const load: PageServerLoad = async ({ url }) => {
 		: [];
 	const team = sides.includes(named) ? named : '';
 
+	// The rosters are read first because they carry the lineup each side is expected to field, which
+	// is what the page opens on where the reader has not named one of their own.
+	const rosters = selectedGame === null ? [] : await getRosters(selectedGame.id).catch(() => []);
+	const expected = expectedScenarios(rosters, selectedGame);
+	const scenarios = await readGameScenarios(parameters, expected);
+
 	let prediction: Prediction | null = null;
 	let error: string | null = null;
 
@@ -63,7 +78,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		try {
 			prediction = await predictTeamStat(model.name, {
 				team,
-				game: gameRequest(selectedGame)
+				game: gameRequest(selectedGame),
+				rosters: {
+					home: scenarioRequest(scenarios.home),
+					away: scenarioRequest(scenarios.away)
+				}
 			});
 		} catch (thrown) {
 			if (!isHttpError(thrown)) throw thrown;
@@ -78,6 +97,9 @@ export const load: PageServerLoad = async ({ url }) => {
 		games,
 		selectedGame,
 		team,
+		rosters,
+		scenarios,
+		customRoster: isGameChanged(scenarios, expected),
 		prediction,
 		line: readLine(parameters),
 		error

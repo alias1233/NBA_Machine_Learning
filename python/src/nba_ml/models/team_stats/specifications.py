@@ -106,7 +106,51 @@ TEAM_POINTS_MODEL = TeamStatModelSpecification(
     )
 """How many points one team scores."""
 
+# Every range below is picked the way team points was: each end class folds in about 1% of the games
+# played since 2015, and the bucket width is chosen so a class in the middle carries about as much
+# data as one of that model's does. That figure is what bucket_width exists to control, and buckets
+# of three were measured better than a class per whole number here on 2026-08-11 for exactly that
+# reason. Rebounds are narrow enough to want twos, and assists and three-pointers narrower still, so
+# a class per whole number already leaves each one as much data as a team points class has.
+TEAM_REBOUNDS_MODEL = TeamStatModelSpecification(
+    name="team_rebounds",
+    title="Team rebounds",
+    description="How many rebounds one team takes in a game.",
+    # 30 to 61, in twos. Folds 1.0% below and 0.7% above, against 12.0% in the middle class.
+    output=IntegerDistribution(minimum_value=30, outcomes=16, bucket_width=2),
+    target=TargetValue.TEAM_REBOUNDS,
+    predicted="team rebounds"
+    )
+"""How many rebounds one team takes, offensive and defensive together."""
+
+TEAM_ASSISTS_MODEL = TeamStatModelSpecification(
+    name="team_assists",
+    title="Team assists",
+    description="How many assists one team records in a game.",
+    # 13 to 37, one class per assist. Folds 0.8% below and 1.1% above, against 7.9% in the middle.
+    output=IntegerDistribution(minimum_value=13, outcomes=25),
+    target=TargetValue.TEAM_ASSISTS,
+    predicted="team assists"
+    )
+"""How many assists one team records."""
+
+TEAM_THREE_POINTERS_MODEL = TeamStatModelSpecification(
+    name="team_three_pointers",
+    title="Team three-pointers",
+    description="How many three-pointers one team makes in a game.",
+    # 4 to 22, one class per make. Folds 1.0% below and 0.8% above, against 9.7% in the middle.
+    output=IntegerDistribution(minimum_value=4, outcomes=19),
+    target=TargetValue.TEAM_THREE_POINTERS,
+    predicted="team three-pointers"
+    )
+"""How many three-pointers one team makes."""
+
 ALL_MODEL_SPECIFICATIONS = {
     specification.name: specification
-    for specification in (TEAM_POINTS_MODEL,)
+    for specification in (
+        TEAM_POINTS_MODEL,
+        TEAM_REBOUNDS_MODEL,
+        TEAM_ASSISTS_MODEL,
+        TEAM_THREE_POINTERS_MODEL
+    )
 }

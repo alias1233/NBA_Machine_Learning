@@ -18,7 +18,7 @@ from nba_api.stats.library.parameters import PlayerOrTeamAbbreviation, SeasonTyp
 from nba_api.stats.static import players as static_players, teams as static_teams
 
 from nba_ml import season
-from nba_ml.entities import Game, GameStatus, Player, ScheduledGame, Team
+from nba_ml.entities import Game, GameStatus, Player, RosterEntry, ScheduledGame, Team
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
 
@@ -114,6 +114,16 @@ class NBAApiSource(DataSource):
             date_to,
             PlayerOrTeamAbbreviation.player
         )
+
+    def rosters(self) -> list[RosterEntry] | None:
+        """
+        None, because nba.com publishes no roster or injury feed this project can read.
+
+        An archive collected through this source therefore goes on assuming a team plays whoever
+        played its last game, and the site's roster controls open empty. See nba_ml/stores/rosters.py.
+        """
+
+        return None
 
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
         """

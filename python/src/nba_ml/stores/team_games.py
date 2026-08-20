@@ -70,6 +70,27 @@ def get_game_data_after_date(date_start: date) -> pd.DataFrame:
 
     return data
 
+def latest_games_before(team_id: int, day: date, limit: int) -> pd.DataFrame:
+    """
+    The team's most recent games before the given day, oldest first.
+
+    A roster reading is measured against exactly the games it was built over, so a caller asking for
+    a window of them gets those games and no others.
+    """
+
+    with DATABASE:
+        data = DATABASE.query_dataframe(
+            SQL_condition=(
+                f"{TEAM_ID.category_name} = :{TEAM_ID.category_name} "
+                f"AND {GAME_DATE.category_name} < :{GAME_DATE.category_name}"
+            ),
+            condition_params={TEAM_ID : team_id, GAME_DATE : season.to_date_string(day)},
+            limit=limit,
+            order_by=f"{GAME_DATE.category_name} DESC"
+        )
+
+    return data.iloc[::-1].reset_index(drop=True)
+
 def stored_game_ids(date_start: date | None = None) -> set[int]:
     """
     Which games have a box score held, which is what says a scheduled game has actually been

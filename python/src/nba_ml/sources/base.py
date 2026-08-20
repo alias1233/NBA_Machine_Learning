@@ -17,7 +17,7 @@ from typing import Callable, Iterable, TypeVar
 import pandas as pd
 
 from nba_ml import season
-from nba_ml.entities import Player, ScheduledGame, Team
+from nba_ml.entities import Player, RosterEntry, ScheduledGame, Team
 from nba_ml.season import SeasonType
 
 Fetched = TypeVar("Fetched")
@@ -172,6 +172,19 @@ class DataSource(ABC):
 
         if batch_parts:
             yield pd.concat(batch_parts, ignore_index=True)
+
+    @abstractmethod
+    def rosters(self) -> list[RosterEntry] | None:
+        """
+        Who is on each team right now, and who the injury report rules out.
+
+        This is the only fetch that says who will play rather than who played. A service that
+        publishes no roster or injury feed answers None, and the pipeline goes on assuming a team
+        plays whoever played its last game. A fetch that should have worked and did not raises
+        instead, so a broken feed is never read as a league with nobody on it.
+        """
+
+        pass
 
     @abstractmethod
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:

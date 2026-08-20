@@ -9,6 +9,9 @@
  * schedule is the only source of a game and a game it does not hold is one no model can answer
  * about.
  *
+ * The player's own team's roster is read as well, and opens on the lineup the collected injury
+ * report and roster snapshot expects of it, which the reader is free to change.
+ *
  * A model is offered only if it has a trained file and answers in a shape this page has a reading
  * for. A reader is never shown a stat that cannot answer.
  */
@@ -24,24 +27,13 @@ import {
 	getUpcomingGames,
 	predictPlayerStat
 } from '$lib/server/api';
+import { expectedAround, rosterOf } from '$lib/rosters';
+import { isChanged, readScenario, scenarioRequest } from '$lib/server/rosters';
 
-import type { Model, Player, Prediction, ScheduledGame } from '$lib/types';
+import type { Model, Prediction, ScheduledGame } from '$lib/types';
 import type { PageServerLoad } from './$types';
 
 const FAMILY = 'player_stats';
-
-/** Names the players a roster parameter holds ids for, so a shared link opens with its pills. */
-async function namePlayers(ids: number[]): Promise<Player[]> {
-	const found = await Promise.all(ids.map((id) => getPlayer(id).catch(() => null)));
-
-	return found.filter((player): player is Player => player !== null);
-}
-
-const readIds = (parameters: URLSearchParams, name: string) =>
-	parameters
-		.getAll(name)
-		.map(Number)
-		.filter((id) => Number.isInteger(id) && id > 0);
 
 export const load: PageServerLoad = async ({ url }) => {
 	const parameters = url.searchParams;
@@ -82,7 +74,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	// team has no game on it yet and so appears on neither, and predicting exactly them is one of
 	// the things this site is for.
 	const [rosters, player] = await Promise.all([
-		selectedGame === null ? [] : getRosters(selectedGame).catch(() => []),
+		selectedGame === null ? [] : getRosters(selectedGame.id).catch(() => []),
 		playerId === null ? null : getPlayer(playerId).catch(() => null)
 	]);
 
@@ -93,10 +85,12 @@ export const load: PageServerLoad = async ({ url }) => {
 		rosters.find((roster) => roster.players.some(({ id }) => id === playerId))?.team.abbreviation ??
 		namedSide;
 
-	const [out, joined] = await Promise.all([
-		namePlayers(readIds(parameters, 'out')),
-		namePlayers(readIds(parameters, 'joined'))
-	]);
+	// One team's roster, because the player's own team is the only one their model reads. The lineup
+	// its game expects is what the page opens on, less the player being asked about: a statistic is
+	// about somebody taking the floor, so a suggestion that sits them out is a question with no
+	// answer. A reader who names them out by hand is still answered as they asked.
+	const expected = expectedAround(rosterOf(rosters, playerTeam), playerId);
+	const scenario = await readScenario(parameters, expected);
 
 	let prediction: Prediction | null = null;
 	let error: string | null = null;
@@ -107,10 +101,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				player_id: player.id,
 				game: gameRequest(selectedGame),
 				player_team: playerTeam || undefined,
-				scenario: {
-					without: out.map(({ id }) => id),
-					returning: joined.map(({ id }) => id)
-				}
+				scenario: scenarioRequest(scenario)
 			});
 		} catch (thrown) {
 			if (!isHttpError(thrown)) throw thrown;
@@ -127,8 +118,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		rosters,
 		player,
 		playerTeam,
-		out,
-		joined,
+		scenario,
+		customRoster: isChanged(scenario, expected),
 		prediction,
 		line: readLine(parameters),
 		error

@@ -24,7 +24,7 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from nba_ml import paths, season, upcoming
+from nba_ml import expected_rosters, paths, season, upcoming
 from nba_ml.entities import Game, ScheduledGame
 from nba_ml.models.families import ALL_FAMILIES, ModelFamily
 from nba_ml.models.game_stats import inference as game_stat_inference
@@ -144,17 +144,28 @@ def _answer(family_name: str, specification: ModelSpecification, game: Game, sub
     Run one model, through the same inference the service runs.
 
     Nothing here is a second code path for predicting. A sample is the same answer a reader would get
-    asking for it by hand, which is the only reason it is worth showing.
+    asking for it by hand, which is the only reason it is worth showing, and it is asked with the
+    same expected lineups the site opens its roster controls on.
     """
+
+    scenarios = expected_rosters.expected_scenarios(game)
 
     if family_name == "player_stats":
         assert player_id is not None
-        return player_stat_inference.predict(specification, player_id, game, set(), set(), print_debug=False)
+        return player_stat_inference.predict(
+            specification,
+            player_id,
+            game,
+            expected_rosters.with_player_playing(scenarios[subject_team_id], player_id),
+            print_debug=False
+        )
 
     if family_name == "team_stats":
-        return team_stat_inference.predict(specification, subject_team_id, game, print_debug=False)
+        return team_stat_inference.predict(
+            specification, subject_team_id, game, scenarios, print_debug=False
+        )
 
-    return game_stat_inference.predict(specification, game, print_debug=False)
+    return game_stat_inference.predict(specification, game, scenarios, print_debug=False)
 
 def _draw(
     chooser: random.Random,

@@ -9,7 +9,7 @@ import argparse
 from datetime import date
 
 from nba_ml import season, sources
-from nba_ml.data_collection import games, players, schedule, teams
+from nba_ml.data_collection import games, players, rosters, schedule, teams
 from nba_ml.data_collection import source_identity
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
@@ -98,7 +98,7 @@ def collect_all(
     print_debug: bool = True,
     refresh_schedule: bool = True
     ) -> int:
-    """Collect the stores a serving update needs, then refresh the schedule."""
+    """Collect the stores a serving update needs, then refresh the schedule and the rosters."""
 
     # Read before anything is collected, because collecting is what stops the archive being empty.
     collect_every_player = from_start or player_games.latest_game_date() is None
@@ -118,6 +118,7 @@ def collect_all(
             )
         )
         + (schedule.collect(source, print_debug=print_debug) if refresh_schedule else 0)
+        + rosters.collect(source, print_debug)
     )
 
 def main():
@@ -149,6 +150,11 @@ def main():
     )
 
     commands.add_parser("teams", help="Collect the thirty teams and their tricodes.")
+
+    commands.add_parser(
+        "rosters",
+        help="Collect who is on each team right now and who the injury report rules out."
+    )
 
     schedule_command = commands.add_parser("schedule", help="Collect the games of a season, played or not.")
     schedule_command.add_argument(
@@ -200,6 +206,8 @@ def main():
     match arguments.command:
         case "teams":
             rows_written = teams.collect(source, print_debug)
+        case "rosters":
+            rows_written = rosters.collect(source, print_debug)
         case "schedule":
             rows_written = schedule.collect(source, arguments.seasons, print_debug)
         case "players":

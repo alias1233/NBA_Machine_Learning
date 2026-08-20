@@ -14,6 +14,11 @@
 	The list opens the moment it is asked for, whether or not it has anybody to show yet. While a
 	roster or a search is on its way it holds pulsing rows of the size the names will take.
 
+	A finger works the list the way it works the page. Putting one down outside the list starts a
+	scroll as often as it dismisses it, so the list is only put away where a finger is lifted about
+	where it landed, and an entry is taken on that lift rather than on the click the browser makes of
+	it afterwards.
+
 	A box holding words carries a Clear control at its right edge, so changing who is predicted is one
 	press rather than a held backspace. It takes the words and nothing else, because the picker was
 	answered by an entry and that answer stands until another entry replaces it.
@@ -55,6 +60,9 @@
 
 	/** How many names the list stands in for while it waits for them. */
 	const RESERVED_ROWS = 5;
+
+	/** How far a finger can travel, in pixels, and still be a press rather than a scroll. */
+	const TAP_TRAVEL = 10;
 
 	/** What the list calls a search, which is the whole league rather than the game's own teams. */
 	const LEAGUE = 'Across the league';
@@ -168,6 +176,10 @@
 	}
 
 	function choose(player: Player) {
+		// A press landing after the list has closed is the tail of one already taken. A touch takes an
+		// entry the moment it is lifted, and the click the browser makes of it arrives afterwards.
+		if (!open) return;
+
 		text = clearOnChoose ? '' : player.name;
 		open = false;
 		active = -1;
@@ -218,16 +230,50 @@
 		if (next instanceof Node && !field?.contains(next)) open = false;
 	}
 
+	/**
+	 * A press outside the field closes the list, and a scroll is not one.
+	 *
+	 * A mouse press is a press the moment it goes down. A finger is not: putting one on the page is
+	 * as often the start of a scroll as it is a dismissal, and closing on that alone took the list
+	 * away from every reader who tried to scroll it into view. So a touch closes the list only where
+	 * it is lifted roughly where it landed. A scroll is cancelled rather than lifted, and one that
+	 * travels is a drag rather than a press either way.
+	 */
 	$effect(() => {
 		if (!open) return;
 
-		const closeOutside = (event: PointerEvent) => {
-			if (!field?.contains(event.target as Node)) open = false;
+		/** Where a finger went down outside the field, until it becomes a press or a scroll. */
+		let from: { x: number; y: number } | null = null;
+
+		const outside = (event: PointerEvent) => !field?.contains(event.target as Node);
+
+		const onDown = (event: PointerEvent) => {
+			if (!outside(event)) return;
+
+			if (event.pointerType === 'mouse') open = false;
+			else from = { x: event.clientX, y: event.clientY };
 		};
 
-		document.addEventListener('pointerdown', closeOutside);
+		const onUp = (event: PointerEvent) => {
+			if (from === null) return;
 
-		return () => document.removeEventListener('pointerdown', closeOutside);
+			const travelled = Math.hypot(event.clientX - from.x, event.clientY - from.y);
+			from = null;
+
+			if (travelled <= TAP_TRAVEL && outside(event)) open = false;
+		};
+
+		const onCancel = () => (from = null);
+
+		document.addEventListener('pointerdown', onDown);
+		document.addEventListener('pointerup', onUp);
+		document.addEventListener('pointercancel', onCancel);
+
+		return () => {
+			document.removeEventListener('pointerdown', onDown);
+			document.removeEventListener('pointerup', onUp);
+			document.removeEventListener('pointercancel', onCancel);
+		};
 	});
 
 	onDestroy(() => {
@@ -290,9 +336,20 @@
 						{/if}
 
 						{#each group.entries as entry (entry.player.id)}
-							<!-- The input keeps focus and owns the keyboard, so the option only handles pointers.
-							     A mouse press is refused so the box keeps focus, and a touch press is not,
-							     because a prevented one never becomes a tap. -->
+							<!--
+								The input keeps focus and owns the keyboard, so the option only handles pointers.
+								A mouse press is refused so the box keeps focus, and a touch press is not,
+								because a prevented one never becomes a tap.
+
+								A finger takes the entry the moment it is lifted off it. The click a browser
+								makes of a tap is dispatched after the box has given up focus, which on a phone
+								hides the keyboard and moves the page out from under the finger, so by then the
+								click can land on anything or on nothing. Lifting is unambiguous: a swipe that
+								scrolls the list is cancelled rather than lifted, so it takes nobody.
+
+								The click is still handled, because that is what assistive technology and a
+								mouse send. Whichever of the two arrives second finds the list closed.
+							-->
 							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<li
 								id="{id}-option-{entry.position}"
@@ -300,6 +357,7 @@
 								aria-selected={entry.position === active}
 								class:active={entry.position === active}
 								onpointerdown={(event) => event.pointerType === 'mouse' && event.preventDefault()}
+								onpointerup={(event) => event.pointerType !== 'mouse' && choose(entry.player)}
 								onclick={() => choose(entry.player)}
 							>
 								{entry.player.name}

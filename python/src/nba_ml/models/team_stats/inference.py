@@ -7,9 +7,12 @@ read off its row. It would be a different number for the other one.
 This is the half that deploys. It never imports the trainer or the evaluation graphs.
 """
 
+from types import MappingProxyType
+from typing import Mapping
+
 import torch
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.machine_learning import datasets, trainer
 from nba_ml.models import loading, requests
 from nba_ml.models.outputs import Prediction
@@ -20,6 +23,7 @@ def predict(
     model_specs: TeamStatModelSpecification,
     target_team_id: int,
     target_game: Game,
+    rosters: Mapping[int, RosterScenario] = MappingProxyType({}),
     print_debug: bool = True
     ) -> Prediction:
     """
@@ -28,6 +32,9 @@ def predict(
 
     Args:
         target_team_id is the side of the game the answer belongs to.
+        rosters is who each side is playing without or with, keyed by team id. Both sides count: the
+        named team's row carries what the team it faces has available, so a defence missing its best
+        player changes what the named team is expected to do.
 
     Raises:
         ValueError if the team is not playing in the given game.
@@ -42,6 +49,7 @@ def predict(
         model_specs.get_feature_set(),
         target_team_id,
         target_game,
+        rosters,
         print_debug=print_debug
     )
 

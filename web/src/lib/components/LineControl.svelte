@@ -90,10 +90,36 @@
 			Math.min(Math.max(Math.round(axis / STEP) * STEP, outermost.first), outermost.last)
 		);
 
+	let field = $state<HTMLInputElement>();
+
+	/** True while the box holds words the reader is still typing, which the line must not write over. */
+	let typing = $state(false);
+
 	/** Moves the line along the axis, which is the only run either control travels. */
 	function move(steps: number) {
+		// A step is the line moving rather than the reader typing, so the box takes the new one.
+		typing = false;
 		line = nearest(axisAt(distribution, line) + steps * STEP);
 	}
+
+	// What the box opens holding. Written once, for the server's markup and the first paint, and the
+	// effect below owns it from then on.
+	// svelte-ignore state_referenced_locally
+	const opening = String(line);
+
+	/**
+	 * The box follows the line, except while the reader is typing in it.
+	 *
+	 * Writing into a field under a caret puts the caret back to the front of it. A number typed a
+	 * digit at a time settles the line at every keystroke, so a box following it would be rewritten
+	 * under the reader and the next digit would land at the wrong end. Leaving the box hands it back,
+	 * which is also what puts an emptied or half typed one right.
+	 */
+	$effect(() => {
+		const settled = String(line);
+
+		if (field && !typing) field.value = settled;
+	});
 
 	// How many steps a key is worth on each control. The handle moves one step on an arrow already, so
 	// it takes only the pages. The field's own arrows count in halves from its minimum, which stops on
@@ -112,17 +138,14 @@
 
 	// A part typed number reads as nothing, so it is left alone until there is something to settle.
 	function onFieldInput(event: Event & { currentTarget: HTMLInputElement }) {
+		typing = true;
+
 		const typed = event.currentTarget.valueAsNumber;
 
 		if (Number.isNaN(typed)) return;
 
 		line = nearest(axisAt(distribution, typed));
 	}
-
-	// Whatever the reader left in the box is put back to the line it stands for once they leave it,
-	// so an emptied or half typed field never stands against the handle beside it.
-	const onFieldChange = (event: Event & { currentTarget: HTMLInputElement }) =>
-		(event.currentTarget.value = String(line));
 </script>
 
 <div class="control" style="--columns: {columns}">
@@ -145,15 +168,16 @@
 		<div class="field">
 			<label class="micro" id="{id}-label" for="{id}-number">Line</label>
 			<input
+				bind:this={field}
 				id="{id}-number"
 				type="number"
 				class="numeric"
 				min={reach.lowest}
 				max={reach.highest}
 				step={STEP}
-				value={line}
+				value={opening}
 				oninput={onFieldInput}
-				onchange={onFieldChange}
+				onblur={() => (typing = false)}
 				onkeydown={stepping(FIELD_KEYS)}
 			/>
 		</div>
@@ -240,7 +264,9 @@
 		gap: var(--space-3);
 	}
 
+	/* Wide enough for the longest line any model can be asked about and no wider, so the row still
+	   holds the field and whatever sits at its far end on one line on a phone. */
 	input[type='number'] {
-		width: calc(var(--space-8) * 1.5);
+		width: calc(var(--space-8) * 1.25);
 	}
 </style>

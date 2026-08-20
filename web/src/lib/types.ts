@@ -20,10 +20,21 @@ export type Player = {
 	name: string;
 };
 
-/** One team and who plays for it. Both sides of a chosen game, away first. */
+/**
+ * One team and who plays for it, for one game. Both sides of a chosen game, away first.
+ *
+ * `without` and `returning` are the lineup change the collected roster and injury snapshot expects
+ * of this side, already worked out. The site opens its roster controls on them, so a reader who
+ * changes nothing is still answered for the players who will actually take the floor. Both are
+ * empty where nothing collected says who will play.
+ */
 export type Roster = {
 	team: Team;
 	players: Player[];
+	/** Who played the team's last game and is not expected to play this one. */
+	without: Player[];
+	/** Who is expected to play this one and did not play the last. */
+	returning: Player[];
 };
 
 /**
@@ -54,6 +65,10 @@ export type ModelOutput =
 
 export type Model = {
 	name: string;
+	/** What the model is called where it is listed rather than run. */
+	title: string;
+	/** One sentence saying what it answers, for a reader who has not opened the family yet. */
+	description: string;
 	/** The group of models this belongs to, which is the page it is predicted on. */
 	family: string;
 	/** What the model answers about, in the words a reader sees. */
@@ -182,6 +197,8 @@ export type Health = {
 	models: string[];
 	/** Predictions read rest off the gap to this date, so a stale database reads as a layoff. */
 	newest_stored_game: string | null;
+	/** When the roster and injury snapshot was collected, in UTC. Null while none has been. */
+	roster_snapshot: string | null;
 };
 
 /**
@@ -205,7 +222,7 @@ export type GameRequest = {
 };
 
 /**
- * Which core players are on the floor, when that differs from the team's last game.
+ * Which core players are on the floor for one team, when that differs from its last game.
  *
  * `without` is the site's Out control and `returning` is New teammates. The reader never sees
  * either service name.
@@ -213,6 +230,17 @@ export type GameRequest = {
 export type Scenario = {
 	without: number[];
 	returning: number[];
+};
+
+/**
+ * The same, for both sides of a game.
+ *
+ * A team or game model reads one row that carries what each side has available, so a request names
+ * both. A defence missing its best player changes what the team it faces is expected to score.
+ */
+export type GameRosters = {
+	home: Scenario;
+	away: Scenario;
 };
 
 export type PlayerPredictionRequest = {
@@ -228,6 +256,7 @@ export type TeamPredictionRequest = {
 	/** A tricode such as LAL, or a full team name. */
 	team: string;
 	game: GameRequest;
+	rosters?: GameRosters;
 };
 
 /**
@@ -236,4 +265,5 @@ export type TeamPredictionRequest = {
  */
 export type GamePredictionRequest = {
 	game: GameRequest;
+	rosters?: GameRosters;
 };

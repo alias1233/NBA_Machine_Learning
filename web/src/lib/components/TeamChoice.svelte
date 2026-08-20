@@ -64,7 +64,7 @@
 				     tiles are the same size and neither moves when the choice is made. -->
 				<span class="marking">
 					{#if chosen}
-						<PencilMark bleed="0" />
+						<PencilMark bleed="0px" />
 					{/if}
 				</span>
 

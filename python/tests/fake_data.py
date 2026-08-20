@@ -19,7 +19,7 @@ import pandas as pd
 
 from nba_ml import paths, season
 from nba_ml.database import Database
-from nba_ml.entities import Game, GameStatus, Player, ScheduledGame, Team
+from nba_ml.entities import Game, GameStatus, Player, RosterEntry, ScheduledGame, Team
 from nba_ml.feature_engineering import player_columns, team_columns
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
@@ -375,13 +375,15 @@ class FakeSource(DataSource):
         games: Sequence[PlayedGame] = SEASON_GAMES,
         known_players: Sequence[Player] = ALL_PLAYERS,
         schedule: Sequence[ScheduledGame] = (),
-        failing_seasons: Iterable[int] = ()
+        failing_seasons: Iterable[int] = (),
+        rosters: Sequence[RosterEntry] | None = None
         ):
         super().__init__()
 
         self.games = list(games)
         self.known_players = list(known_players)
         self.scheduled = list(schedule)
+        self.rostered = None if rosters is None else list(rosters)
         self.failing_seasons = set(failing_seasons)
         self.requests: list[str] = []
         """What was asked for, in order, so a test can check a collector asked for the right thing."""
@@ -435,7 +437,41 @@ class FakeSource(DataSource):
             f"player games of {season_year}"
         )
 
+    def rosters(self) -> list[RosterEntry] | None:
+        """None unless a test named a snapshot, which is a source with no roster feed."""
+
+        self.requests.append("rosters")
+
+        return None if self.rostered is None else list(self.rostered)
+
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
         self.requests.append(f"schedule {season_year}")
 
         return [game for game in self.scheduled if season.season_of(game.game.date) == season_year]
+
+def roster_entries(
+    hurt: Collection[int] = (),
+    moved: dict[int, int] | None = None,
+    left_out: Collection[int] = ()
+    ) -> list[RosterEntry]:
+    """
+    Every player on the team their id says they are on, as a collected snapshot holds them.
+
+    Args:
+        hurt names the players the injury report rules out.
+        moved names the players now on a different team, as player id to team id.
+        left_out names the players the snapshot says nothing about at all, which is a service that
+        simply has not listed somebody rather than a player who has been dropped.
+    """
+
+    moved = moved or {}
+
+    return [
+        RosterEntry(
+            player.id,
+            moved.get(player.id, team_of(player.id)),
+            "Out" if player.id in hurt else None
+        )
+        for player in ALL_PLAYERS
+        if player.id not in left_out
+    ]

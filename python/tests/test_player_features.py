@@ -13,7 +13,7 @@ The league these run over is four teams of three players, in tests/fake_data.py.
 import numpy as np
 import pytest
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.feature_engineering import feature_store, game_columns, player_columns
 from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.models.player_stats import features, specifications
@@ -154,8 +154,7 @@ def test_a_prediction_reads_every_game_played_before_the_one_asked_about(collect
         TARGET_PLAYER_ID,
         TARGET_TEAM_ID,
         target_game(),
-        removed_core_teammate_player_ids=[],
-        added_core_teammate_player_ids=[]
+        RosterScenario()
     )
 
     history = features.build_league_histories(features_read)[TARGET_PLAYER_ID]
@@ -180,7 +179,7 @@ def test_a_published_build_answers_a_prediction_exactly_as_building_the_league_p
     it changed no answer is taking the same prediction both ways and comparing the numbers.
     """
 
-    arguments = (features_read, TARGET_PLAYER_ID, TARGET_TEAM_ID, target_game(), [], [])
+    arguments = (features_read, TARGET_PLAYER_ID, TARGET_TEAM_ID, target_game(), RosterScenario())
 
     per_request_sequences, per_request_sample = features.get_inference_data(*arguments)
 
@@ -202,8 +201,12 @@ def test_taking_a_core_teammate_out_changes_the_predicted_game_and_nothing_behin
     teammate = fake_data.player_id(TARGET_TEAM_ID, 1)
     arguments = (features_read, TARGET_PLAYER_ID, TARGET_TEAM_ID, target_game())
 
-    with_everyone_sequences, with_everyone = features.get_inference_data(*arguments, [], [])
-    without_teammate_sequences, without_teammate = features.get_inference_data(*arguments, [teammate], [])
+    with_everyone_sequences, with_everyone = features.get_inference_data(
+        *arguments, RosterScenario()
+    )
+    without_teammate_sequences, without_teammate = features.get_inference_data(
+        *arguments, RosterScenario.of(without=[teammate])
+    )
 
     np.testing.assert_array_equal(
         without_teammate_sequences.sequences[0],
@@ -216,7 +219,9 @@ def test_a_player_nothing_is_stored_about_is_refused_rather_than_answered(collec
     unknown_player_id = 9999
 
     with pytest.raises(PredictionRefused) as refused:
-        features.get_inference_data(features_read, unknown_player_id, TARGET_TEAM_ID, target_game(), [], [])
+        features.get_inference_data(
+            features_read, unknown_player_id, TARGET_TEAM_ID, target_game(), RosterScenario()
+        )
 
     assert refused.value.reason is Refusal.MISSING_PLAYER_INFORMATION
 
@@ -235,8 +240,7 @@ def test_a_team_with_no_game_before_the_predicted_one_is_refused(features_read):
             TARGET_PLAYER_ID,
             TARGET_TEAM_ID,
             Game(first_game.day, TARGET_TEAM_ID, 2),
-            [],
-            []
+            RosterScenario()
         )
 
     assert refused.value.reason is Refusal.NO_TEAM_HISTORY

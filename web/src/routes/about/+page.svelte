@@ -15,12 +15,36 @@
 	import { pageTitle, SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
 	import { MODELS_PATH } from '$lib/models';
 
-	/** Placeholders. The wording is the user's to settle, so each one reads as unwritten. */
+	/**
+	 * Placeholders, apart from the first question. The wording is the user's to settle, so each one
+	 * reads as unwritten.
+	 *
+	 * Which games can be predicted is asked here rather than on a family page, because the answer is
+	 * the same for every family and would otherwise be restated once per family.
+	 */
 	const QUESTIONS = [
-		{ question: 'First question, not written yet', answer: 'This answer is not written yet.' },
-		{ question: 'Second question, not written yet', answer: 'This answer is not written yet.' },
-		{ question: 'Third question, not written yet', answer: 'This answer is not written yet.' },
-		{ question: 'Fourth question, not written yet', answer: 'This answer is not written yet.' }
+		{ 
+			question: `Why can't I find a scheduled game in the Upcoming Games section of a prediction page?`, 
+			answer: `To predict the statistics of a target game, the models on this site utilize box scores 
+			and other stats from the previous games as input features. To prevent predictions from
+			being made with premature and inaccurate data, the only games that are shown in the Upcoming 
+			Games section are games between teams that both do not have a sooner scheduled game. This ensures 
+			all predictions are made with accurate and updated information. Simply wait for the teams in your 
+			target game to finish playing the games that they have scheduled before your target game, and 
+			the Upcoming Games section should automatically update soon after.` 
+		},
+		{ 
+			question: '', 
+			answer: 'This answer is not written yet.' 
+		},
+		{ 
+			question: 'Third question, not written yet', 
+			answer: 'This answer is not written yet.' 
+		},
+		{ 
+			question: 'Fourth question, not written yet', 
+			answer: 'This answer is not written yet.' 
+		}
 	];
 
 	// The anchors are fixed. Every answer block on the site links to #reading, so that one in
@@ -29,8 +53,8 @@
 		['what', 'What this is'],
 		['reading', 'Reading a prediction'],
 		['how', 'How it works'],
-		['disclaimers', 'Disclaimers'],
-		['questions', 'Common questions']
+		['questions', 'Common questions'],
+		['disclaimers', 'Disclaimers']
 	];
 </script>
 
@@ -81,37 +105,54 @@
 		<section id="how">
 			<h2 class="section-rule">How it works</h2>
 
-			<h3><em>What is machine learning?</em></h3>
+			<h3><em>Model Architecture</em></h3>
 			<p>
-				...
+				The models on this site utilize a multimodal architecture consisting of a Gated Recurrent Unit
+				(GRU) and a Multi-Layer Perceptron.
 			</p>
 			<p>
-				...
+				The GRU is fed sequential game data, encoding in its hidden states a representation of
+				the modeled process. This encoded representation is then fed into the MLP, along with relevant
+				static data points, to produce the final output logits.
 			</p>
 
-			<h3><em>How are models trained?</em></h3>
+			<h3><em>Training the Models</em></h3>
 			<p>
 				Historical NBA game logs containing player and team box scores are first collected from 
 				our data provider,
 				<a href="https://www.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE</a>.
-				The raw game logs are then processed by removing redundant data points and engineering
-				new features.
+				Before training, the raw game logs are processed, removing redundant data points and 
+				engineering new features.
 			</p>
 			<p>
 				The dataset is partitioned by date into training, validation, and test splits.
 				During the learning phase, the model makes predictions on the training dataset, and 
-				its internal weights are adjusted based on the result. After the training epochs have 
-				elapsed, the weights that produced the least error when inferencing on the validation 
-				dataset are kept. Evaluation metrics are then calculated based on a final pass of the 
-				trained model on the test split.
+				its weights are adjusted based on comparing the predicted values to the actual values,
+				allowing the model to "learn". After the training epochs have elapsed, the weights that 
+				produced the least error when inferencing on the validation dataset are kept. 
 			</p>
 			<p>
 				Each model has a unique data processing step and tailored hyperparameters, each chosen 
-				to maximize the accuracy of predictions. More information detailing the engineered features 
-				and evaluation scores of a model is outlined within their category's
-				<em>About</em>
-				page.
+				to improve the accuracy of predictions.
 			</p>
+
+			<h3><em>Evaluating the Models</em></h3>
+			<p>
+				Evaluation metrics are calculated based on a final pass of the trained model on the unseen
+				test split. A simple baseline model, which naively answers with the season's usual spread 
+				of outcomes, is also evaluated on the test split as a comparison tool.
+			</p>
+			<p>
+				These evaluation scores are public, with each model's scores outlined within their category's
+				<em>About</em>
+				page. The baseline model's scores are shown too.
+			</p>
+		</section>
+
+		<section id="questions">
+			<h2 class="section-rule">Frequently Asked Questions</h2>
+
+			<Faq questions={QUESTIONS} name="about" />
 		</section>
 
 		<section id="disclaimers">
@@ -133,12 +174,6 @@
 			<p>
 				This site is not affiliated with, endorsed by, or sponsored by the National Basketball Association.
 			</p>
-		</section>
-
-		<section id="questions">
-			<h2 class="section-rule">Common questions</h2>
-
-			<Faq questions={QUESTIONS} name="about" />
 		</section>
 	</div>
 </div>

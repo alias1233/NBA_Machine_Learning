@@ -26,6 +26,8 @@ const sides: GameSides = { home: 'Toronto Raptors', away: 'Boston Celtics' };
 
 const model = (fields: Partial<Model>): Model => ({
 	name: 'test',
+	title: 'Test',
+	description: 'A model that exists only in this file.',
 	family: 'game_stats',
 	predicts: ['point differential'],
 	output: {

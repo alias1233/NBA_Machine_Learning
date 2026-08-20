@@ -4,11 +4,9 @@ Running a saved player game statistics model against an upcoming game.
 This is the half that deploys. It never imports the trainer or the evaluation graphs.
 """
 
-from typing import Collection
-
 import torch
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.machine_learning import datasets, trainer
 from nba_ml.models import loading, requests
 from nba_ml.models.errors import PredictionRefused, Refusal
@@ -52,8 +50,7 @@ def predict(
     model_specs: PlayerStatModelSpecification,
     target_player_id: int,
     target_game: Game,
-    removed_core_teammate_player_ids: Collection[int] = (),
-    added_core_teammate_player_ids: Collection[int] = (),
+    scenario: RosterScenario = RosterScenario(),
     target_player_team_id: int | None = None,
     print_debug: bool = True
     ) -> Prediction:
@@ -61,9 +58,9 @@ def predict(
     Returns a probability for every position of this model's output, in that order, and how many of
     the player's earlier games the answer was built from.
 
-    See features.build_target_game_row for what the roster arguments mean.
-
     Args:
+        scenario is the change the request made to the player's team's last lineup. See
+        features.build_target_game_row.
         target_player_team_id names the player's team outright. Leave it unset unless they have just
         moved and no game records it yet.
 
@@ -83,8 +80,7 @@ def predict(
         target_player_id,
         target_player_team_id,
         target_game,
-        removed_core_teammate_player_ids,
-        added_core_teammate_player_ids,
+        scenario,
         print_debug=print_debug
     )
 

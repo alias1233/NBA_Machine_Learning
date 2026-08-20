@@ -14,10 +14,11 @@ shared with team statistics.
 """
 
 from datetime import datetime
+from typing import Mapping
 
 import pandas as pd
 
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.feature_engineering import placeholders, season_columns, team_columns, team_game_rows
 from nba_ml.feature_engineering.samples import (
     EvaluationSplit,
@@ -81,6 +82,7 @@ def get_all_labeled_data(
     histories = team_game_rows.build_histories(
         features,
         all_team_game_data,
+        team_game_rows.stored_roster_totals(all_team_game_data),
         sample_row_column=team_game_rows.IS_HOME_ROW,
         print_debug=print_debug
     )
@@ -127,6 +129,7 @@ def _read_team(
 def get_inference_data(
     features: FeatureSet,
     target_game: Game,
+    rosters: Mapping[int, RosterScenario],
     print_debug: bool = False
     ) -> tuple[GameSequences, SequenceInputSamples]:
     """
@@ -137,12 +140,17 @@ def get_inference_data(
     Rest and break length come from the gap between the target game's date and each team's last
     recorded game. That is only their real rest while the database is current, so collect before
     predicting.
+
+    Args:
+        rosters is who each side is playing without or with, keyed by team id. Neither side is named
+        in the answer, so both are read.
     """
 
     if print_debug:
         print("Querying data from databases...")
 
     team_game_data = team_game_rows.read_history_window(target_game)
+    roster_totals = team_game_rows.prediction_roster_totals(target_game, rosters)
 
     if print_debug:
         print("Creating placeholder rows...")
@@ -155,7 +163,7 @@ def get_inference_data(
     if print_debug:
         print("Processing data...")
 
-    histories = team_game_rows.build_histories(features, team_game_data)
+    histories = team_game_rows.build_histories(features, team_game_data, roster_totals)
 
     if print_debug:
         print("Creating input chunk...")

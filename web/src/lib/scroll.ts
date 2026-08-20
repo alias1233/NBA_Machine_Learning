@@ -29,8 +29,14 @@ const TRAVEL = MOTION_SLOW;
 /** Close enough that one eased step would round to nothing, so what is left is closed in one. */
 const SNAP = 2;
 
-/** No scroll runs longer than this, so a target that never settles cannot hold the page. */
+/**
+ * How long past the end of its flow a walk keeps following, so a target that never settles cannot
+ * hold the page.
+ */
 const LIMIT = 2000;
+
+/** How long a flow handed over as a promise is waited on before the page stops following it. */
+const FLOW_LIMIT = 10000;
 
 const length = (value: string) => (Number.isNaN(parseFloat(value)) ? 0 : parseFloat(value));
 
@@ -71,10 +77,15 @@ type Walk = {
 	/** Which edge of the target the page is brought to. */
 	block: Block;
 	/**
-	 * How long the flow the choice set off lasts. The wait it buys costs nothing where the target
-	 * does not move, because the page is already on its way by then.
+	 * The flow the choice set off, as how long it lasts or as the flow itself. The wait it buys costs
+	 * nothing where the target does not move, because the page is already on its way by then.
+	 *
+	 * A request is a flow of unknown length, so it is handed over as its own promise and the page
+	 * follows the target until it settles and for one motion after it, which is what the answer
+	 * landing takes to lay itself out. Without that the page stops where the target used to be and
+	 * whatever the answer moves is left showing instead of it.
 	 */
-	flowing?: number;
+	flowing?: number | Promise<unknown>;
 	/**
 	 * Walk even where the target is already fully in view.
 	 *
@@ -101,8 +112,22 @@ export async function walkTo(
 
 	const instant = prefersReducedMotion.current;
 	const offset = resting(target, block);
-	const following = performance.now() + (instant ? 0 : flowing);
-	const deadline = performance.now() + LIMIT;
+
+	// When the flow is expected to be over, and the point past which the walk gives up whatever the
+	// target is doing. A flow handed over as a promise sets both again the moment it settles.
+	const waiting = typeof flowing === 'number' ? (instant ? 0 : flowing) : FLOW_LIMIT;
+
+	let following = performance.now() + waiting;
+	let deadline = following + LIMIT;
+
+	if (typeof flowing !== 'number') {
+		const landed = () => {
+			following = performance.now() + (instant ? 0 : MOTION);
+			deadline = following + LIMIT;
+		};
+
+		flowing.then(landed, landed);
+	}
 
 	return new Promise((resolve) => {
 		let frame = 0;
@@ -140,7 +165,7 @@ export async function walkTo(
 
 			// Each frame closes the same share of whatever distance is left, so the page eases in on a
 			// target standing still and keeps pace with one the flow is still moving.
-			const closing =
+			const closing =
 				instant || Math.abs(left) < SNAP ? 1 : 1 - Math.exp((-3 * elapsed) / TRAVEL);
 
 			window.scrollBy({ top: left * closing, behavior: 'instant' });

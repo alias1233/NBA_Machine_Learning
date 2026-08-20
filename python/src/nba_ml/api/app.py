@@ -11,15 +11,16 @@ FAMILY_ROUTERS.
 """
 
 from datetime import date, datetime, timedelta
+from typing import Collection
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from nba_ml import season, showcase, upcoming
+from nba_ml import expected_rosters, season, showcase, upcoming
 from nba_ml.api import game_stats, limits, player_stats, team_stats
-from nba_ml.api.schemas import PlayerResponse, TeamResponse, team_id
-from nba_ml.entities import ScheduledGame
+from nba_ml.api.schemas import PlayerResponse, TeamResponse
+from nba_ml.entities import Game, ScheduledGame, Team
 from nba_ml.feature_engineering import feature_store
 from nba_ml.models.errors import PredictionRefused
 from nba_ml.models import metrics
@@ -28,7 +29,7 @@ from nba_ml.models.outputs import DISCRIMINATOR, ModelOutput
 from nba_ml.models.player_stats import features as player_stat_features
 from nba_ml.models.specifications import GameSide, ModelSpecification
 from nba_ml.season import SeasonType
-from nba_ml.stores import player_games, players, team_games, teams
+from nba_ml.stores import player_games, players, rosters, schedule, team_games, teams
 
 app = FastAPI(
     title="NBA Machine Learning",
@@ -66,9 +67,34 @@ class ScheduledGameResponse(BaseModel):
     is_mock: bool
     """Added by hand for testing rather than collected, so a page can say so."""
 
+class RosterResponse(BaseModel):
+    """
+    One side of a game: who can be named for it, and how it is expected to differ from last time.
+
+    The two lists are a RosterScenario already worked out, so a caller can offer them as the roster
+    the reader would otherwise have had to enter by hand and still hand every name back to be
+    changed. Both are empty where nothing collected says who will play. See nba_ml/expected_rosters.py.
+    """
+
+    team: TeamResponse
+    players: list[PlayerResponse]
+    """Everyone who can be named for this team, whether they played its last game or not."""
+
+    without: list[PlayerResponse]
+    """Who played the team's last game and is not expected to play this one."""
+
+    returning: list[PlayerResponse]
+    """Who is expected to play this one and did not play the last."""
+
 class ModelResponse(BaseModel):
     name: str
     """What to pass as the model in a prediction request."""
+
+    title: str
+    """What the model is called where it is listed rather than run."""
+
+    description: str
+    """One sentence saying what it answers, for a reader who has not opened the family yet."""
 
     family: str
     """
@@ -142,7 +168,12 @@ class ModelEvaluationResponse(BaseModel):
     """The figures this model chose to publish, headline first."""
 
 class AboutModelResponse(BaseModel):
-    """The model copy a family About page reads, separate from the prediction-page catalogue."""
+    """
+    The model card a family About page reads: exactly the four fields it draws and nothing else.
+
+    The same words are on the catalogue, which is what a caller listing several families at once
+    reads. This exists so the About page is not handed the answer shapes it never looks at.
+    """
 
     name: str
     """The stable model identifier."""
@@ -167,6 +198,14 @@ class HealthResponse(BaseModel):
 
     Null while none has been published, which is what makes every player request build the league for
     itself. See nba_ml/cli/build_features.py.
+    """
+
+    roster_snapshot: datetime | None
+    """
+    When the held roster and injury snapshot was collected, in UTC.
+
+    Null while none has been, which is what makes every side of every game open on the lineup it last
+    played. A stale one reads as a player who has since been ruled out still taking the floor.
     """
 
 @app.exception_handler(PredictionRefused)
@@ -204,7 +243,8 @@ def health() -> HealthResponse:
     return HealthResponse(
         models=ALL_MODEL_NAMES,
         newest_stored_game=player_games.latest_game_date(),
-        feature_build=None if build is None else build.version
+        feature_build=None if build is None else build.version,
+        roster_snapshot=rosters.collected_at()
     )
 
 @app.get("/showcase")
@@ -252,20 +292,59 @@ def all_teams() -> list[TeamResponse]:
         for abbreviation in sorted(named)
     ]
 
-@app.get("/teams/{abbreviation}/players")
-def team_players(abbreviation: str) -> list[PlayerResponse]:
-    """
-    Who plays for a team, taken as everyone whose most recent game in the last year was for it.
-
-    This is what fills the player list once a game has been chosen. There is no roster feed, so a
-    player traded in the off season stays on their old team until they play for the new one.
-    """
-
-    player_ids = player_games.player_ids_on_team(team_id(abbreviation), season.today() - ROSTER_WINDOW)
+def _named(player_ids: Collection[int]) -> list[PlayerResponse]:
+    """The named players among the given ids, alphabetically, which is how a list of them is read."""
 
     return [
         PlayerResponse(id=player.id, name=player.name)
         for player in sorted(players.get_players(player_ids), key=lambda player: player.name)
+    ]
+
+def _roster(team: Team, game: Game) -> RosterResponse:
+    """
+    One side of a game: everyone who can be named for it, and how it is expected to line up.
+
+    Who plays for a team is everyone whose most recent game in the last year was for it, plus
+    everyone the collected roster snapshot now puts on it, which is what names a player traded since
+    their last game. Neither list on its own is the roster: the snapshot leaves out anybody the
+    provider has not listed, and the played games leave out anybody who has not played yet.
+    """
+
+    played_for = player_games.player_ids_on_team(team.id, season.today() - ROSTER_WINDOW)
+    on_team_now = [entry.player_id for entry in rosters.on_team(team.id)]
+    expected = expected_rosters.expected_scenario(team.id, game.date)
+
+    return RosterResponse(
+        team=TeamResponse(abbreviation=team.abbreviation, name=team.name),
+        players=_named({*played_for, *on_team_now}),
+        without=_named(expected.without),
+        returning=_named(expected.returning)
+    )
+
+@app.get("/games/{game_id}/rosters")
+def game_rosters(game_id: int) -> list[RosterResponse]:
+    """
+    Both sides of a scheduled game, away first, which is the order a matchup is written in.
+
+    This is what fills the roster controls once a game has been chosen. Each side arrives with the
+    lineup change the collected snapshot expects of it, so a caller can offer that as the reader's
+    starting point rather than an empty form. See nba_ml/expected_rosters.py.
+    """
+
+    scheduled = schedule.get_game(game_id)
+    if scheduled is None:
+        raise HTTPException(404, f"No scheduled game has the id {game_id}.")
+
+    named_teams = {team.id: team for team in teams.all_teams()}
+    missing = [
+        side for side in scheduled.game.team_ids if side not in named_teams
+    ]
+    if missing:
+        raise HTTPException(404, f"No stored team has the id {missing[0]}.")
+
+    return [
+        _roster(named_teams[side], scheduled.game)
+        for side in (scheduled.game.away_team_id, scheduled.game.home_team_id)
     ]
 
 @app.get("/games/upcoming")
@@ -316,6 +395,8 @@ def all_models() -> list[ModelResponse]:
     return [
         ModelResponse(
             name=specification.name,
+            title=specification.title,
+            description=specification.description,
             family=family.name,
             predicts=list(specification.predicts),
             output=specification.output,

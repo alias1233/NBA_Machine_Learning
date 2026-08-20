@@ -8,12 +8,15 @@ from nba_ml.api.app import (
     all_models,
     all_teams,
     family_about_models,
+    game_rosters,
     model_evaluation
 )
+from nba_ml.api.schemas import GameRequest, GameRostersRequest, ScenarioRequest
+from nba_ml.entities import Game, GameStatus, ScheduledGame
 from nba_ml.machine_learning import evaluation
 from nba_ml.models import metrics
 from nba_ml.models.player_stats import specifications as player_stat_specifications
-from nba_ml.stores import team_games, teams
+from nba_ml.stores import player_games, players, rosters, schedule, team_games, teams
 
 import fake_data
 import pytest
@@ -51,11 +54,20 @@ def test_no_team_is_offered_when_no_game_is_collected():
     assert all_teams() == []
 
 
-def test_model_about_copy_only_arrives_on_the_family_endpoint():
+def test_every_model_is_named_and_explained_wherever_it_is_listed():
+    """
+    A caller listing models needs the words as well as the shapes, so the catalogue carries both.
+
+    The home page lists every family and the models in each, from the one catalogue request the site
+    already makes. Asking the About endpoint per family instead would be three more requests for two
+    fields the catalogue could have carried. The About endpoint stays, narrowed to exactly what a card
+    reads, because that page reads nothing else.
+    """
+
     catalogue = [model.model_dump() for model in all_models()]
     about_models = [model.model_dump() for model in family_about_models("player_stats")]
 
-    assert all("title" not in model and "description" not in model for model in catalogue)
+    assert all(model["title"] and model["description"] for model in catalogue)
     assert all(
         {"name", "title", "description", "published"} == model.keys() for model in about_models
     )
@@ -149,3 +161,117 @@ def test_an_unreadable_score_reads_as_no_score_rather_than_failing_the_page():
     file_path.write_text("{ not json", encoding="utf-8")
 
     assert model_evaluation("player_stats", "rebounds") is None
+
+
+def test_a_game_roster_change_is_keyed_to_the_side_it_belongs_to():
+    """
+    Both sides of a game can be changed, and getting the two the wrong way round would sit the away
+    team's players out for the home team. Nothing else in the request says which side is which.
+    """
+
+    teams.store(fake_data.teams_frame())
+
+    home, away = fake_data.TEAMS[0], fake_data.TEAMS[1]
+    request = GameRostersRequest(
+        home=ScenarioRequest(without=[10, 11]),
+        away=ScenarioRequest(returning=[20])
+    )
+    game = GameRequest(
+        date=fake_data.NEXT_GAME_DATE,
+        home_team=home.abbreviation,
+        away_team=away.abbreviation
+    ).to_game()
+
+    scenarios = request.to_scenarios(game)
+
+    assert scenarios[home.id].without == frozenset({10, 11})
+    assert scenarios[home.id].returning == frozenset()
+    assert scenarios[away.id].returning == frozenset({20})
+    assert scenarios[away.id].without == frozenset()
+
+
+def test_a_side_no_change_was_named_for_plays_whoever_played_its_last_game():
+    teams.store(fake_data.teams_frame())
+
+    game = GameRequest(
+        date=fake_data.NEXT_GAME_DATE,
+        home_team=fake_data.TEAMS[0].abbreviation,
+        away_team=fake_data.TEAMS[1].abbreviation
+    ).to_game()
+
+    scenarios = GameRostersRequest().to_scenarios(game)
+
+    assert set(scenarios) == set(game.team_ids)
+    assert all(not scenario.without and not scenario.returning for scenario in scenarios.values())
+
+
+def stored_league():
+    """A whole fake season, plus one game still to be played between the first two teams."""
+
+    teams.store(fake_data.teams_frame())
+    team_games.store(fake_data.team_game_frame())
+    player_games.store(fake_data.player_game_frame())
+    players.store(fake_data.player_info_frame())
+
+    upcoming = ScheduledGame(
+        id=fake_data.game_id(99),
+        game=Game(fake_data.NEXT_GAME_DATE, fake_data.TEAMS[0].id, fake_data.TEAMS[1].id),
+        status=GameStatus.SCHEDULED
+    )
+    schedule.store([upcoming])
+
+    return upcoming
+
+
+def test_a_games_rosters_are_dealt_away_side_first():
+    """That is the order a matchup is written in, and the order the board deals its cards."""
+
+    upcoming = stored_league()
+
+    away, home = game_rosters(upcoming.id)
+
+    assert away.team.abbreviation == fake_data.TEAMS[1].abbreviation
+    assert home.team.abbreviation == fake_data.TEAMS[0].abbreviation
+
+
+def test_a_roster_offers_everyone_the_snapshot_puts_on_the_team():
+    """
+    A player traded since their last game has no game for their new team, so nothing played would
+    name them. They are still somebody a reader has to be able to sit out.
+    """
+
+    upcoming = stored_league()
+    moved = fake_data.player_id(fake_data.TEAMS[1].id, 0)
+    rosters.store(fake_data.roster_entries(moved={moved: fake_data.TEAMS[0].id}))
+
+    _, home = game_rosters(upcoming.id)
+
+    assert moved in {player.id for player in home.players}
+
+
+def test_a_roster_carries_the_lineup_change_the_snapshot_expects():
+    upcoming = stored_league()
+    hurt = fake_data.player_id(fake_data.TEAMS[0].id, 0)
+    rosters.store(fake_data.roster_entries(hurt={hurt}))
+
+    _, home = game_rosters(upcoming.id)
+
+    assert [player.id for player in home.without] == [hurt]
+    assert home.returning == []
+
+
+def test_a_roster_expects_no_change_while_nothing_is_collected():
+    """Which is the empty form every prediction was made with before any roster was collected."""
+
+    upcoming = stored_league()
+
+    assert all(not side.without and not side.returning for side in game_rosters(upcoming.id))
+
+
+def test_a_game_the_schedule_does_not_hold_has_no_rosters():
+    teams.store(fake_data.teams_frame())
+
+    with pytest.raises(HTTPException) as refused:
+        game_rosters(1234)
+
+    assert refused.value.status_code == 404

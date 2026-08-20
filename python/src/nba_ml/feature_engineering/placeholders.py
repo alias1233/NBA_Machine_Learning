@@ -17,7 +17,7 @@ import pandas as pd
 
 from nba_ml import season
 from nba_ml.entities import Game
-from nba_ml.feature_engineering import player_columns, season_columns, team_columns
+from nba_ml.feature_engineering import roster_columns, season_columns, team_columns
 from nba_ml.stores import player_games, team_games
 
 def game_id(target_game: Game) -> str:
@@ -86,7 +86,7 @@ def player_rows(
             **_known_before_the_game(target_game, team_id),
             player_games.PLAYER_ID.category_name: player_id,
             player_games.MINUTES_PLAYED.category_name: (
-                player_columns.CORE_PLAYER_MINUTES_CUTOFF + 1 if player_id in returning else 1
+                roster_columns.CORE_PLAYER_MINUTES_CUTOFF + 1 if player_id in returning else 1
             )
         }
         for player_id in playing_player_ids

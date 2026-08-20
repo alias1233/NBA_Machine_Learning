@@ -62,11 +62,18 @@
 	--accent: light-dark(#a83c1e, #e28b5c);
 	--accent-on: light-dark(#ffffff, #141311);
 	--accent-block: light-dark(#e9a177, #a83c1e);
-	/* The accent of the plane a thing sits on, and what reads on top of it filled. A block sets this
-	   pair to its own and a surface sets it back, so a link, a button and a focus ring each take the
-	   right accent from where they sit rather than from a rule per plane. */
+	/* Where the accent goes when a control is under the pointer. It is a second mix of the same ink
+	   rather than a filter over the whole control, so the words on a filled button keep the contrast
+	   they were chosen for. Each plane's accent has one, and each moves away from that plane's paper:
+	   deeper on light, brighter on dark. */
+	--accent-hover: light-dark(#8a3018, #f0a077);
+	--accent-block-hover: light-dark(#f4b48d, #8a3018);
+	/* The accent of the plane a thing sits on, what reads on top of it filled, and where it goes on
+	   hover. A block sets these to its own and a surface sets them back, so a link, a button and a
+	   focus ring each take the right accent from where they sit rather than from a rule per plane. */
 	--plane-accent: var(--accent);
 	--plane-accent-on: var(--accent-on);
+	--plane-accent-hover: var(--accent-hover);
 	--over: light-dark(#0b6845, #4bcf9a);
 	--under: light-dark(#b01d57, #f072b0);
 	/* An outcome landing exactly on the line. A third data colour rather than the neutral tone,
@@ -124,6 +131,9 @@
 	/* Chrome. The header is fixed, so the page reserves exactly what it takes. */
 	--header-height: calc(var(--tap-target) + var(--space-2) * 2);
 	--header-reveal-zone: 64px;
+	/* How much of the page the header is kept clear of above anything the page travels to. It is also
+	   what a section sized to one screen measures itself against. */
+	--scroll-lead: calc(var(--header-height) + var(--space-2));
 
 	/* Shape */
 	--radius: 8px;
@@ -131,8 +141,6 @@
 	--radius-full: 999px;
 	/* The box an inline SVG icon is drawn in. */
 	--icon: 1.25rem;
-	/* The picture at the head of a family's column on the home page. */
-	--graphic-ratio: 3 / 2;
 
 	/*
 	 * A game dealt as a playing card. Both sides of a game are printed in the two corner indices, the
@@ -148,6 +156,20 @@
 	--play-card-ratio: 5 / 7;
 	/* How far a card lifts off the board when it is hovered, focused or picked. */
 	--play-card-lift: 1rem;
+	/* How far each row of the deal lies off the one above it, one to the left and the next to the
+	   right by the same amount. Three quarters of the gap between cards each way: enough that no two
+	   rows line up down the board, and not so far that a row reads as having slipped. A hand pushed
+	   across a table, rather than a grid. */
+	--play-card-stagger: 0.5rem;
+	/* How much larger a card prints at the top of its turn, which is what says it came up out of the
+	   page rather than slid across it. A card, not a poster: barely a fourteenth over its own size. */
+	--play-card-rise: 1.075;
+	/* How near the reader the board's vanishing point stands. Far enough that a card turning keeps
+	   its proportions and near enough that the turn is read as a card and not as a flat sheet. */
+	--play-card-depth: 620px;
+	/* The whole turn: up, over, and down. One authored moment, given the room a gesture needs and no
+	   more, so a reader picking a second game is never waiting on the first one. */
+	--play-card-turn: 700ms;
 
 	/* The chart. It is drawn --chart-height tall inside an answer and fills the room it is given in
 	   the detailed view. --chart-axis is the gutter the probability axis is written in, which has to
@@ -176,12 +198,6 @@
 	--ease-out: cubic-bezier(0.4, 0, 1, 1);
 	--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
-	/* Every picture on the site is drawn at this opacity and this filter. That shared treatment is
-	   what makes a set of unrelated pictures read as one piece rather than as a mood board, and it is
-	   the one place to dial it back. Only the family graphics use it now that the hero is a plate. */
-	--art-opacity: 0.7;
-	--art-filter: saturate(0.8);
-
 	/*
 	 * The plate world.
 	 *
@@ -208,6 +224,8 @@
 	/* The spot colour, printed. It marks the run of outcomes above the line and fills the one action. */
 	--plate-spot: #f35411;
 	--plate-spot-on: #0a1d4a;
+	/* The spot ink under the pointer. A press lays one ink, so this is the same ink run heavier. */
+	--plate-spot-hover: #ff6a2b;
 	/* Printed hairlines: the rule that only separates, and the box a figure is printed inside. */
 	--plate-rule: #2a5aa8;
 	--plate-rule-strong: #6d88d4;
@@ -219,6 +237,9 @@
 	/* The acetate. A real second sheet, so it has a sheen along its top edge and a shadow under it. */
 	--acetate-sheen: rgb(255 255 255 / 0.16);
 	--acetate-shadow: rgb(1 15 48 / 0.5);
+	/* What a sheet of paper lying on a plate casts onto it. It is the plate's own shadow rather than
+	   the page's, because the ground it falls on is printed stock and not paper. */
+	--sheet-shadow: 0 2px 8px var(--acetate-shadow), 0 14px 34px var(--acetate-shadow);
 	/*
 	 * Wet-erase magenta: every mark that is the reader's rather than the model's.
 	 *
@@ -233,6 +254,11 @@
 
 	/* How thick a drawn mark is. A grease pencil does not draw a hairline. */
 	--pencil-width: 3px;
+	/* How long one stroke of a drawn mark takes, and how long after it the second one starts. Two
+	   strokes laid one at a time is the whole of what makes the mark read as drawn by a hand rather
+	   than switched on, so it is given more than --motion-slow to happen in. */
+	--pencil-stroke: 240ms;
+	--pencil-stagger: 180ms;
 	/* The registration crosses the plate is printed with, one per corner. */
 	--registration: 14px;
 
@@ -283,10 +309,12 @@
 }
 
 /*
- * How far a sprayed mark has reached out from its centre. Registered so it can be animated, which an
- * unregistered custom property cannot be, and used as the stop of the mask that reveals the mark.
+ * How far along its own run one stroke of a drawn mark has been laid down. Registered so it can be
+ * animated, which an unregistered custom property cannot be, and used as the stop of the mask that
+ * lays each stroke in from the corner it starts at. At rest it is past the far end and holds nothing
+ * back, so a mark with no animation to run is simply the finished mark.
  */
-@property --spray {
+@property --laid {
 	syntax: '<percentage>';
 	inherits: false;
 	initial-value: 100%;
@@ -298,11 +326,26 @@ html {
 	background: var(--page);
 	-webkit-text-size-adjust: 100%;
 	/* The header is fixed, so an anchor stops below it rather than under it, with a little of the
-	   page tone above whatever was linked to. Nothing sets its own top margin for this. */
-	scroll-padding-top: calc(var(--header-height) + var(--space-2));
+	   page tone above whatever was linked to. Nothing sets its own top margin for this. A target that
+	   opens a new ground takes .lands-flush instead, further down. */
+	scroll-padding-top: var(--scroll-lead);
 	/* Held on every page, so the header and the page under it sit in the same place whether or not
 	   that page is long enough to scroll. */
 	scrollbar-gutter: stable;
+	/* The bar the browser draws is part of the page too, so it is set in the page's own tones rather
+	   than in the platform's. */
+	scrollbar-color: var(--control-border) var(--page);
+}
+
+/*
+ * Marking a word on paper. The plate marks in wet-erase pencil instead, further down. Left to the
+ * browser this is a system blue that belongs to no plane on the site.
+ *
+ * A wash of the plane's own accent rather than a fill, so the words keep the ink and the contrast
+ * they were set in whichever paper they are on.
+ */
+::selection {
+	background: color-mix(in srgb, var(--plane-accent) 32%, transparent);
 }
 
 body {
@@ -322,13 +365,15 @@ body {
    small text. Anything below h2 is the interface face. */
 h1,
 h2,
+.type-h1,
 .type-h2 {
 	margin: 0;
 	font-family: var(--font-display);
 	font-weight: 400;
 }
 
-h1 {
+h1,
+.type-h1 {
 	font-size: var(--type-h1);
 	letter-spacing: -0.015em;
 	line-height: 1.05;
@@ -376,6 +421,19 @@ a {
 	display: inline-flex;
 	align-items: center;
 	min-height: var(--tap-target);
+}
+
+/* Acting on the page the reader is already on is a button, not a link, but it reads as a sentence
+   either way, so it is given the accent and the underline a link takes and nothing else. */
+button.text-link {
+	padding: 0;
+	background: none;
+	border: none;
+	color: var(--plane-accent);
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 2px;
+	cursor: pointer;
 }
 
 /* The ring takes the accent of whatever it is drawn on, so it inverts with a block and back with a
@@ -531,6 +589,23 @@ a {
 }
 
 /*
+ * A target the page travels to whose ground is not the ground of the section above it.
+ *
+ * The lead the root keeps clear of the header would leave a strip of the section above showing at
+ * the top of the screen, and a strip of another ground reads as the page having stopped short of
+ * where it was going. So the lead is cancelled here and the change of ground lands on the top edge
+ * of the screen exactly. Nothing is kept clear for the header, which stands over the target's own
+ * first stretch, the way it already stands over the band a page opens with.
+ *
+ * Every scroll-to whose target changes ground takes this, whether it is followed as a link or walked
+ * by lib/scroll.ts, which reads the same two properties. A target on the same ground as what is
+ * above it does not, because there the lead is what keeps the header off what was linked to.
+ */
+.lands-flush {
+	scroll-margin-top: calc(var(--scroll-lead) * -1);
+}
+
+/*
  * A band is the page's structural unit. It runs the full width of the screen, carries one register,
  * printed plate or paper, and holds its content on the page column. Everything that used to be a
  * box floating in a narrow column is a band now, which is where the site's composition comes from.
@@ -626,6 +701,7 @@ main > .band:first-child {
 	--rule-accent: 2px solid var(--plate-spot);
 	--plane-accent: var(--plate-spot);
 	--plane-accent-on: var(--plate-spot-on);
+	--plane-accent-hover: var(--plate-spot-hover);
 	--plane-pencil: var(--pencil);
 }
 
@@ -640,6 +716,7 @@ main > .band:first-child {
    here reads as something typeset elsewhere and pasted on. */
 .plate h1,
 .plate h2,
+.plate .type-h1,
 .plate .type-h2 {
 	font-family: var(--font-ui);
 	font-weight: 700;
@@ -716,18 +793,30 @@ main > .band:first-child {
 	background: var(--panel);
 	--plane-accent: var(--accent);
 	--plane-accent-on: var(--accent-on);
+	--plane-accent-hover: var(--accent-hover);
 	--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
 }
 
-/* A block is the opposite theme's paper, so everything on it comes from the block family. Its accent
-   comes with it, because the page-side one has no edge against block paper, and what reads on top of
-   that accent filled is the block's own paper. */
+/*
+ * Block paper: the opposite theme's paper, and the whole ink family that comes with it. Its accent
+ * comes too, because the page-side one has no edge against block paper, and what reads on top of that
+ * accent filled is the block's own paper. Every rule on it is the block hairline, so nothing drawn
+ * here has to know which paper it landed on.
+ *
+ * It is one of the two containers on paper and nothing else. A band never takes it: a band is the
+ * site talking and prints on plate, and block paper run the width of the screen stops reading as a
+ * thing set into the page at all.
+ */
 .block {
 	background: var(--block);
 	color: var(--block-ink);
 	--plane-accent: var(--accent-block);
 	--plane-accent-on: var(--block);
+	--plane-accent-hover: var(--accent-block-hover);
 	--plane-pencil: light-dark(var(--pencil), var(--pencil-deep));
+	--hairline: var(--hairline-block);
+	--hairline-panel: var(--hairline-block);
+	--rule-accent: 2px solid var(--accent-block);
 	--waiting: var(--hairline-block);
 }
 
@@ -744,6 +833,7 @@ main > .band:first-child {
 	border-radius: var(--radius);
 	--plane-accent: var(--accent);
 	--plane-accent-on: var(--accent-on);
+	--plane-accent-hover: var(--accent-hover);
 	--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
 	--waiting: var(--surface-sunken);
 }
@@ -940,6 +1030,9 @@ select {
 	color: var(--ink);
 	border: var(--rule-control);
 	border-radius: var(--radius);
+	/* The one part of a field the browser draws for itself, set in the plane's accent like every other
+	   mark the reader makes. */
+	caret-color: var(--plane-accent);
 }
 
 /* A date field is drawn by the platform, and on iOS that means an intrinsic width no rule above can
@@ -959,6 +1052,11 @@ select:disabled {
 	cursor: not-allowed;
 }
 
+/*
+ * A button is a block of the plane's accent, and it behaves like one under a hand: the ink deepens
+ * under the pointer and the block takes a press. Both come from tokens rather than from a filter over
+ * the whole control, so the words on it keep the contrast they were chosen for.
+ */
 .button {
 	display: inline-flex;
 	align-items: center;
@@ -971,27 +1069,42 @@ select:disabled {
 	border: none;
 	border-radius: var(--radius);
 	font-weight: 600;
+	letter-spacing: -0.01em;
 	text-decoration: none;
 	cursor: pointer;
 	transition:
 		background var(--motion-fast) var(--ease-in),
 		color var(--motion-fast) var(--ease-in),
-		filter var(--motion-fast) var(--ease-in);
+		translate var(--motion-fast) var(--ease-in);
 }
 
 .button:hover:not(:disabled) {
-	filter: brightness(1.08);
+	background: var(--plane-accent-hover);
 }
 
-.button:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
+/* Pressed. A block being pushed into the page is the whole of the feedback, so it is one pixel and
+   no change of size. */
+.button:active:not(:disabled) {
+	translate: 0 1px;
 }
 
-/* The loudest control on the site, once, in the hero. */
+/* A printed button is square, like everything else the press lays down. Only a control on paper takes
+   the inner radius. */
+.plate .button {
+	border-radius: 0;
+}
+
+/* The loudest control on the site, once, in the hero. Taller and wider than the standard target,
+   and stamped in the plate's own lettering rather than set in the interface face at button weight,
+   because being the one thing on a screen worth pressing is a size and a register, not only a
+   colour. */
 .button--lead {
-	padding-inline: var(--space-5);
-	font-size: var(--type-h3);
+	min-height: calc(var(--tap-target) + var(--space-5));
+	padding-inline: var(--space-7);
+	font-size: var(--type-note);
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 }
 
 /* The accent in outline rather than filled, for a control that acts on the page but is not what the
@@ -1003,11 +1116,30 @@ select:disabled {
 	color: var(--plane-accent);
 	border: var(--rule-current);
 	font-size: var(--type-small);
+	transition:
+		background var(--motion-fast) var(--ease-in),
+		color var(--motion-fast) var(--ease-in),
+		border-color var(--motion-fast) var(--ease-in),
+		translate var(--motion-fast) var(--ease-in);
 }
 
 .button--quiet:hover:not(:disabled) {
 	background: var(--plane-accent);
 	color: var(--plane-accent-on);
+}
+
+/*
+ * A control that cannot be pressed is drawn on the plane's own inert tone rather than as a faded
+ * accent. A half-strength accent still reads as the thing to press, only badly printed, which is the
+ * one thing a disabled control must not say. Declared after both variants so it holds for either.
+ */
+.button:disabled {
+	background: var(--waiting);
+	color: var(--ink-muted);
+	/* Inset, so a disabled control is exactly the same size as one that can be pressed. */
+	box-shadow: inset 0 0 0 1px var(--hairline-panel);
+	border-color: transparent;
+	cursor: not-allowed;
 }
 
 /*
@@ -1043,6 +1175,24 @@ select:disabled {
 
 	html.arriving {
 		scroll-behavior: auto;
+	}
+}
+
+/*
+ * A phone. The page is one column here and the header is not standing in the reader's way: it puts
+ * itself away the moment they scroll down and comes back when they scroll up. So nothing has to stop
+ * below it, and a target the page travels to keeps only a hair of the page above it rather than a
+ * header's worth of room nothing is drawn in. $lib/screen.ts holds the same width for the scripts
+ * that have to know it.
+ *
+ * Width is the scarce thing here, so the gutter the detailed chart writes its probability axis in is
+ * cut to what those figures need. It also insets the line handle under the drawing, so both follow
+ * from the one value and stay laid out against the same run.
+ */
+@media (width < 40rem) {
+	:root {
+		--scroll-lead: var(--space-2);
+		--chart-axis: 3rem;
 	}
 }
 

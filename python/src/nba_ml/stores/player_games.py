@@ -140,6 +140,38 @@ def player_ids_in_games(team_id: int, game_ids: Collection[int]) -> set[int]:
 
     return {int(row[0]) for row in rows}
 
+def recent_mean_minutes(
+    player_ids: Collection[int],
+    before: date,
+    games: int
+    ) -> dict[int, float]:
+    """
+    What each of the named players was averaging in minutes over their last few games before a date.
+
+    Minutes stand in for how much of a team a player is, so this is what says whether somebody
+    joining a roster is worth counting. Only the players with a stored game before the date appear.
+
+    Args:
+        games is how many of each player's own most recent games the average is taken over.
+    """
+
+    if not player_ids:
+        return {}
+
+    with DATABASE:
+        rows = DATABASE.cursor.execute(
+            f"SELECT {PLAYER_ID.category_name}, AVG({MINUTES_PLAYED.category_name}) FROM ("
+            f"SELECT {PLAYER_ID.category_name}, {MINUTES_PLAYED.category_name}, ROW_NUMBER() OVER ("
+            f"PARTITION BY {PLAYER_ID.category_name} ORDER BY {GAME_DATE.category_name} DESC"
+            f") AS PLAYED_AGO FROM {NAME} "
+            f"WHERE {_held_in(PLAYER_ID, player_ids)} "
+            f"AND {GAME_DATE.category_name} < :{GAME_DATE.category_name}"
+            f") WHERE PLAYED_AGO <= :GAMES GROUP BY {PLAYER_ID.category_name}",
+            {GAME_DATE.category_name : season.to_date_string(before), "GAMES" : int(games)}
+        ).fetchall()
+
+    return {int(player_id): float(minutes) for player_id, minutes in rows if minutes is not None}
+
 def get_game_data_after_date(date_start: date) -> pd.DataFrame:
     with DATABASE:
         data = DATABASE.query_dataframe(

@@ -71,12 +71,12 @@ export function reasonFor(thrown: HttpError): string {
  * fields name themselves, so the query is read off the form rather than restated per family, and an
  * empty one is left out so the address bar names only what the reader actually asked for.
  *
- * The page is told first, because the reader is walked to the answer on the reader's own press
- * rather than when the service comes back.
+ * The page travels on the reader's own press rather than when the service comes back, and it is
+ * given the request itself, so it keeps the answer in front of them while it lands.
  */
 export function askPrediction(
 	event: SubmitEvent & { currentTarget: HTMLFormElement },
-	shell?: { reveal: () => void }
+	shell?: { reveal: (asking?: Promise<unknown>) => void }
 ) {
 	event.preventDefault();
 
@@ -86,9 +86,13 @@ export function askPrediction(
 		if (value !== '') query.append(key, String(value));
 	}
 
-	shell?.reveal();
+	const asking = goto(`?${query}`, {
+		noScroll: true,
+		keepFocus: true,
+		invalidateAll: true
+	});
 
-	goto(`?${query}`, { noScroll: true, keepFocus: true, invalidateAll: true });
+	shell?.reveal(asking);
 }
 
 /**

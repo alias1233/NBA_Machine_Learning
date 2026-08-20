@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from nba_ml.data_collection import games, legacy_archive
-from nba_ml.entities import Game
+from nba_ml.entities import Game, RosterScenario
 from nba_ml.models.player_stats import features as player_features
 from nba_ml.models.player_stats import specifications as player_specifications
 from nba_ml.season import SeasonType
@@ -321,8 +321,7 @@ def test_an_imported_game_is_read_as_part_of_the_career_it_belongs_to():
         player.id,
         team_id,
         Game(fake_data.NEXT_GAME_DATE, team_id, fake_data.TEAMS[1].id),
-        [],
-        []
+        RosterScenario()
     )
 
     assert sample.sequence_end_indices[0].tolist() == [len(fake_data.games_of(team_id))]
