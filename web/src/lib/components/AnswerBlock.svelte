@@ -216,6 +216,7 @@
 		flex-direction: column;
 		gap: var(--space-5);
 		border-top-color: var(--plane-accent);
+		border-radius: 0;
 	}
 
 	.brief {

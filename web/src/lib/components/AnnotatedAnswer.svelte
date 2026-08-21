@@ -171,9 +171,8 @@
 		});
 	}
 
-	// A resize is every reason the two boxes move: the viewport, a font arriving, and the chart
-	// changing height when a dragged line widens the run it draws. The observer measures on its own
-	// first call, so nothing else has to run one.
+	// A resize is every reason the two boxes move: the viewport and a font arriving. The observer
+	// measures on its own first call, so nothing else has to run one.
 	$effect(() => {
 		if (!frame || !subject) return;
 
@@ -202,7 +201,7 @@
 			stat="points"
 			heading="John Basketball, points"
 			headingLevel={3}
-			subheading="Away team at home team, game day"
+			subheading="AWAY TEAM at HOME TEAM, January 23, 2006"
 			openOn={LINE}
 			example
 			customRoster={false}

@@ -170,12 +170,12 @@ class ModelEvaluationResponse(BaseModel):
     metrics: list[MetricResponse]
     """The figures this model chose to publish, headline first."""
 
-class AboutModelResponse(BaseModel):
+class InfoModelResponse(BaseModel):
     """
-    The model card a family About page reads: exactly the four fields it draws and nothing else.
+    The model card a family Info page reads: exactly the four fields it draws and nothing else.
 
     The same words are on the catalogue, which is what a caller listing several families at once
-    reads. This exists so the About page is not handed the answer shapes it never looks at.
+    reads. This exists so the Info page is not handed the answer shapes it never looks at.
     """
 
     name: str
@@ -475,10 +475,10 @@ def _family(family: str):
 
     return requested
 
-@app.get("/models/{family}/about")
-def family_about_models(family: str) -> list[AboutModelResponse]:
+@app.get("/models/{family}/info")
+def family_info_models(family: str) -> list[InfoModelResponse]:
     """
-    The model cards for one family About page, with their explanatory copy and nothing measured.
+    The model cards for one family Info page, with their explanatory copy and nothing measured.
 
     One request rather than one per model, because the page draws the whole family at once. The
     figures are not in it: they are read per model, when a reader opens one, so drawing the page
@@ -488,7 +488,7 @@ def family_about_models(family: str) -> list[AboutModelResponse]:
     requested = _family(family)
 
     return [
-        AboutModelResponse(
+        InfoModelResponse(
             name=specification.name,
             title=specification.title,
             description=specification.description,
@@ -497,7 +497,7 @@ def family_about_models(family: str) -> list[AboutModelResponse]:
         for specification in requested.specifications.values()
     ]
 
-@app.get("/models/{family}/about/{model}/evaluation")
+@app.get("/models/{family}/info/{model}/evaluation")
 def model_evaluation(family: str, model: str) -> ModelEvaluationResponse | None:
     """
     What one model measured on its held-out games, asked for only when a reader opens that model.

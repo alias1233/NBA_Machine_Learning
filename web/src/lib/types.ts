@@ -128,11 +128,11 @@ export type ModelEvaluation = {
 };
 
 /**
- * The explanatory card copy returned only for one family About page.
+ * The model card copy returned only for one family Info page.
  *
  * It carries no figures. What a model measured is read on its own, when a reader opens that model.
  */
-export type FamilyAboutModel = {
+export type FamilyInfoModel = {
 	name: string;
 	title: string;
 	description: string;

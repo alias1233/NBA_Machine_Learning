@@ -15,7 +15,7 @@ import { error } from '@sveltejs/kit';
 
 import type {
 	GamePredictionRequest,
-	FamilyAboutModel,
+	FamilyInfoModel,
 	Health,
 	Model,
 	ModelEvaluation,
@@ -86,14 +86,14 @@ export const getHealth = () => request<Health>('/health');
 
 export const getModels = () => request<Model[]>('/models');
 
-/** The reader-facing model cards for one family About page, without their figures. */
-export const getFamilyAboutModels = (family: string) =>
-	request<FamilyAboutModel[]>(`/models/${encodeURIComponent(family)}/about`);
+/** The reader-facing model cards for one family Info page, without their figures. */
+export const getFamilyInfoModels = (family: string) =>
+	request<FamilyInfoModel[]>(`/models/${encodeURIComponent(family)}/info`);
 
 /** What one model measured, asked for only when a reader opens that model. Null where unscored. */
 export const getModelEvaluation = (family: string, model: string) =>
 	request<ModelEvaluation | null>(
-		`/models/${encodeURIComponent(family)}/about/${encodeURIComponent(model)}/evaluation`
+		`/models/${encodeURIComponent(family)}/info/${encodeURIComponent(model)}/evaluation`
 	);
 
 /**

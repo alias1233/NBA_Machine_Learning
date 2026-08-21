@@ -21,17 +21,17 @@
 	import { SvelteMap } from 'svelte/reactivity';
 
 	import { figure, winner } from '$lib/model-evaluation';
-	import type { FamilyAboutModel, ModelEvaluation } from '$lib/types';
+	import type { FamilyInfoModel, ModelEvaluation } from '$lib/types';
 
 	type Props = {
-		models: FamilyAboutModel[];
+		models: FamilyInfoModel[];
 		/** The family these models belong to, which is half of what names one to the service. */
 		family: string;
 	};
 
 	let { models, family }: Props = $props();
 
-	let opened = $state<FamilyAboutModel | null>(null);
+	let opened = $state<FamilyInfoModel | null>(null);
 	let dialog = $state<HTMLDialogElement>();
 
 	/**
@@ -61,7 +61,7 @@
 	 * saying it is working and then growing under the reader. The row that was pressed says it is
 	 * reading instead, which is where the reader is looking.
 	 */
-	async function open(model: FamilyAboutModel) {
+	async function open(model: FamilyInfoModel) {
 		if (scores.has(model.name)) {
 			opened = model;
 			return;
@@ -101,7 +101,7 @@
 				<!-- While the figures are on their way the row says so, because the press has to be
 				     answered somewhere and this is where the reader is looking. -->
 				{#if loading === model.name}
-					<span class="state"><span class="tag micro">Reading…</span></span>
+					<span class="state"><span class="tag micro">Loading metrics…</span></span>
 				{:else if !model.published}
 					<span class="state"><span class="tag micro">Not published yet</span></span>
 				{/if}
@@ -114,7 +114,10 @@
 	<!-- Named by the model it is about, so a reader who cannot see the panel is told what opened. -->
 	<dialog bind:this={dialog} aria-labelledby="opened-model" onclose={() => (opened = null)}>
 		<header>
-			<h3 id="opened-model">{opened.title}</h3>
+			<div>
+				<h3 id="opened-model">{opened.title}</h3>
+				<p class="small muted">Evaluation metrics</p>
+			</div>
 			<button type="button" class="button button--quiet" onclick={() => dialog?.close()}>
 				Close
 			</button>
@@ -128,8 +131,8 @@
 			<!-- Held out is spelled out rather than named, because it is the whole reason the figures
 			     below mean anything and the reader is meeting the idea for the first time. -->
 			<p class="small muted">
-				Scored on {scored.samples.toLocaleString()} games the model never saw while it was being
-				built, from {day(scored.first_game)} to {day(scored.last_game)}. Baseline is what answering
+				Scored on {scored.samples.toLocaleString()} held out games the model never saw during 
+				training, from {day(scored.first_game)} to {day(scored.last_game)}. Baseline is what answering
 				with the season's usual spread of outcomes scores on those same games.
 			</p>
 

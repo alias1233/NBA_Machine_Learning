@@ -48,7 +48,7 @@
 			]
 		},
 		{ 
-			question: 'Can I make predictions on mock trades that have not happened?', 
+			question: 'Can I make predictions on mock trades just for fun?', 
 			answer: [
 				`Yes! Predicting supports any custom changes to a team's roster. Simply begin typing in the 
 				player selector's input field to search for players league-wide, even if they do not 
@@ -100,9 +100,9 @@
 			<p>
 				Head to the
 				<a href={MODELS_PATH}>Models</a>
-				section to select from the available model types. Visit a specific model type's
-				<em>About</em>
-				page to learn more about what each model predicts.
+				section to select from the available model categories. Visit a model category's
+				<em>Info</em>
+				page to learn more about what specific models within the category predict.
 			</p>
 		</section>
 
@@ -118,7 +118,7 @@
 			<h3><em>Model Architecture</em></h3>
 			<p>
 				The models on this site utilize a multimodal architecture consisting of a Gated Recurrent Unit
-				(GRU) and a Multi-Layer Perceptron.
+				(GRU) and a Multi-Layer Perceptron (MLP).
 			</p>
 			<p>
 				The GRU is fed sequential game data, encoding in its hidden states a representation of
@@ -154,7 +154,7 @@
 			</p>
 			<p>
 				These evaluation scores are public, with each model's scores outlined within their category's
-				<em>About</em>
+				<em>Info</em>
 				page. The baseline model's scores are shown too.
 			</p>
 		</section>

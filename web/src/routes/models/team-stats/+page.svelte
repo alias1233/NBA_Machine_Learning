@@ -55,7 +55,7 @@
 	let { data } = $props();
 
 	const TITLE = 'Team stat models';
-	const ABOUT = '/models/team-stats/about';
+	const INFO = '/models/team-stats/info';
 
 	/**
 	 * The pending request. It starts as the answered one and is the reader's until the button copies
@@ -202,9 +202,6 @@
 		data.models.find(({ name }) => name === (predicting ? form.model : data.model)) ?? null
 	);
 
-	// A new game, team or stat is a new answer, so the block starts from its own line.
-	const answerKey = $derived(JSON.stringify([data.selectedGame?.id, data.team, data.model]));
-
 	/** The one sentence an answer is announced with, which is whatever its block leads with. */
 	const announcement = $derived(
 		answer ? `${reached.heading}. ${answerSentence(answer, reached.stat)}` : ''
@@ -258,7 +255,7 @@
 	bind:this={shell}
 	title={TITLE}
 	description="The chance of every points, rebounds, assists and three-pointer total for an NBA team in one game."
-	aboutHref={ABOUT}
+	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
 	hasAnswer={data.prediction !== null || data.error !== null}
@@ -365,20 +362,18 @@
 			{#if data.error && !predicting}
 				<Notice tone="error">{data.error}</Notice>
 			{:else}
-				{#key answerKey}
-					<AnswerBlock
-						{answer}
-						output={asked?.output ?? null}
-						loading={predicting}
-						stat={shown.stat}
-						heading={shown.heading}
-						headingLevel={3}
-						subheading={shown.subheading}
-						openOn={data.line}
-						customRoster={data.customRoster}
-						pastGames={data.prediction?.past_games ?? null}
-					/>
-				{/key}
+				<AnswerBlock
+					{answer}
+					output={asked?.output ?? null}
+					loading={predicting}
+					stat={shown.stat}
+					heading={shown.heading}
+					headingLevel={3}
+					subheading={shown.subheading}
+					openOn={data.line}
+					customRoster={data.customRoster}
+					pastGames={data.prediction?.past_games ?? null}
+				/>
 			{/if}
 		</div>
 	{/snippet}

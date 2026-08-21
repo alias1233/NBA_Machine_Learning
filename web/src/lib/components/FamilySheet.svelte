@@ -15,7 +15,7 @@
 -->
 <script lang="ts">
 	import ModelRoll from '$lib/components/ModelRoll.svelte';
-	import { familyAboutPath, familyPath } from '$lib/models';
+	import { familyInfoPath, familyPath } from '$lib/models';
 
 	import type { ListedFamily } from '$lib/models';
 
@@ -61,7 +61,7 @@
 	<div class="ways">
 		{#if family.published}
 			<a class="button" href={familyPath(family)}>Run a prediction</a>
-			<a class="small text-link" href={familyAboutPath(family)}>How these models work</a>
+			<a class="small text-link" href={familyInfoPath(family)}>More info about these models</a>
 		{:else}
 			<span class="tag micro">Not published yet</span>
 		{/if}

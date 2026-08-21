@@ -1,7 +1,3 @@
-import { getFamilyAboutModels } from '$lib/server/api';
+import { redirect } from '@sveltejs/kit';
 
-import type { PageServerLoad } from './$types';
-
-export const load: PageServerLoad = async () => ({
-	models: await getFamilyAboutModels('player_stats').catch(() => [])
-});
+export const load = () => redirect(308, '/models/player-stats/info');

@@ -56,7 +56,7 @@
 	let { data } = $props();
 
 	const TITLE = 'Game stat models';
-	const ABOUT = '/models/game-stats/about';
+	const INFO = '/models/game-stats/info';
 
 	/**
 	 * The pending request. It starts as the answered one and is the reader's until the button copies
@@ -214,9 +214,6 @@
 		return side && sides ? { side, team: sides[side] } : null;
 	});
 
-	// A new game or stat is a new answer, so the block starts from its own line.
-	const answerKey = $derived(JSON.stringify([data.selectedGame?.id, data.model]));
-
 	/**
 	 * The one sentence an answer is announced with, which is whatever its block leads with. A figure
 	 * belonging to one side is spoken with that side named, as it is drawn.
@@ -260,7 +257,7 @@
 	bind:this={shell}
 	title={TITLE}
 	description="The chance of every final margin, every points, rebounds, assists and three-pointer total, and each team winning one NBA game."
-	aboutHref={ABOUT}
+	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
 	hasAnswer={data.prediction !== null || data.error !== null}
@@ -357,22 +354,20 @@
 			{#if data.error && !predicting}
 				<Notice tone="error">{data.error}</Notice>
 			{:else}
-				{#key answerKey}
-					<AnswerBlock
-						{answer}
-						output={asked?.output ?? null}
-						loading={predicting}
-						stat={shown.stat}
-						heading={shown.heading}
-						headingLevel={3}
-						figureNote={shown.note}
-						categoryNames={shown.categoryNames}
-						subheading={shown.subheading}
-						openOn={data.line}
-						customRoster={data.customRoster}
-						pastGames={data.prediction?.past_games ?? null}
-					/>
-				{/key}
+				<AnswerBlock
+					{answer}
+					output={asked?.output ?? null}
+					loading={predicting}
+					stat={shown.stat}
+					heading={shown.heading}
+					headingLevel={3}
+					figureNote={shown.note}
+					categoryNames={shown.categoryNames}
+					subheading={shown.subheading}
+					openOn={data.line}
+					customRoster={data.customRoster}
+					pastGames={data.prediction?.past_games ?? null}
+				/>
 			{/if}
 		</div>
 	{/snippet}

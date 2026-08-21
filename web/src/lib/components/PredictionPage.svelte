@@ -36,7 +36,7 @@
 	import PlateBand from '$lib/components/PlateBand.svelte';
 	import { flow, MOTION_SLOW } from '$lib/motion';
 	import { phone } from '$lib/screen';
-	import { walkTo } from '$lib/scroll';
+	import { stopWalking, walkTo } from '$lib/scroll';
 	import { pageTitle } from '$lib/site';
 
 	import type { Snippet } from 'svelte';
@@ -45,8 +45,8 @@
 		title: string;
 		/** One sentence, for a search result, a shared link, and the band's own lede. */
 		description: string;
-		/** The family's own page, linked under the title before a reader asks for a number. */
-		aboutHref: string;
+		/** The family's Info page, linked under the title before a reader asks for a number. */
+		infoHref: string;
 		/** False when the service offers nothing this page can draw, which is its empty state. */
 		hasModels: boolean;
 		/** False where the service did not answer at all, which is not the same as nothing published. */
@@ -69,7 +69,7 @@
 	let {
 		title,
 		description,
-		aboutHref,
+		infoHref,
 		hasModels,
 		answering,
 		hasAnswer,
@@ -104,11 +104,15 @@
 	 * of fighting the browser's own viewport movement.
 	 */
 	export async function reveal(asking?: Promise<unknown>): Promise<void> {
+		stopWalking();
 		asked = true;
 
 		await tick();
 
 		walkTo(answerColumn, { block: 'start', flowing: phone.current ? MOTION_SLOW : asking });
+
+		// The first mobile answer opens a new region. Once it has arrived, the reader owns the page.
+		if (phone.current && asking) asking.then(stopWalking, stopWalking);
 	}
 
 	/**
@@ -132,7 +136,7 @@
 <PlateBand {title} lede={description}>
 	{#snippet action()}
 		<!-- How the number is reached, before a reader asks for one. -->
-		<a class="small text-link" href={aboutHref}>How these models work</a>
+		<a class="small text-link" href={infoHref}>More info about these models</a>
 	{/snippet}
 </PlateBand>
 
@@ -163,7 +167,9 @@
 				<section class="controls" aria-labelledby="controls-column" bind:this={controlsColumn}>
 					<h2 class="column-label micro" id="controls-column">What to predict</h2>
 					{@render matchup?.()}
-					{@render controls()}
+					<div class="panel">
+						{@render controls()}
+					</div>
 				</section>
 			</div>
 
@@ -236,6 +242,13 @@
 		margin-block-start: var(--space-6);
 		container-type: inline-size;
 		container-name: answer-column;
+	}
+
+	@media (width < 40rem) {
+		/* The response replaces a reserved drawing. It must not become the browser's scroll anchor. */
+		.answer {
+			overflow-anchor: none;
+		}
 	}
 
 	/*

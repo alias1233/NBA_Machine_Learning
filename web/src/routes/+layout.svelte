@@ -29,6 +29,7 @@
 	import { longGameDay } from '$lib/games';
 	import { MODELS_PATH, MODELS_SECTION, familyPath, plateOf } from '$lib/models';
 	import { SITE_NAME } from '$lib/site';
+	import { ADS_ENABLED } from '$lib/ads.js'
 
 	let { children, data } = $props();
 
@@ -108,9 +109,16 @@
 		revealed = true;
 	}
 
-	let masthead = $state<HTMLElement>();
-	let menuRoot = $state<HTMLElement>();
-	let menuList = $state<HTMLElement>();
+	type HeaderRefs = {
+		masthead?: HTMLElement;
+		menuRoot?: HTMLElement;
+		menuList?: HTMLElement;
+	};
+
+	let heroRefs = $state<HeaderRefs>({});
+	let headerRefs = $state<HeaderRefs>({});
+	let pastHero = $state(false);
+	const activeRefs = $derived(home && !pastHero ? heroRefs : headerRefs);
 	let menuNudge = $state(0);
 	let viewportWidth = $state(0);
 
@@ -119,7 +127,7 @@
 		if (!revealed) return;
 
 		const closeOutside = (event: PointerEvent) => {
-			if (!menuRoot?.contains(event.target as Node)) revealed = false;
+			if (!activeRefs.menuRoot?.contains(event.target as Node)) revealed = false;
 		};
 
 		document.addEventListener('pointerdown', closeOutside);
@@ -135,13 +143,13 @@
 		viewportWidth;
 		predictable.length;
 
-		if (!masthead || !menuRoot || !menuList) return;
+		if (!activeRefs.masthead || !activeRefs.menuRoot || !activeRefs.menuList) return;
 
-		const gutter = parseFloat(getComputedStyle(masthead).paddingRight);
-		const edge = masthead.getBoundingClientRect().right - gutter;
-		const centre = menuRoot.getBoundingClientRect().left + menuRoot.offsetWidth / 2;
+		const gutter = parseFloat(getComputedStyle(activeRefs.masthead).paddingRight);
+		const edge = activeRefs.masthead.getBoundingClientRect().right - gutter;
+		const centre = activeRefs.menuRoot.getBoundingClientRect().left + activeRefs.menuRoot.offsetWidth / 2;
 
-		menuNudge = Math.max(centre + menuList.offsetWidth / 2 - edge, 0);
+		menuNudge = Math.max(centre + activeRefs.menuList.offsetWidth / 2 - edge, 0);
 	});
 
 	let scrollY = $state(0);
@@ -150,8 +158,7 @@
 	let holdingFocus = $state(false);
 	let scrolledUp = $state(false);
 	let revealZone = $state(0);
-	let pastHero = $state(false);
-
+	let arrivingAtModels = $state(false);
 	/* The home header belongs to the hero until the Models section takes over the viewport. */
 	function syncPastHero() {
 		const models = document.getElementById(MODELS_SECTION);
@@ -232,6 +239,11 @@
 	// would jump the moment the fade ended.
 	onNavigate((navigation) => {
 		const samePage = navigation.from?.url.pathname === navigation.to?.url.pathname;
+		const destination = navigation.to?.url;
+		arrivingAtModels =
+			!samePage &&
+			destination?.pathname === '/' &&
+			destination.hash === `#${MODELS_SECTION}`;
 
 		document.documentElement.classList.toggle('arriving', !samePage);
 
@@ -254,6 +266,7 @@
 		scrolledUp = false;
 		lastScroll = window.scrollY;
 		syncPastHero();
+		arrivingAtModels = false;
 	});
 </script>
 
@@ -282,18 +295,9 @@
 <!-- The first thing focus reaches, and the one way past a header that is holding itself away. -->
 <a class="skip button" href="#content">Skip to content</a>
 
-<header
-	class="plate"
-	class:neutral-page={!plate}
-	class:home-header={home && !pastHero}
-	class:hidden={(!home || pastHero) && hidden}
-	class:detached={(!home || pastHero) && scrollY > 0}
-	data-plate={plate}
-	bind:clientHeight={headerHeight}
-	onfocusin={onHeaderFocusIn}
-	onfocusout={onHeaderFocusOut}
->
-	<div class="page masthead" bind:this={masthead}>
+{#snippet masthead(modelsTabId: string, refs: HeaderRefs)}
+	{@const ownsMenu = refs === activeRefs}
+	<div class="page masthead" bind:this={refs.masthead}>
 		<a class="wordmark" href="/">{SITE_NAME}</a>
 
 		<nav>
@@ -305,16 +309,16 @@
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 				<li
 					class="menu"
-					class:revealed
+					class:revealed={revealed && ownsMenu}
 					style:--menu-nudge="{menuNudge}px"
-					bind:this={menuRoot}
+					bind:this={refs.menuRoot}
 					onpointerenter={(event) => (overMenu = event.pointerType !== 'touch')}
 					onpointerleave={onMenuPointerLeave}
 				>
 					<a
-						id="models-tab"
+						id={modelsTabId}
 						href={MODELS_PATH}
-						aria-expanded={canHover.current ? undefined : revealed}
+						aria-expanded={canHover.current ? undefined : revealed && ownsMenu}
 						aria-current={onModels ? 'page' : atModels ? 'location' : undefined}
 						onclick={onModelsTab}
 					>
@@ -325,7 +329,7 @@
 					     a page-coloured card floating over it. Each family says what it answers, because a
 					     title alone leaves the reader to open all three to find out. -->
 					{#if predictable.length > 0}
-						<ul aria-labelledby="models-tab" bind:this={menuList}>
+						<ul aria-labelledby={modelsTabId} bind:this={refs.menuList}>
 							{#each predictable as family (family.name)}
 								{@const path = familyPath(family)}
 								<li>
@@ -349,7 +353,53 @@
 			</ul>
 		</nav>
 	</div>
-</header>
+{/snippet}
+
+{#if home}
+	<!-- The hero owns this copy. It stays on the hero timeline until that paper has receded. -->
+	<header
+		class="plate home-header"
+		class:neutral-page={!plate}
+		class:arrival-hidden={arrivingAtModels}
+		data-plate={plate}
+		aria-hidden={pastHero || arrivingAtModels || undefined}
+		inert={pastHero || arrivingAtModels}
+		bind:clientHeight={headerHeight}
+		onfocusin={onHeaderFocusIn}
+		onfocusout={onHeaderFocusOut}
+	>
+		{@render masthead('hero-models-tab', heroRefs)}
+	</header>
+
+	<!-- The fixed header waits behind the hero copy, then takes over with its own transition. -->
+	<header
+		class="plate"
+		class:neutral-page={!plate}
+		class:hidden={(!pastHero && !arrivingAtModels) || hidden}
+		class:detached={pastHero && scrollY > 0}
+		data-plate={plate}
+		aria-hidden={!pastHero && !arrivingAtModels ? true : undefined}
+		inert={!pastHero && !arrivingAtModels}
+		bind:clientHeight={headerHeight}
+		onfocusin={onHeaderFocusIn}
+		onfocusout={onHeaderFocusOut}
+	>
+		{@render masthead('models-tab', headerRefs)}
+	</header>
+{:else}
+	<header
+		class="plate"
+		class:neutral-page={!plate}
+		class:hidden={hidden}
+		class:detached={scrollY > 0}
+		data-plate={plate}
+		bind:clientHeight={headerHeight}
+		onfocusin={onHeaderFocusIn}
+		onfocusout={onHeaderFocusOut}
+	>
+		{@render masthead('models-tab', headerRefs)}
+	</header>
+{/if}
 
 <!-- tabindex, so the skip link above moves focus here and not only the scroll. -->
 <main id="content" class:neutral-page={!plate} tabindex="-1" data-plate={plate}>
@@ -369,7 +419,11 @@
 
 		<ul class="links">
 			<li><a class="text-link" href="/about">About</a></li>
-			<li><a class="text-link" href="/privacy">Privacy</a></li>
+			<li><a class="text-link" href="/terms-and-conditions">Terms and conditions</a></li>
+
+			{#if ADS_ENABLED} 
+				<li><a class="text-link" href="/privacy">Privacy</a></li>
+			{/if}
 		</ul>
 	</div>
 </footer>
@@ -406,6 +460,12 @@
 	   timeline, then leaves it at the Models section and returns to the normal fixed-header rules. */
 	header.home-header {
 		position: fixed;
+	}
+
+	/* A cross-page arrival at Models bypasses the hero, so its copy never flashes before the fixed
+	   header takes over. */
+	header.arrival-hidden {
+		visibility: hidden;
 	}
 
 	@supports (animation-timeline: scroll()) {

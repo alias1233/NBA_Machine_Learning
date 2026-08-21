@@ -38,6 +38,16 @@ const LIMIT = 2000;
 /** How long a flow handed over as a promise is waited on before the page stops following it. */
 const FLOW_LIMIT = 10000;
 
+/** The one automatic walk that may move the page. A newer intent replaces an older one. */
+let stopCurrentWalk: (() => void) | undefined;
+let walkVersion = 0;
+
+/** Stops the current automatic walk immediately, without taking the page away from the reader. */
+export function stopWalking(): void {
+	walkVersion += 1;
+	stopCurrentWalk?.();
+}
+
 const length = (value: string) => (Number.isNaN(parseFloat(value)) ? 0 : parseFloat(value));
 
 /**
@@ -107,8 +117,12 @@ export async function walkTo(
 ): Promise<void> {
 	if (!target) return;
 
+	stopWalking();
+	const version = walkVersion;
+
 	// The tick puts the choice in the page, so what is measured below is the page it made.
 	await tick();
+	if (version !== walkVersion) return;
 
 	const instant = prefersReducedMotion.current;
 	const offset = resting(target, block);
@@ -139,8 +153,11 @@ export async function walkTo(
 			cancelAnimationFrame(frame);
 			window.removeEventListener('wheel', stop);
 			window.removeEventListener('touchmove', stop);
+			if (stopCurrentWalk === stop) stopCurrentWalk = undefined;
 			resolve();
 		};
+
+		stopCurrentWalk = stop;
 
 		const step = (now: number) => {
 			if (!target.isConnected || now > deadline) {

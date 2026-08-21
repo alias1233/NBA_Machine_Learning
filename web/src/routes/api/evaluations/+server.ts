@@ -1,7 +1,7 @@
 /**
  * What one model measured, for the browser. The prediction service itself is not reachable from one.
  *
- * A family About page draws its cards without figures, so opening a card is what asks for them, and
+ * A family Info page draws its cards without figures, so opening a card is what asks for them, and
  * a reader who opens none costs the service nothing.
  */
 

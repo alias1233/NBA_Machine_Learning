@@ -97,7 +97,7 @@
 	}
 
 	.reserved.figure {
-		height: var(--type-figure);
+		height: calc(var(--type-figure) * 1.2);
 		margin-top: var(--space-1);
 	}
 </style>

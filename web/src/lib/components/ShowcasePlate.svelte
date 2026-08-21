@@ -288,6 +288,10 @@
 
 		return Number.isNaN(at) ? iso : DAY.format(at);
 	};
+
+	const sampledLabel = $derived(
+		heldOver ? `Sampled predictions from ${dayOf(heldOver)}.` : "Today's sampled predictions."
+	);
 </script>
 
 <!-- Focus landing anywhere in the hero holds the turn, because somebody dragging the line or moving
@@ -331,17 +335,8 @@
 	{/snippet}
 
 	<div class="page composition">
-		<!-- The plate's own foot line: what the site does, what press sheet this is, and the one way out
-		     of the screen that is not the listing under it. -->
 		<div class="colophon plate">
 			<p class="lede">{SITE_DESCRIPTION}</p>
-
-			<span class="ways">
-				<span class="micro number" aria-hidden="true">
-					BB-{cards.length.toString().padStart(3, '0')}
-				</span>
-				<a class="text-link small" href="/about">About this site</a>
-			</span>
 		</div>
 
 		{#if cards.length === 0}
@@ -434,10 +429,7 @@
 					</dl>
 				{/if}
 
-				<p class="caveat small muted">
-					A sample, drawn at random {heldOver ? `on ${dayOf(heldOver)}` : 'this morning'}. A
-					prediction is not a promise about one game.
-				</p>
+				<p class="sampled-label small muted">{sampledLabel}</p>
 			</div>
 
 			{@render intoModels()}
@@ -447,14 +439,8 @@
 			     because the listing is what the screen is for and the set is how a reader changes what
 			     it is answering. -->
 			<div class="slate-region">
-				<!-- What the slate holds rather than how much of it. How many there are is counted by the
-				     tiles under this line, and the day only needs saying where it is not today's. -->
-				<p class="micro slate-label" id="slate-label">
-					{heldOver ? `Sampled predictions from ${dayOf(heldOver)}` : "Today's sampled predictions"}
-				</p>
-
 				<div class="slate block">
-					<ul aria-labelledby="slate-label">
+					<ul aria-label={sampledLabel}>
 						{#each cards as entry, index (entry.sample.model + index)}
 							<li>
 								<button
@@ -504,10 +490,8 @@
 	 * ink for the plate lettering to keep its contrast. A minimum rather than a height, because a
 	 * screen too short to hold the answer should grow rather than cut it off.
 	 *
-	 * The screen it is measured against is the one the reader actually has, which on a phone changes
-	 * as the browser's own bars come and go. A smallest-screen height leaves the band under it showing
-	 * along the bottom edge whenever those bars are away, and the first screen of the site is the one
-	 * place a seam like that cannot be allowed.
+	 * A phone's browser bars change the dynamic viewport while a reader scrolls. The hero must keep its
+	 * printed proportions, so it uses the smallest viewport instead of stretching the chart with them.
 	 */
 	.hero {
 		position: sticky;
@@ -515,7 +499,7 @@
 		isolation: isolate;
 		display: flex;
 		flex-direction: column;
-		min-height: 100dvh;
+		min-height: 100svh;
 		padding-block-end: var(--space-3);
 		/* Only the room the header needs. The hero is one screen, so the answer takes the rest. */
 		--band-lead: var(--space-2);
@@ -531,7 +515,7 @@
 			.hero {
 				animation: hero-recede linear both;
 				animation-timeline: scroll(root);
-				animation-range: 0 100dvh;
+				animation-range: 0 100svh;
 			}
 		}
 	}
@@ -580,32 +564,12 @@
 		font-weight: 500;
 	}
 
-	.colophon .ways {
-		display: flex;
-		align-items: center;
-		gap: var(--space-4);
-	}
-
-	/* The plate's foot line has its sheet number at one end and the way out at the other. It is printed
-	   in the separating rule rather than in the
-	   stronger one, which is a box a figure sits in and carries a meaning of its own. */
+	/* The description is printed on the separating rule rather than in the stronger one, which is a
+	   box a figure sits in and carries a meaning of its own. */
 	.colophon {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0 var(--space-4);
 		padding-block-start: var(--space-2);
 		background: none;
 		border-top: var(--rule-plate);
-	}
-
-	.colophon .number {
-		color: var(--plate-ink-muted);
-	}
-
-	.colophon a {
-		color: var(--plate-ink);
 	}
 
 	/*
@@ -638,15 +602,15 @@
 	.turn {
 		position: absolute;
 		inset: 0 0 auto;
-		height: 3px;
-		background: color-mix(in oklab, var(--plate-spot) 28%, transparent);
+		height: 4px;
+		background: color-mix(in oklab, var(--accent) 28%, transparent);
 		overflow: clip;
 	}
 
 	.turn-left {
 		display: block;
 		height: 100%;
-		background: var(--plate-spot);
+		background: var(--accent);
 		transform-origin: left center;
 		animation: empty var(--turn-duration) linear;
 	}
@@ -725,7 +689,7 @@
 		margin: 0;
 	}
 
-	.caveat {
+	.sampled-label {
 		max-width: var(--measure);
 	}
 
@@ -799,13 +763,6 @@
 	.slate-region {
 		display: none;
 		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.slate-label {
-		padding-block-start: var(--space-1);
-		color: var(--plate-ink-muted);
-		border-top: var(--rule-plate);
 	}
 
 	.slate {

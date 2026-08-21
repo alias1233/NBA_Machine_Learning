@@ -15,7 +15,7 @@
 	<!-- The wording is the user's to write or source. Ads stay off until it is real. -->
 	<div class="measure">
 		<Notice tone="warning">
-			This page is not written yet. No ads and no analytics run on this site.
+			This page is not written. No ads and no analytics currently run on this site.
 		</Notice>
 	</div>
 </div>

@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 
 from nba_ml import season
-from nba_ml.api.app import family_about_models, model_evaluation
+from nba_ml.api.app import family_info_models, model_evaluation
 from nba_ml.cli import train
 from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey
 from nba_ml.machine_learning import evaluation
@@ -220,7 +220,7 @@ def _one_epoch(model_specification):
 def test_a_finished_run_writes_a_held_out_score_the_service_reads_back():
     """
     The whole chain, end to end on the made up league: fit, score the games the run never read,
-    write them down, and serve them on the family About page.
+    write them down, and serve them on the family Info page.
 
     A run that scored its own validation games would report a number nobody should publish, so what
     matters here is that the split named in the file is the held-out one.
@@ -250,7 +250,7 @@ def test_a_finished_run_writes_a_held_out_score_the_service_reads_back():
     assert set(written.floor) <= set(written.metrics)
     assert evaluation.EXPECTED_VALUE_MAE in written.floor
 
-    assert any(card.name == "team_points" for card in family_about_models("team_stats"))
+    assert any(card.name == "team_points" for card in family_info_models("team_stats"))
 
     served = model_evaluation("team_stats", "team_points")
     assert served is not None

@@ -2,7 +2,7 @@
 What a scored model recorded, and how a reader is told about it.
 
 A training run writes one of these files beside the model it fitted. The service reads it back and
-puts it on the family About page, so a visitor sees measured figures rather than claims. The file is
+puts it on the family Info page, so a visitor sees measured figures rather than claims. The file is
 plain JSON, so nothing has to load PyTorch to read it and publishing a model still copies files.
 
 Two things are deliberately kept apart. The **file** holds only identifiers and numbers, which is
@@ -57,38 +57,38 @@ ALL_METRICS: dict[str, Metric] = {
     for metric in (
         Metric(
             evaluation.EXPECTED_VALUE_MAE,
-            "Average miss",
-            "How far the model's average answer landed from what actually happened, over every game "
-            "it was scored on.",
+            "Average error",
+            "How far the model's expected answer landed from what actually happened, averaged over every "
+            "tested game.",
             MetricUnit.VALUE,
             higher_is_better=False
         ),
         Metric(
             evaluation.EXPECTED_VALUE_MEDIAN_ERROR,
-            "Typical miss",
-            "The middle miss. Half the answers landed at least this close, so a handful of games "
-            "nothing could have called does not move it.",
+            "Typical error",
+            "The median error of the expected answer and the truth. Half the predictions landed at least "
+            "this close, so a handful of outlier games does not affect the metric.",
             MetricUnit.VALUE,
             higher_is_better=False
         ),
         Metric(
             evaluation.EXPECTED_VALUE_RMSE,
             "Root mean squared error",
-            "The average miss again, counting a large miss far more heavily than a small one.",
+            "The average error, weighing a large miss far more heavily than a small one.",
             MetricUnit.VALUE,
             higher_is_better=False
         ),
         Metric(
             evaluation.HIGHEST_PROBABILITY_MAE,
-            "Miss of the single likeliest answer",
-            "How far the one outcome the model called likeliest landed from what happened.",
+            "Error of the single likeliest answer",
+            "How far the predicted likeliest outcome landed from what happened.",
             MetricUnit.VALUE,
             higher_is_better=False
         ),
         Metric(
             evaluation.HIGHEST_PROBABILITY_RMSE,
             "Root mean squared error of the likeliest answer",
-            "The same, counting a large miss far more heavily than a small one.",
+            "The error of the likeliest answer, weighing a large miss far more heavily than a small one.",
             MetricUnit.VALUE,
             higher_is_better=False
         ),
@@ -97,8 +97,9 @@ ALL_METRICS: dict[str, Metric] = {
             "How often the middle of the answer was right",
             "The model gives a chance to every outcome. This is how often the real result fell "
             f"inside the middle {evaluation.CENTRAL_INTERVAL:.0%} of that answer. A model that "
-            f"knows how sure it is scores exactly {evaluation.CENTRAL_INTERVAL:.0%}, and a lower "
-            "figure means it claims to be more certain than it is.",
+            f"is perfectly calibrated scores exactly {evaluation.CENTRAL_INTERVAL:.0%}. A lower "
+            "figure means it claims to be more certain than it is, and a higher means it spreads "
+            "out its answers more than it should.",
             MetricUnit.PROBABILITY,
             higher_is_better=True,
             ideal=evaluation.CENTRAL_INTERVAL
@@ -106,22 +107,22 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.ACCURACY,
             "Exact answers",
-            "How often the outcome the model called likeliest is the outcome that happened.",
+            "How often the outcome the model called likeliest is the outcome that occured.",
             MetricUnit.PROBABILITY,
             higher_is_better=True
         ),
         Metric(
             evaluation.PROBABILITY_OF_ACTUAL,
             "Chance given to what happened",
-            "The average chance the model gave to the outcome that actually occurred. Higher is "
-            "better, and it is the reading that matters where one outcome is rare.",
+            "The average probability the model predicted for the outcome that actually occurred. Higher "
+            "is better. This is the metric that matters where one outcome is rare.",
             MetricUnit.PROBABILITY,
             higher_is_better=True
         ),
         Metric(
             evaluation.BRIER_SCORE,
             "Brier score",
-            "How far the whole answer sat from what happened. It rewards confidence only where the "
+            "How far the whole answer was from the true value. It rewards confidence only where the "
             "confidence was warranted.",
             MetricUnit.SCORE,
             higher_is_better=False
@@ -130,31 +131,33 @@ ALL_METRICS: dict[str, Metric] = {
             evaluation.CALIBRATION_ERROR,
             "Calibration error",
             "How far the model's stated confidence is from how often it turns out to be right. "
-            "Zero means an answer given a 70% chance happens 70% of the time.",
+            "Zero means an answer given a 70% chance happens 70% of the time, which indicates "
+            "a perfectly calibrated model.",
             MetricUnit.SCORE,
             higher_is_better=False
         ),
         Metric(
             evaluation.CLASSWISE_CALIBRATION_ERROR,
             "Calibration error across every outcome",
-            "The same reading, averaged over every outcome the model can answer with rather than "
-            "over the one it favoured.",
+            "A measure of how calibrated the model is, calculated by averaging how closely a model's "
+            "predictions were with how often that outcome actually occured over every possible outcome.",
             MetricUnit.SCORE,
             higher_is_better=False
         ),
         Metric(
             evaluation.LINE_RANKED_PROBABILITY_SCORE,
             "Line score",
-            "How wrong the chance of going over is, added up over every line the model covers. It "
-            "is the one figure that compares models whose answers cover different ground.",
+            "The error in the predicted chance of the outcome surpassing a line is against the actual "
+            "probability the outcome surpassed a line, added up over every line the model covers. It "
+            "can compare models whose answers cover different intervals.",
             MetricUnit.SCORE,
             higher_is_better=False
         ),
         Metric(
             evaluation.RANKED_PROBABILITY_SCORE,
             "Ranked probability score",
-            "The Brier score's ordered cousin. Putting the answer one outcome away costs less than "
-            "putting it ten away.",
+            "Measures the distance between the predicted outcome and the true value, penalizing closer "
+            "predictions less than further ones.",
             MetricUnit.SCORE,
             higher_is_better=False
         ),

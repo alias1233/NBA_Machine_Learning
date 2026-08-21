@@ -1,14 +1,9 @@
 <!--
 	The line, as a handle on the chart's x axis and as a number beside it.
 
-	The handle travels the drawn run plus three outcomes at each end. The moment the line goes past
-	the run, the chart widens to hold it and three more outcomes of headroom open up beyond that, so
-	the reader reaches every outcome the model has by dragging alone and the handle is always under
-	the bars it is splitting.
-
-	Where the whole run is already drawn there is nothing left to widen into, so the handle travels
-	exactly the drawn run and is laid out to put its thumb over the split it makes. That is the
-	detailed view, where every outcome is on screen at once.
+	The handle travels exactly the drawn run. Its thumb is laid out to put it over the split it makes,
+	and the field accepts that same run. The detailed view draws every outcome, so its control reaches
+	every outcome without changing these rules.
 
 	Steps of a half, whatever the model's outcomes are worth. A line is a question a reader asks, not
 	something the answer's shape decides, so it moves in halves even where one bar covers three
@@ -38,7 +33,7 @@
 		line: number;
 		/** The answer being read, which says what the field accepts and how wide one bar is. */
 		distribution: Distribution;
-		/** The outcomes the chart draws, which the handle travels with headroom past each end. */
+		/** The outcomes the chart draws, which set the limits for both controls. */
 		range: ChartRange;
 		/** What the line settles at, or the way to read it larger. Sits at the end of the field row. */
 		children?: Snippet;
@@ -49,45 +44,28 @@
 	const STEP = 0.5;
 	const PAGE_STEPS = 5;
 
-	// A handle that stops at the edge of the first drawing, and makes the reader type a number to go
-	// further, cannot reach every outcome by dragging. This is how many outcomes past it it travels.
-	const HEADROOM = 3;
-
 	const width = $derived(distribution.bucketWidth);
 
 	// The handle travels the axis rather than the values, so its thumb tracks the bars even where the
 	// model names a value it can never answer with and the two are not the same run.
 	const span = $derived(axisSpan(distribution, range));
-	const whole = $derived(
-		axisSpan(distribution, { first: 0, last: distribution.probabilities.length - 1 })
-	);
 
-	// The middle of the first and last bars drawn, and of the first and last the model has. The
-	// handle is laid out against bar middles, because that is what its thumb has to line up with.
+	// The middle of the first and last bars drawn. The handle is laid out against bar middles, because
+	// that is what its thumb has to line up with.
 	const drawn = $derived({ first: span.from + width / 2, last: span.to - width / 2 });
-	const outermost = $derived({ first: whole.from + width / 2, last: whole.to - width / 2 });
-
-	const travel = $derived({
-		first: Math.max(outermost.first, drawn.first - HEADROOM * width),
-		last: Math.min(outermost.last, drawn.last + HEADROOM * width)
-	});
-
-	// Lining the thumb up with the bars only means anything where it travels exactly the run they are
-	// drawn over. Anywhere else it reaches past what is drawn, so there is nothing to line up with.
-	const aligned = $derived(travel.first === drawn.first && travel.last === drawn.last);
 	const columns = $derived(range.last - range.first + 1);
 
 	/** The two ends of everything the handle can settle on, so the field offers exactly that run. */
 	const reach = $derived({
-		lowest: valueAt(distribution, outermost.first),
-		highest: valueAt(distribution, outermost.last)
+		lowest: valueAt(distribution, drawn.first),
+		highest: valueAt(distribution, drawn.last)
 	});
 
 	/** The nearest line the handle could have been dragged to, which is where any other one settles. */
 	const nearest = (axis: number) =>
 		valueAt(
 			distribution,
-			Math.min(Math.max(Math.round(axis / STEP) * STEP, outermost.first), outermost.last)
+			Math.min(Math.max(Math.round(axis / STEP) * STEP, drawn.first), drawn.last)
 		);
 
 	let field = $state<HTMLInputElement>();
@@ -149,14 +127,12 @@
 </script>
 
 <div class="control" style="--columns: {columns}">
-	<!-- The travel is written before the value, so a drag that widens the run is never clamped back
-	     by the bounds it just outgrew. -->
 	<input
 		type="range"
-		class:aligned
+		class="aligned"
 		aria-labelledby="{id}-label"
-		min={travel.first}
-		max={travel.last}
+		min={drawn.first}
+		max={drawn.last}
 		step={STEP}
 		value={axisAt(distribution, line)}
 		data-explain="line"

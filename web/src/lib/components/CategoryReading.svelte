@@ -118,6 +118,6 @@
 		grid-column: 1 / -1;
 		width: calc(var(--space-8) * 1.5);
 		max-width: 60%;
-		height: var(--type-figure);
+		height: calc(var(--type-small) * 1.5);
 	}
 </style>

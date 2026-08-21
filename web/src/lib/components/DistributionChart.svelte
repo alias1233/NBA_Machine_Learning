@@ -242,7 +242,9 @@
 
 			<!-- The cut the odds are reporting, in the push gold, wherever the chart is drawn. -->
 			{#if within(line)}
-				<div class="mark chosen" style="left: {positionOf(line)}%" aria-hidden="true"></div>
+				<div class="mark chosen" style="left: {positionOf(line)}%" aria-hidden="true">
+					<span class="micro" class:before={positionOf(line) > 50}>Line</span>
+				</div>
 			{/if}
 		</div>
 
@@ -366,17 +368,24 @@
 		background: var(--chart-expected);
 	}
 
-	.mark.expected span {
+	.mark span {
 		position: absolute;
 		top: 0;
 		left: var(--space-1);
-		color: var(--chart-expected);
 		white-space: nowrap;
 	}
 
-	.mark.expected span.before {
+	.mark span.before {
 		left: auto;
 		right: var(--space-1);
+	}
+
+	.mark.expected span {
+		color: var(--chart-expected);
+	}
+
+	.mark.chosen span {
+		color: var(--push);
 	}
 
 	/* The marks are placed by value, so they line up inside the same box the bars are drawn in and

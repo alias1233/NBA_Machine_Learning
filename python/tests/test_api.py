@@ -7,7 +7,7 @@ from nba_ml.api.app import (
     ACTIVE_TEAM_WINDOW,
     all_models,
     all_teams,
-    family_about_models,
+    family_info_models,
     game_rosters,
     model_evaluation
 )
@@ -59,24 +59,24 @@ def test_every_model_is_named_and_explained_wherever_it_is_listed():
     A caller listing models needs the words as well as the shapes, so the catalogue carries both.
 
     The home page lists every family and the models in each, from the one catalogue request the site
-    already makes. Asking the About endpoint per family instead would be three more requests for two
-    fields the catalogue could have carried. The About endpoint stays, narrowed to exactly what a card
+    already makes. Asking the Info endpoint per family instead would be three more requests for two
+    fields the catalogue could have carried. The Info endpoint stays, narrowed to exactly what a card
     reads, because that page reads nothing else.
     """
 
     catalogue = [model.model_dump() for model in all_models()]
-    about_models = [model.model_dump() for model in family_about_models("player_stats")]
+    info_models = [model.model_dump() for model in family_info_models("player_stats")]
 
     assert all(model["title"] and model["description"] for model in catalogue)
     assert all(
-        {"name", "title", "description", "published"} == model.keys() for model in about_models
+        {"name", "title", "description", "published"} == model.keys() for model in info_models
     )
-    assert len(about_models) == 14
+    assert len(info_models) == 14
 
 
-def test_unknown_model_family_has_no_about_catalogue():
+def test_unknown_model_family_has_no_info_catalogue():
     with pytest.raises(HTTPException, match="No model family is named unknown") as raised:
-        family_about_models("unknown")
+        family_info_models("unknown")
 
     assert raised.value.status_code == 404
 
@@ -100,7 +100,7 @@ def _score(specification, **scored: float):
 
 
 def test_a_model_with_no_score_is_still_offered_without_figures():
-    assert any(card.name == "assists" for card in family_about_models("player_stats"))
+    assert any(card.name == "assists" for card in family_info_models("player_stats"))
     assert model_evaluation("player_stats", "assists") is None
 
 

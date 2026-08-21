@@ -88,7 +88,6 @@ export function askPrediction(
 
 	const asking = goto(`?${query}`, {
 		noScroll: true,
-		keepFocus: true,
 		invalidateAll: true
 	});
 

@@ -8,7 +8,7 @@
  * Run with `npm test`. Node reads the TypeScript directly, so there is nothing to install.
  */
 
-import { answerSentence, figureNote, namedCategories } from './models.ts';
+import { answerSentence, familyInfoPath, figureNote, MODEL_FAMILIES, namedCategories } from './models.ts';
 
 import type { GameSides } from './models.ts';
 import type { Answer } from './odds.ts';
@@ -23,6 +23,12 @@ function check(what: string, actual: unknown, expected: unknown) {
 }
 
 const sides: GameSides = { home: 'Toronto Raptors', away: 'Boston Celtics' };
+
+check(
+	'a family Info link uses the info route',
+	familyInfoPath(MODEL_FAMILIES[0]),
+	'/models/player-stats/info'
+);
 
 const model = (fields: Partial<Model>): Model => ({
 	name: 'test',

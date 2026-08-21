@@ -28,10 +28,9 @@
 		defaultLine,
 		expectedValue,
 		figureText,
-		highestValue,
-		lowestValue,
 		mostLikelyOutcomes,
-		oddsPercentages
+		oddsPercentages,
+		outcomes
 	} from '$lib/odds';
 
 	import type { Distribution } from '$lib/odds';
@@ -54,14 +53,20 @@
 	const URL_SYNC_DELAY = 300;
 
 	const expected = $derived(expectedValue(distribution));
+	const range = $derived(chartRange(distribution));
+	const rangeOutcomes = $derived(outcomes(distribution).slice(range.first, range.last + 1));
+	const limits = $derived({
+		lowest: rangeOutcomes[0].lowest,
+		highest: rangeOutcomes.at(-1)!.highest
+	});
 
 	// Deliberately the opening value only. After that the reader owns it, and a new answer arrives as
 	// a new one of these carrying its own.
 	// svelte-ignore state_referenced_locally
 	let line = $state(
 		Math.min(
-			Math.max(openOn ?? defaultLine(expected), lowestValue(distribution)),
-			highestValue(distribution)
+			Math.max(openOn ?? defaultLine(expected), limits.lowest),
+			limits.highest
 		)
 	);
 
@@ -72,9 +77,6 @@
 	let detailed = $state(false);
 
 	const likeliest = $derived(mostLikelyOutcomes(distribution, 1)[0]);
-
-	// One range, read by the chart it draws and by the handle that travels across it.
-	const range = $derived(chartRange(distribution, line));
 
 	// The push sentence is always present, the same rule the readout follows. On a half number it
 	// reads 0.0 percent, because a half number cannot be landed on.
