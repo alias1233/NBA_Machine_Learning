@@ -155,6 +155,19 @@ def test_a_figure_the_run_did_not_score_is_left_out_rather_than_sent_as_a_blank(
     assert scored.metrics[0].label and scored.metrics[0].description
 
 
+def test_middle_coverage_names_the_value_closest_to_its_goal():
+    _score(
+        player_stat_specifications.POINTS_MODEL,
+        **{evaluation.CENTRAL_INTERVAL_COVERAGE: 0.79}
+    )
+
+    scored = model_evaluation("player_stats", "points")
+
+    assert scored is not None
+    middle = next(metric for metric in scored.metrics if metric.key == evaluation.CENTRAL_INTERVAL_COVERAGE)
+    assert middle.ideal == evaluation.CENTRAL_INTERVAL
+
+
 def test_an_unreadable_score_reads_as_no_score_rather_than_failing_the_page():
     file_path = player_stat_specifications.REBOUNDS_MODEL.evaluation_file()
     file_path.parent.mkdir(parents=True, exist_ok=True)

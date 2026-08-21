@@ -20,7 +20,8 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
 
-	import type { FamilyAboutModel, Metric, ModelEvaluation } from '$lib/types';
+	import { figure, winner } from '$lib/model-evaluation';
+	import type { FamilyAboutModel, ModelEvaluation } from '$lib/types';
 
 	type Props = {
 		models: FamilyAboutModel[];
@@ -80,35 +81,6 @@
 
 		loading = null;
 		opened = model;
-	}
-
-	/** A figure written the way its unit asks to be read. */
-	function figure(value: number, unit: Metric['unit']): string {
-		if (unit === 'probability') return `${(value * 100).toFixed(1)}%`;
-
-		return value.toFixed(3);
-	}
-
-	/**
-	 * Which of the two figures on a row is the better one, or null where nothing was won.
-	 *
-	 * Compared on the figures as written rather than as held, so a pair that reads the same in the
-	 * panel is never marked as though one of them beat the other. Which direction is better comes from
-	 * the model, because a miss and a share of right answers are read opposite ways.
-	 */
-	function won(metric: Metric): 'model' | 'baseline' | null {
-		if (metric.floor === null) return null;
-
-		const mine = figure(metric.value, metric.unit);
-		const theirs = figure(metric.floor, metric.unit);
-
-		if (mine === theirs) return null;
-
-		const ahead = metric.higher_is_better
-			? metric.value > metric.floor
-			: metric.value < metric.floor;
-
-		return ahead ? 'model' : 'baseline';
 	}
 
 	const day = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString();
@@ -171,7 +143,7 @@
 				</thead>
 				<tbody>
 					{#each scored.metrics as metric (metric.key)}
-						{@const better = won(metric)}
+						{@const better = winner(metric)}
 						<tr>
 							<th scope="row">
 								{metric.label}

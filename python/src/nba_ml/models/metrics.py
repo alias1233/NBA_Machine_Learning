@@ -49,6 +49,8 @@ class Metric():
 
     unit: MetricUnit
     higher_is_better: bool
+    ideal: float | None = None
+    """The value this figure should reach, when closer is better than simply higher or lower."""
 
 ALL_METRICS: dict[str, Metric] = {
     metric.key: metric
@@ -98,7 +100,8 @@ ALL_METRICS: dict[str, Metric] = {
             f"knows how sure it is scores exactly {evaluation.CENTRAL_INTERVAL:.0%}, and a lower "
             "figure means it claims to be more certain than it is.",
             MetricUnit.PROBABILITY,
-            higher_is_better=True
+            higher_is_better=True,
+            ideal=evaluation.CENTRAL_INTERVAL
         ),
         Metric(
             evaluation.ACCURACY,

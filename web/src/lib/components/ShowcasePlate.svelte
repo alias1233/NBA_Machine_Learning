@@ -1,16 +1,14 @@
 <!--
 	The home page hero: one screen, printed as a poster.
 
-	The plate is the site talking. A photograph sits under its blue ink, changing with the sample that
-	is up. Lying on it are two sheets of paper. The answer, on the reader's own paper, carries the
-	sample that is up. The slate, on the opposite theme's paper, carries the day's set at the foot.
+	The plate is the site talking. Its transparent header names the site, then an answer sheet carries
+	the sample that is up. The slate, on the opposite theme's paper, carries the day's set at the foot.
 
-	It reads down in four printed registers. The nameplate, stamped over the sample's own shape printed
-	to the plate's margins. The answer, given the whole page column, because a distribution is a
-	drawing and every pixel of width is another outcome a reader can tell apart. The one action of the
-	site, stamped in spot ink between two printed rules, which is the middle of the screen and the
-	whole point of it. Then the slate, which is the day's index rather than the day's answer, so it
-	lies under the action rather than over it.
+	It reads down in four printed registers. The foot line says what the site does. The answer is given
+	the whole page column, because a distribution is a drawing and every pixel of width is another
+	outcome a reader can tell apart. The one action of the site is stamped in spot ink between two
+	printed rules. Then the slate is the day's index rather than the day's answer, so it lies under the
+	action rather than over it.
 
 	Everything the site is sure of is printed and everything the reader is asking is drawn. The drawn
 	part is the wet-erase X over the sample they picked and the line they set across the answer.
@@ -26,11 +24,6 @@
 	resting anywhere in the hero holds it where it is, and reduced motion never starts it, which is the
 	standing way to turn it off. The run is drawn only while the turn is actually running, so it never
 	claims a change that is not coming.
-
-	The sample that is up is also printed across the plate behind the name, as large as the ground can
-	carry it, and it is the same shape the slate carries small. That is the one graphic on the ground:
-	it is real model output rather than ornament, it says the answer is a shape before a word has been
-	read, and it is redrawn on every turn, which is where the screen's movement comes from.
 
 	The hero is exactly one screen tall at every size, so the page under it is always one scroll away.
 	That is what decides the slate: a phone screen cannot hold the samples and a readable answer at
@@ -57,7 +50,7 @@
 		readAnswer,
 		sharePercentages
 	} from '$lib/odds';
-	import { READING_PATH, SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
+	import { READING_PATH, SITE_DESCRIPTION } from '$lib/site';
 
 	import type { Answer } from '$lib/odds';
 	import type { ShowcaseSample } from '$lib/types';
@@ -81,9 +74,6 @@
 
 	/** How many bars a silhouette draws. Enough to read a shape, few enough to stay a mark. */
 	const SILHOUETTE_BARS = 24;
-
-	/** How many the shape printed across the plate draws. It has a screen to fill rather than a tile. */
-	const PRINTED_BARS = 48;
 
 	/** How long a sample stays up before the next comes round. Long enough to read the answer. */
 	const TURN = 7000;
@@ -116,8 +106,6 @@
 		where: string;
 		/** The bar heights of the silhouette, as fractions of its tallest. */
 		silhouette: number[];
-		/** The same shape at the density the plate prints it across a whole screen. */
-		printed: number[];
 	};
 
 	/**
@@ -172,7 +160,6 @@
 					who: subject ?? sentenceCase(stat),
 					where: subject ? `${stat} · ${matchup}` : matchup,
 					silhouette: silhouetteOf(shape, SILHOUETTE_BARS),
-					printed: silhouetteOf(shape, PRINTED_BARS)
 				};
 			})
 			.filter((card): card is Card => card !== null)
@@ -307,7 +294,6 @@
      across the slate is working on the sample that is up. -->
 <section
 	class="band hero"
-	data-hero
 	style:--turn-duration="{TURN}ms"
 	onfocusin={() => (held = true)}
 	onfocusout={releaseTurn}
@@ -345,31 +331,8 @@
 	{/snippet}
 
 	<div class="page composition">
-		<div class="nameplate plate">
-			<!-- The sample that is up, printed to the plate's margins behind the name and redrawn every
-			     time the turn brings another one round. It is the same shape the slate carries small, so
-			     the two say one thing at two sizes. Keyed on the pick, because a shape arriving is the
-			     point of it. -->
-			{#if card}
-				{#key picked}
-					<span class="printed" aria-hidden="true">
-						{#each card.printed as height, bar (bar)}
-							<span
-								class="printed-bar"
-								style="height: {Math.max(height * 100, FLOOR)}%"
-								style:--bar={bar}
-							></span>
-						{/each}
-					</span>
-				{/key}
-			{/if}
-
-			<h1>{SITE_NAME}</h1>
-		</div>
-
 		<!-- The plate's own foot line: what the site does, what press sheet this is, and the one way out
-		     of the screen that is not the listing under it. The header holds itself away over the hero,
-		     so this carries it. The printed shape above stands on this rule. -->
+		     of the screen that is not the listing under it. -->
 		<div class="colophon plate">
 			<p class="lede">{SITE_DESCRIPTION}</p>
 
@@ -544,25 +507,33 @@
 	 * The screen it is measured against is the one the reader actually has, which on a phone changes
 	 * as the browser's own bars come and go. A smallest-screen height leaves the band under it showing
 	 * along the bottom edge whenever those bars are away, and the first screen of the site is the one
-	 * place a seam like that cannot be allowed. What the name is set against stays the smallest
-	 * screen, so the lettering holds still while the ground follows the bars.
+	 * place a seam like that cannot be allowed.
 	 */
 	.hero {
-		position: relative;
+		position: sticky;
+		top: 0;
 		isolation: isolate;
 		display: flex;
 		flex-direction: column;
 		min-height: 100dvh;
 		padding-block-end: var(--space-3);
-		/* Only what a returning header needs, rather than the room a band gives its own printing. The
-		   hero is one screen and every millimetre above the name is a millimetre off the answer. */
+		/* Only the room the header needs. The hero is one screen, so the answer takes the rest. */
 		--band-lead: var(--space-2);
-		/* How far in from the screen the plate's margin runs, which is the room the registration
-		   crosses stand in and the width every printed thing on the ground keeps inside. */
-		--plate-margin: calc(var(--space-3) * 2 + var(--registration));
 		background: var(--plate-deep);
 		color: var(--plate-ink);
 		overflow: clip;
+	}
+
+	/* Browsers with scroll-driven animation let the plate yield as the page reaches it. Without it,
+	   sticky positioning still leaves the Models page free to cover the hero. */
+	@supports (animation-timeline: scroll()) {
+		@media (prefers-reduced-motion: no-preference) {
+			.hero {
+				animation: hero-recede linear both;
+				animation-timeline: scroll(root);
+				animation-range: 0 100dvh;
+			}
+		}
 	}
 
 	/* The shared collage treatment, re-inked as a plate so unrelated photographs read as one ground. */
@@ -583,85 +554,23 @@
 		filter: saturate(0.8) contrast(1.08);
 	}
 
+	/* Home is a neutral page, so its opening ground is the block plane rather than a tinted photograph. */
+	:global(.neutral-page) .hero-artwork {
+		display: none;
+	}
+
 	/*
-	 * Four printed registers down one screen: the nameplate, the plate's foot line, the answer, the
-	 * action, and the day's index under it. The answer takes whatever the screen has left, so the
+	 * Four printed registers down one screen: the plate's foot line, the answer, the action, and the
+	 * day's index under it. The answer takes whatever the screen has left, so the
 	 * chart is as tall as the device allows and the four never add up to more than a screen.
 	 */
 	.composition {
 		display: grid;
 		flex: 1;
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+		grid-template-rows: auto minmax(0, 1fr) auto auto;
 		gap: var(--space-2);
 		min-height: 0;
-	}
-
-	/*
-	 * Printed straight onto the plate, so it brings the plate's inks and no ground of its own. It is
-	 * also what the shape behind it is printed on, so it stacks on its own: the shape is ordered
-	 * behind the name and the isolation stops that order reaching anything outside the nameplate.
-	 */
-	.nameplate {
-		position: relative;
-		padding-block-end: var(--space-1);
-		background: none;
-		isolation: isolate;
-	}
-
-	/*
-	 * The sample that is up, printed across the plate behind the name. It stands on the foot line
-	 * under the nameplate and rises past the top of the lettering, so the screen says the answer is a
-	 * shape before a word of it has been read.
-	 *
-	 * It runs to the plate's margin rather than to the edge of the screen, the way an image on a real
-	 * plate keeps inside its registration. Centred on the viewport rather than on the page column,
-	 * which is what the page column being centred itself makes possible.
-	 *
-	 * The ink is the plate's rule tone let down into the ground, which keeps the bone ink above 5:1
-	 * over the bars and keeps a printed shape from reading as a second chart.
-	 */
-	.printed {
-		display: none;
-		position: absolute;
-		z-index: -1;
-		inset: auto auto 0 50%;
-		translate: -50% 0;
-		align-items: flex-end;
-		gap: 2px;
-		width: calc(100vw - var(--plate-margin) * 2);
-		height: 112%;
-	}
-
-	.printed-bar {
-		flex: 1;
-		min-width: 0;
-		background: color-mix(in oklab, var(--plate-rule) 88%, var(--plate));
-		transform-origin: bottom;
-	}
-
-	/*
-	 * Printed, not drawn. The name is the one thing on this screen the reader is not asking about, so
-	 * it belongs to the plate and never to the pencil.
-	 *
-	 * Set in the interface face at its heaviest rather than in the site's serif, because plate
-	 * lettering is stamped and a serif reads as something typeset elsewhere and pasted on. It costs
-	 * no fourth font: the interface face is already loaded and already carries this weight.
-	 *
-	 * Its size is held against the screen's height as well as its width, because the hero is one
-	 * screen and a name set by width alone takes the answer's room on a short one.
-	 */
-	.nameplate h1 {
-		color: var(--plate-ink);
-		font-family: var(--font-ui);
-		font-size: clamp(2.5rem, min(13vw, 12svh), 9rem);
-		font-weight: 800;
-		letter-spacing: -0.038em;
-		line-height: 0.84;
-		text-transform: uppercase;
-		/* Never broken inside a word. A name too long for the screen wraps between its words, and
-		   letting it break inside one would cut the mark itself in half. */
-		overflow-wrap: normal;
 	}
 
 	.lede {
@@ -677,8 +586,8 @@
 		gap: var(--space-4);
 	}
 
-	/* The rule the printed shape stands on, with the sheet number at one end and the way out at the
-	   other. It is the plate's foot line, so it is printed in the separating rule rather than in the
+	/* The plate's foot line has its sheet number at one end and the way out at the other. It is printed
+	   in the separating rule rather than in the
 	   stronger one, which is a box a figure sits in and carries a meaning of its own. */
 	.colophon {
 		display: flex;
@@ -711,7 +620,7 @@
 		gap: var(--space-2);
 		min-height: 0;
 		padding: var(--space-4);
-		background: var(--page);
+		background: var(--panel);
 		color: var(--ink);
 		box-shadow: var(--sheet-shadow);
 		/* The drawing takes whatever the screen has left once everything around it is set. */
@@ -840,10 +749,16 @@
 	}
 
 	/* Narrow, there is no room either side of the block for a rule to run, so the block takes the whole
-	   column and the rules that centred it come off. */
+	   column and the rules that centred it come off. The action leaves room at the lower right for the
+	   page edge that meets it there. */
 	@media (width < 48rem) {
 		.act {
 			display: flex;
+			padding-inline-end: calc(var(--tap-target) * 4 + var(--space-3));
+		}
+
+		.button--lead {
+			padding-inline: var(--space-3);
 		}
 
 		.act::before,
@@ -986,34 +901,19 @@
 
 	/* The tile the turn is on takes the full ink, and nothing about its shape moves. A silhouette on
 	   the slate is the same shape before and after the turn reaches it, so drawing it in would say a
-	   value had changed when none had. Only the print behind the name is drawn in, because that one
-	   really is a new shape each turn. */
+	   value had changed when none had. */
 	.game.picked .bar {
 		background: var(--block-ink);
 	}
 
-	/*
-	 * The plate prints itself, once, on arrival, and in the order a press would lay it down: the name
-	 * is stamped, the shape behind it is printed bar by bar, what is said under it and the foot line
-	 * follow, the sheets are laid on the ink, and the action is stamped on last, which is where the
-	 * screen means the reader to end up.
-	 */
+	/* The plate prints itself once: its foot line settles, then the sheet and its action arrive. */
 	@media (prefers-reduced-motion: no-preference) {
-		.nameplate h1 {
-			animation: stamp 520ms var(--ease-in) both;
-		}
-
 		.lede {
 			animation: settle var(--motion-slow) var(--ease-in) 200ms both;
 		}
 
 		.colophon {
 			animation: settle var(--motion-slow) var(--ease-in) 280ms both;
-		}
-
-		/* The shape is printed on, bar by bar from the left, every time the turn brings one round. */
-		.printed-bar {
-			animation: draw var(--motion-slow) var(--ease-in) calc(var(--bar) * 9ms) backwards;
 		}
 
 		/* Laid onto the ink rather than faded up, which is what a sheet of paper landing on a plate
@@ -1031,8 +931,8 @@
 		}
 	}
 
-	/* stamp is the site's own impression and lives in app.css, because the nameplate here and a
-	   landing answer are the same press. */
+	/* stamp is the site's own impression and lives in app.css, because this action and a landing answer
+	   are the same press. */
 
 	@keyframes settle {
 		from {
@@ -1048,23 +948,9 @@
 		}
 	}
 
-	@keyframes draw {
-		from {
-			scale: 1 0;
-		}
-	}
-
 	@keyframes empty {
 		to {
 			scale: 0 1;
-		}
-	}
-
-	/* Where the plate has a margin to print its own shape in. Narrow, the nameplate wraps and every
-	   word on it would be set over a bar. */
-	@media (min-width: 40rem) {
-		.printed {
-			display: flex;
 		}
 	}
 

@@ -279,6 +279,25 @@
 	--rule-slot: 1px solid rgb(255 255 255 / 0.13);
 
 	/*
+	 * The home Models listing is a press composition, not a row of matching cards. Its deep board is
+	 * the bed of the press, and the first family anchors the run while the two others bind to its
+	 * edge. The values live here so the arrangement remains part of the shared visual system.
+	 */
+	--models-board-ground: var(--plate-deep);
+	--models-board-gap: var(--space-4);
+	--models-board-inset: var(--space-4);
+	--models-board-shadow: inset 0 0 0 1px var(--plate-rule);
+	--models-lead-span: 1.45fr;
+	--models-support-min: 17rem;
+	--models-sheet-min-height: 31rem;
+	--models-lead-inset: var(--space-6);
+	--models-support-inset: var(--space-4);
+	--models-sheet-rule: 1px;
+	--models-sheet-cue-inset: var(--space-3);
+	--models-sheet-lift: calc(var(--space-2) * -1);
+	--models-sheet-hover-shadow: 0 8px 16px var(--acetate-shadow), 0 24px 42px var(--acetate-shadow);
+
+	/*
 	 * Layout.
 	 *
 	 * One column, wide, and every band and the header sit on it, so a printed name in a band lines up
@@ -334,6 +353,13 @@
 	syntax: '<percentage>';
 	inherits: false;
 	initial-value: 100%;
+}
+
+/* The home header and hero leave the opening plate as one printed object. */
+@keyframes hero-recede {
+	to {
+		translate: 0 calc(var(--space-8) * -1.5);
+	}
 }
 
 /* The page tone is painted on the root, so nothing the browser draws outside the document, including
@@ -636,8 +662,7 @@ button.text-link {
  * thing printed on the band clears the wordmark.
  *
  * How much room it leaves above its own printing is --band-lead. A band that has a whole screen to
- * itself, which is the home page's hero, takes less of it, because every millimetre above the name
- * there is a millimetre off the answer.
+ * itself, which is the home page's hero, takes less of it because the answer needs the room.
  */
 main > .band:first-child {
 	margin-top: calc(var(--header-height) * -1);
@@ -687,6 +712,25 @@ main > .band:first-child {
 	--plate-rule-strong: #7c6ad0;
 	--rule-plate: 1px solid var(--plate-rule);
 	--rule-plate-strong: 1px solid var(--plate-rule-strong);
+}
+
+/*
+ * Pages that do not belong to a model family use the block plane for their opening band and header.
+ * The page components still speak the shared plate vocabulary, so mapping it here keeps their
+ * typography, rules and controls on the block's own ink without a second version of each component.
+ */
+.neutral-page {
+	--plate: var(--block);
+	--plate-deep: var(--block);
+	--plate-ink: var(--block-ink);
+	--plate-ink-muted: var(--block-muted);
+	--plate-spot: var(--accent-block);
+	--plate-spot-on: var(--block);
+	--plate-spot-hover: var(--accent-block-hover);
+	--plate-rule: var(--hairline-block);
+	--plate-rule-strong: var(--hairline-block);
+	--rule-plate: var(--rule-block);
+	--rule-plate-strong: var(--rule-block);
 }
 
 /*

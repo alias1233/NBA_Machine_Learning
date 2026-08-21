@@ -109,6 +109,8 @@ export type Metric = {
 	floor: number | null;
 	unit: MetricUnit;
 	higher_is_better: boolean;
+	/** The value this figure should reach, where closer is better than higher or lower. */
+	ideal: number | null;
 };
 
 /** How one model scored on games it never saw while it was being fitted. */

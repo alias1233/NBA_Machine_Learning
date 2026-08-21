@@ -152,6 +152,9 @@ class MetricResponse(BaseModel):
 
     higher_is_better: bool
 
+    ideal: float | None
+    """The value this figure should reach, where closeness defines the better result."""
+
 class ModelEvaluationResponse(BaseModel):
     """How one model scored on games it never saw while it was being fitted."""
 
@@ -444,7 +447,8 @@ def _model_evaluation(specification: ModelSpecification) -> ModelEvaluationRespo
             value=scored.metrics[key],
             floor=scored.floor.get(key),
             unit=metrics.ALL_METRICS[key].unit,
-            higher_is_better=metrics.ALL_METRICS[key].higher_is_better
+            higher_is_better=metrics.ALL_METRICS[key].higher_is_better,
+            ideal=metrics.ALL_METRICS[key].ideal
         )
         for key in specification.reported_metrics
         if key in scored.metrics and key in metrics.ALL_METRICS

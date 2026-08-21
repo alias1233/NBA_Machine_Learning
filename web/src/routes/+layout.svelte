@@ -10,10 +10,9 @@
 	else: the top of the page, a pointer in the top --header-reveal-zone, a scroll back up where there
 	is no pointer, the models menu standing open, and keyboard focus landing inside it.
 
-	The home page is the exception. Its first screen already prints the name at display size and every
-	tab leads somewhere the plate itself offers, so the header is held away until the reader has
-	scrolled past that screen. Keyboard focus still brings it back, and the skip link above it reaches
-	the page without it.
+	On the home page the header is a copy of the one printed on the hero. It shares the hero's
+	scroll-driven movement until the Models section reaches the screen, then resumes the normal fixed
+	header behavior without leaving two bars on screen.
 
 	The models menu opens on hover. A touch device has none, so there the first tap on the tab opens
 	it and the second follows the tab.
@@ -147,52 +146,18 @@
 
 	let scrollY = $state(0);
 	let headerHeight = $state(0);
-	let viewportHeight = $state(0);
 	let nearTop = $state(false);
 	let holdingFocus = $state(false);
 	let scrolledUp = $state(false);
 	let revealZone = $state(0);
+	let pastHero = $state(false);
 
-	/**
-	 * How far down the home page the header stays away, in pixels.
-	 *
-	 * The plate's own bottom edge, or one screen, whichever comes first. The plate runs to two or
-	 * three screens on a phone, and a reader that far into it with no way to reach the tabs is worse
-	 * off than one who has simply left the first screen behind.
-	 */
-	let heroDepth = $state(0);
+	/* The home header belongs to the hero until the Models section takes over the viewport. */
+	function syncPastHero() {
+		const models = document.getElementById(MODELS_SECTION);
 
-	$effect(() => {
-		// Read so a viewport of a new size measures a screenful again.
-		viewportHeight;
-		viewportWidth;
-
-		if (!home) {
-			heroDepth = 0;
-			return;
-		}
-
-		const hero = document.querySelector('[data-hero]');
-		if (!hero) return;
-
-		const measure = () => {
-			const bottom = hero.getBoundingClientRect().bottom + window.scrollY;
-
-			heroDepth = Math.min(bottom - headerHeight, window.innerHeight);
-		};
-
-		measure();
-
-		// The plate resizes with the fonts landing and with the day's samples, neither of which is a
-		// viewport change.
-		const watch = new ResizeObserver(measure);
-		watch.observe(hero);
-
-		return () => watch.disconnect();
-	});
-
-	/** The home page's first screen, where the plate says everything the header would. */
-	const overHero = $derived(heroDepth > 0 && scrollY < heroDepth);
+		pastHero = home && !!models && models.getBoundingClientRect().top <= 0;
+	}
 
 	// It hides once the page has scrolled past half the header height, so a small scroll does not
 	// take it away. The menu hangs below the reveal zone, so an open one holds the header as well,
@@ -200,8 +165,7 @@
 	const hidden = $derived(
 		holdingFocus
 			? false
-			: overHero ||
-					(scrollY > headerHeight / 2 && !nearTop && !scrolledUp && !overMenu && !revealed)
+			: scrollY > headerHeight / 2 && !nearTop && !scrolledUp && !overMenu && !revealed
 	);
 
 	/** Below this a move is jitter rather than a direction. */
@@ -210,6 +174,8 @@
 	let lastScroll = 0;
 
 	function onScroll() {
+		syncPastHero();
+
 		const moved = window.scrollY - lastScroll;
 
 		if (Math.abs(moved) < SCROLL_STEP) return;
@@ -254,6 +220,7 @@
 
 		revealZone = parseFloat(zone);
 		lastScroll = window.scrollY;
+		syncPastHero();
 	});
 
 	// Pages cross-fade. A change within one page never does, because the reader did not ask to go
@@ -286,13 +253,13 @@
 		revealed = false;
 		scrolledUp = false;
 		lastScroll = window.scrollY;
+		syncPastHero();
 	});
 </script>
 
 <svelte:window
 	bind:scrollY
 	bind:innerWidth={viewportWidth}
-	bind:innerHeight={viewportHeight}
 	onscroll={onScroll}
 	onpointermove={onPointerMove}
 />
@@ -317,8 +284,10 @@
 
 <header
 	class="plate"
-	class:hidden
-	class:detached={scrollY > 0}
+	class:neutral-page={!plate}
+	class:home-header={home && !pastHero}
+	class:hidden={(!home || pastHero) && hidden}
+	class:detached={(!home || pastHero) && scrollY > 0}
 	data-plate={plate}
 	bind:clientHeight={headerHeight}
 	onfocusin={onHeaderFocusIn}
@@ -383,7 +352,7 @@
 </header>
 
 <!-- tabindex, so the skip link above moves focus here and not only the scroll. -->
-<main id="content" tabindex="-1" data-plate={plate}>
+<main id="content" class:neutral-page={!plate} tabindex="-1" data-plate={plate}>
 	{@render children()}
 </main>
 
@@ -408,19 +377,15 @@
 <style>
 	/*
 	 * Printed on the band under it rather than set above it, so the top of every page is one object
-	 * and the wordmark lines up with the name stamped below it.
+	 * and the wordmark lines up with the work below it.
 	 *
-	 * It takes the plate's inks through the .plate class in app.css and remaps only the block family
-	 * on top of that, so every tab, rule and accent in the markup is already correct without a rule
-	 * per element.
+	 * It takes the current plane's inks through the .plate class in app.css, so every tab, rule and
+	 * accent in the markup is already correct without a rule per element.
 	 */
 	header {
 		position: fixed;
 		z-index: var(--layer-header);
 		inset: 0 0 auto;
-		--block-ink: var(--plate-ink);
-		--block-muted: var(--plate-ink-muted);
-		--hairline-block: var(--plate-rule);
 		transition:
 			translate var(--motion) var(--ease-in),
 			background var(--motion-fast) var(--ease-in),
@@ -430,6 +395,27 @@
 	/* At rest it is part of the band it is printed on, so it has no ground of its own. */
 	header.plate {
 		background: transparent;
+	}
+
+	/* Neutral pages have no family stock. Their fixed header is block paper from the first pixel onward. */
+	header.plate.neutral-page:not(.home-header) {
+		background: var(--block);
+	}
+
+	/* The home header is a hero-owned copy of the shared masthead. It shares the hero's scroll
+	   timeline, then leaves it at the Models section and returns to the normal fixed-header rules. */
+	header.home-header {
+		position: fixed;
+	}
+
+	@supports (animation-timeline: scroll()) {
+		@media (prefers-reduced-motion: no-preference) {
+			header.home-header {
+				animation: hero-recede linear both;
+				animation-timeline: scroll(root);
+				animation-range: 0 100dvh;
+			}
+		}
 	}
 
 	/* Off the band and over the page, where it is a strip of plate in its own right. With no ground
@@ -476,7 +462,7 @@
 		min-width: 0;
 		min-height: var(--tap-target);
 		overflow: hidden;
-		color: var(--block-ink);
+		color: var(--ink);
 		text-decoration: none;
 		white-space: nowrap;
 	}
@@ -506,7 +492,7 @@
 		padding-inline: var(--space-2);
 		border-bottom: var(--rule-accent);
 		border-bottom-color: transparent;
-		color: var(--block-muted);
+		color: var(--ink-muted);
 		font-size: var(--type-small);
 		font-weight: 600;
 		text-decoration: none;
@@ -532,7 +518,7 @@
 	/* A tap opens the menu and the next one follows the tab, which is two jobs and no hover to tell
 	   them apart. The open tab is boxed, so the second tap reads as a different press. */
 	.menu.revealed > a {
-		background: var(--hairline-block);
+		background: var(--hairline);
 		border-radius: var(--radius);
 	}
 

@@ -35,6 +35,7 @@
 	import Notice from '$lib/components/Notice.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
 	import { flow, MOTION_SLOW } from '$lib/motion';
+	import { phone } from '$lib/screen';
 	import { walkTo } from '$lib/scroll';
 	import { pageTitle } from '$lib/site';
 
@@ -98,16 +99,16 @@
 	 * so the walk does nothing there. Under them, which is every narrow screen, it is a page away
 	 * from the button that asked for it.
 	 *
-	 * The request is the flow, so it is handed over and the page holds the answer at the top of the
-	 * screen until it lands. An answer changes the height of everything it touches, and a page that
-	 * stopped travelling when the button was pressed is left wherever that leaves it.
+	 * On larger screens the request is the flow, so the page follows an answer that moves its target.
+	 * A phone's answer already holds its finished space, so it stops after the opening reveal instead
+	 * of fighting the browser's own viewport movement.
 	 */
 	export async function reveal(asking?: Promise<unknown>): Promise<void> {
 		asked = true;
 
 		await tick();
 
-		walkTo(answerColumn, { block: 'start', flowing: asking });
+		walkTo(answerColumn, { block: 'start', flowing: phone.current ? MOTION_SLOW : asking });
 	}
 
 	/**

@@ -208,12 +208,6 @@
 		margin-block-end: var(--space-1);
 	}
 
-	/* A 76rem page would set a line nobody can track back, so running text is capped by measure. */
-	section p,
-	section h3 {
-		max-width: var(--measure);
-	}
-
 	.over {
 		color: var(--over);
 	}

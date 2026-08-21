@@ -27,7 +27,7 @@
 	import FamilySheet from '$lib/components/FamilySheet.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import ShowcasePlate from '$lib/components/ShowcasePlate.svelte';
-	import { MODELS_SECTION } from '$lib/models';
+	import { MODELS_PATH, MODELS_SECTION } from '$lib/models';
 	import { SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
 
 	let { data } = $props();
@@ -41,12 +41,11 @@
 <ShowcasePlate samples={data.samples} heldOver={data.heldOver} answering={data.answering} />
 
 <section class="models lands-flush" id={MODELS_SECTION}>
+	<a class="models-tab" href={MODELS_PATH}>Models</a>
+
 	<div class="page inside">
-		<!-- The heading and what is not on the board yet share one line, so the board keeps the height
-		     and the section is still a screen. -->
 		<div class="head">
 			<h2 class="page-title type-h1">Models</h2>
-			<p class="more muted">More models <span class="tag micro">Coming soon</span></p>
 		</div>
 
 		<!-- A dead service leaves this list empty too, and telling a reader nothing is published would
@@ -61,14 +60,16 @@
 				<Notice>No model can be listed while the prediction service is not answering.</Notice>
 			{/if}
 		{:else}
-			<div class="block board">
+			<div class="board">
 				<ul class="families">
-					{#each data.families as family (family.name)}
-						<FamilySheet {family} />
+					{#each data.families as family, position (family.name)}
+						<FamilySheet {family} {position} />
 					{/each}
 				</ul>
 			</div>
 		{/if}
+
+		<p class="more muted">More models <span class="tag micro">Coming soon</span></p>
 
 		<AdSlot place="homeModels" />
 	</div>
@@ -81,9 +82,39 @@
 	 * field of it.
 	 */
 	.models {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		padding-block: var(--space-6) var(--space-5);
+		background: var(--page);
+	}
+
+	/* The listing's first piece of paper. Its page edge stays square while the far edge takes the
+	   fold of a folder tab. */
+	.models-tab {
+		position: absolute;
+		inset-block-end: 100%;
+		inset-inline-start: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-block-size: var(--tap-target);
+		inline-size: max(calc(var(--tap-target) * 4), 20vw);
+		padding-inline: var(--space-5);
+		background: var(--page);
+		border: var(--rule);
+		border-block-end: 0;
+		clip-path: polygon(0 0, calc(100% - var(--space-3)) 0, 100% 100%, 0 100%);
+		color: var(--ink);
+		font-size: var(--type-small);
+		font-weight: 700;
+		text-decoration: none;
+		white-space: nowrap;
+		transition: color var(--motion-fast) var(--ease-in);
+	}
+
+	.models-tab:hover {
+		color: var(--plane-accent);
 	}
 
 	.inside {
@@ -98,25 +129,18 @@
 		flex-direction: column;
 	}
 
-	/* The families as sheets on the board, with the board showing between them. */
+	/* The families form one press composition. The first sheet anchors the run and the others bind to
+	   its edge, which makes the page read as a single object rather than three equal cards. */
 	.families {
-		display: flex;
+		display: grid;
 		flex: 1;
-		flex-direction: column;
-		gap: var(--space-4);
+		gap: var(--models-board-gap);
 		margin: 0;
-		padding: 0;
+		padding: var(--models-board-inset);
+		background: var(--models-board-ground);
+		box-shadow: var(--models-board-shadow);
 		list-style: none;
-	}
-
-	/* Not a family and nothing to act on, so it is a note at the far end of the heading's own line
-	   rather than a fourth sheet with empty stock. */
-	.head {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: var(--space-2) var(--space-5);
+		isolation: isolate;
 	}
 
 	.more {
@@ -150,15 +174,12 @@
 			min-height: 0;
 		}
 
-		/*
-		 * Every family takes the same three rows of the board rather than three of its own, so what
-		 * they are, the models they hold and the ways into them each line up across the row however
-		 * many lines a family's own words run to.
-		 */
 		.families {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-			grid-template-rows: min-content minmax(0, 1fr) min-content;
+			grid-template-columns: minmax(0, var(--models-lead-span)) minmax(
+				var(--models-support-min),
+				1fr
+			);
+			grid-template-rows: repeat(2, minmax(0, 1fr));
 		}
 	}
 </style>

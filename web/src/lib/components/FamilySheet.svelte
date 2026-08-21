@@ -21,15 +21,17 @@
 
 	type Props = {
 		family: ListedFamily;
+		/** The first family is the anchor of the home page's press composition. */
+		position: number;
 	};
 
-	let { family }: Props = $props();
+	let { family, position }: Props = $props();
 
 	const models = $derived(family.models);
 </script>
 
 <!-- The family's own stock. One attribute is the whole of what a family colours. -->
-<li class="family plate" data-plate={family.slug}>
+<li class:lead={position === 0} class="family plate" data-plate={family.slug}>
 	<span class="registration top-start" aria-hidden="true"></span>
 	<span class="registration top-end" aria-hidden="true"></span>
 	<span class="registration bottom-start" aria-hidden="true"></span>
@@ -78,10 +80,29 @@
 		grid-template-rows: min-content minmax(0, 1fr) min-content;
 		gap: var(--space-4);
 		padding: var(--space-5);
+		min-height: var(--models-sheet-min-height);
 		/* A sheet lies on the board rather than being printed into it, so it is lit along its top edge
 		   and casts onto the board under it. The one place on paper that carries the plate's own
 		   shadow, because the ground it falls on is printed stock. */
-		box-shadow: inset 0 1px 0 var(--acetate-sheen), var(--sheet-shadow);
+		box-shadow: inset 0 var(--models-sheet-rule) 0 var(--acetate-sheen), var(--sheet-shadow);
+		transition:
+			transform var(--motion) var(--ease-in),
+			box-shadow var(--motion) var(--ease-in);
+	}
+
+	.family::after {
+		position: absolute;
+		inset: var(--models-sheet-cue-inset);
+		content: '';
+		border: var(--rule-plate);
+		border-left: 0;
+		pointer-events: none;
+	}
+
+	.family:hover,
+	.family:focus-within {
+		transform: translateY(var(--models-sheet-lift));
+		box-shadow: inset 0 var(--models-sheet-rule) 0 var(--acetate-sheen), var(--models-sheet-hover-shadow);
 	}
 
 	.said {
@@ -177,28 +198,32 @@
 	}
 
 	/*
-	 * Landscape, the page stands the families as columns of one grid, so the three registers line up
-	 * across the row however long a family's own words run. The index takes the room between them.
+	 * Landscape, the lead family takes the full press height and the two supporting sheets share the
+	 * other edge. Each index still takes exactly the room between its own heading and ways in.
 	 */
 	@media (orientation: landscape) {
 		.family {
-			grid-row: span 3;
-			grid-template-rows: subgrid;
+			min-height: 0;
 		}
 
-		.said {
-			grid-row: 1;
+		.family.lead {
+			grid-row: 1 / -1;
+			grid-template-rows: min-content minmax(0, 1fr) min-content;
+			padding: var(--models-lead-inset);
+		}
+
+		.family:not(.lead) {
+			padding: var(--models-support-inset);
+		}
+
+		.family.lead .said {
 			gap: var(--space-3);
 		}
+	}
 
-		/* The models take the room between what the family is and the ways into it, so the sheets are
-		   the same height whatever each one holds. */
-		.index {
-			grid-row: 2;
-		}
-
-		.ways {
-			grid-row: 3;
+	@media (prefers-reduced-motion: reduce) {
+		.family {
+			transition: none;
 		}
 	}
 </style>
