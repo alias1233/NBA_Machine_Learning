@@ -12,7 +12,8 @@ published from there.
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Sequence
+import re
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -136,6 +137,87 @@ class TrainingInputs():
     build_description: tuple = ()
     """Anything else deciding what a build holds, beyond the columns and the output shape."""
 
+@dataclass(frozen=True)
+class EvaluationSettings():
+    """The settings needed to rebuild exactly the splits a model was originally scored on."""
+
+    training_start_date: datetime
+    evaluation_split: EvaluationSplit
+    chunk_step_size: int = CHUNK_STEP_SIZE
+
+def _saved_evaluation_settings(settings: EvaluationSettings) -> dict[str, str | float | int]:
+    split = settings.evaluation_split
+
+    return {
+        "training_start_date": settings.training_start_date.isoformat(),
+        "evaluation_start_date": split.start_date.isoformat(),
+        "validation_fraction": split.validation_fraction,
+        "split_on": split.split_on.value,
+        "split_seed": split.seed,
+        "chunk_step_size": settings.chunk_step_size
+    }
+
+def _read_saved_evaluation_settings(saved: Mapping[str, Any]) -> EvaluationSettings | None:
+    """Reads a model's recorded split settings, when its file was saved after this was added."""
+
+    settings = saved.get(loading.EVALUATION_SETTINGS)
+
+    if not isinstance(settings, dict):
+        return None
+
+    try:
+        return EvaluationSettings(
+            training_start_date=datetime.fromisoformat(settings["training_start_date"]),
+            evaluation_split=EvaluationSplit(
+                start_date=datetime.fromisoformat(settings["evaluation_start_date"]),
+                validation_fraction=float(settings["validation_fraction"]),
+                split_on=SplitKey(settings["split_on"]),
+                seed=int(settings["split_seed"])
+            ),
+            chunk_step_size=int(settings["chunk_step_size"])
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("The saved evaluation settings are unreadable.") from error
+
+def _read_reported_evaluation_settings(model_specs: ClassifierModelSpecification) -> EvaluationSettings | None:
+    """Reads split settings from reports written before model files recorded them directly."""
+
+    try:
+        report_text = model_specs.training_report_file().read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    names = (
+        "training starts",
+        "evaluation starts",
+        "validation fraction",
+        "split apart by",
+        "split seed",
+        "sample step size"
+    )
+    values = {
+        name: match.group(1)
+        for name in names
+        if (match := re.search(rf"^{re.escape(name)}\s{{2,}}(.+)$", report_text, re.MULTILINE))
+    }
+
+    if len(values) != len(names):
+        return None
+
+    try:
+        return EvaluationSettings(
+            training_start_date=datetime.fromisoformat(values["training starts"]),
+            evaluation_split=EvaluationSplit(
+                start_date=datetime.fromisoformat(values["evaluation starts"]),
+                validation_fraction=float(values["validation fraction"]),
+                split_on=SplitKey(values["split apart by"]),
+                seed=int(values["split seed"])
+            ),
+            chunk_step_size=int(values["sample step size"])
+        )
+    except ValueError:
+        return None
+
 def _describe_build(
     model_specs: ClassifierModelSpecification,
     inputs: TrainingInputs,
@@ -224,7 +306,9 @@ def _build_datasets(
         use_cached_build: bool = True,
         save_cached_build: bool = True,
         print_debug: bool = False,
-        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON)
+        training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON),
+        chunk_step_size: int = CHUNK_STEP_SIZE,
+        input_scalers: Mapping[str, Any] | None = None
         ) -> tuple[SequenceGameDataset, SequenceGameDataset, SequenceGameDataset, dict]:
     """
     Builds the three splits and the scalers fitted on the training one.
@@ -234,7 +318,9 @@ def _build_datasets(
     """
 
     file_path = model_specs.training_cache_file()
-    description = _describe_build(model_specs, inputs, training_start_date, evaluation_split)
+    description = _describe_build(
+        model_specs, inputs, training_start_date, evaluation_split, chunk_step_size
+    )
     cached = None
 
     if use_cached_build and file_path.exists():
@@ -247,7 +333,7 @@ def _build_datasets(
         labeled_data = inputs.build_labeled_data(
             training_start_date,
             evaluation_split,
-            CHUNK_STEP_SIZE,
+            chunk_step_size,
             print_debug
         )
 
@@ -262,7 +348,12 @@ def _build_datasets(
             num_classifications=model_specs.output.length,
             output_value_step=model_specs.output.value_step,
             impossible_value=model_specs.output.impossible_value,
-            standardize_input=True
+            standardize_input=True,
+            input_scalers=(
+                None if input_scalers is None else (
+                    input_scalers[loading.SEQUENCE_SCALER], input_scalers[loading.STATIC_SCALER]
+                )
+            )
         )
 
         if save_cached_build:
@@ -422,28 +513,22 @@ def _floor_probabilities(
 
     return np.tile(evaluation.class_prior(outputs, classes), (samples, 1))
 
-def _evaluate_saved_model(
+def _evaluate_model(
         model_specs: ClassifierModelSpecification,
+        model: GRUFeedForward,
         training_dataset: SequenceGameDataset,
         test_dataset: SequenceGameDataset,
         evaluation_split: EvaluationSplit,
         loss_function: trainer.LossFunction,
-        training_run: trainer.TrainingRun
+        write_graphs: bool = False
     ) -> tuple[dict[str, float], metrics.ModelEvaluation]:
     """
-    Reloads the model that was just saved and scores it on the held-out games, which also proves
+    Scores a saved model on the held-out games. Training uses this after saving, so it also proves
     that the saved file round trips back into a working model.
 
     Returns:
         (every figure scored, the record written beside the model)
     """
-
-    graphs_directory = model_specs.graphs_directory()
-
-    trainer.graph_loss_progress(training_run, graphs_directory)
-
-    saved_parameters = serialization.load_data_from_file(model_specs.model_file())
-    model = GRUFeedForward.load_from_saved_parameters_dict(saved_parameters)
 
     configuration = model_specs.training_parameters.configuration
     predictions = trainer.predict(
@@ -476,15 +561,16 @@ def _evaluate_saved_model(
         value_scale
     )
 
-    evaluation.graph_classification(
-        probabilities,
-        actuals,
-        label=model_specs.name,
-        class_labels=[output.label(position) for position in range(output.length)],
-        values=value_scale,
-        output_size=20,
-        save_graph_directory_path=graphs_directory
-    )
+    if write_graphs:
+        evaluation.graph_classification(
+            probabilities,
+            actuals,
+            label=model_specs.name,
+            class_labels=[output.label(position) for position in range(output.length)],
+            values=value_scale,
+            output_size=20,
+            save_graph_directory_path=model_specs.graphs_directory()
+        )
 
     first_game, last_game = metrics.dates_covered(test_dataset.samples.game_dates)
 
@@ -501,6 +587,54 @@ def _evaluate_saved_model(
             floor=floor
         )
     )
+
+def rescore(
+        model_specs: ClassifierModelSpecification,
+        inputs: TrainingInputs,
+        print_debug: bool = True
+    ) -> metrics.ModelEvaluation:
+    """Rewrites a saved model's held-out evaluation without fitting or changing the model itself."""
+
+    model, saved = loading.load(model_specs.model_file())
+    settings = _read_saved_evaluation_settings(saved) or _read_reported_evaluation_settings(model_specs)
+
+    if settings is None:
+        raise ValueError(
+            f"{model_specs.name} has no recorded split settings. Train it again before rescoring it."
+        )
+
+    try:
+        training_dataset, _, test_dataset, _ = _build_datasets(
+            model_specs,
+            inputs,
+            settings.evaluation_split,
+            use_cached_build=False,
+            save_cached_build=False,
+            print_debug=print_debug,
+            training_start_date=settings.training_start_date,
+            chunk_step_size=settings.chunk_step_size,
+            input_scalers=saved
+        )
+    except KeyError as error:
+        raise ValueError(
+            f"{model_specs.name} has no saved input scalers, so it cannot be rescored."
+        ) from error
+
+    loss_function = model_specs.training_parameters.build_loss_function(model_specs.output.length)
+    _, model_evaluation = _evaluate_model(
+        model_specs,
+        model,
+        training_dataset,
+        test_dataset,
+        settings.evaluation_split,
+        loss_function
+    )
+    evaluation_path = metrics.write(model_specs.evaluation_file(), model_evaluation)
+
+    if print_debug:
+        print(f"Saved the scores to {evaluation_path}.")
+
+    return model_evaluation
 
 def train(
         model_specs: ClassifierModelSpecification,
@@ -546,6 +680,7 @@ def train(
         evaluation_split if evaluation_split is not None else default_evaluation_split(),
         split_on=inputs.split_on
     )
+    evaluation_settings = EvaluationSettings(training_start_date, evaluation_split)
 
     training_dataset, validation_dataset, test_dataset, scaler_parameters = _build_datasets(
         model_specs,
@@ -651,7 +786,8 @@ def train(
             **model.get_save_parameters_dict(),
             **scaler_parameters,
             loading.SEQUENCE_COLUMNS: list(inputs.sequence_columns),
-            loading.STATIC_COLUMNS: list(inputs.static_columns)
+            loading.STATIC_COLUMNS: list(inputs.static_columns),
+            loading.EVALUATION_SETTINGS: _saved_evaluation_settings(evaluation_settings)
         }
     )
 
@@ -659,13 +795,16 @@ def train(
     model_evaluation: metrics.ModelEvaluation | None = None
 
     if output_evaluations:
-        scores, model_evaluation = _evaluate_saved_model(
+        trainer.graph_loss_progress(training_run, model_specs.graphs_directory())
+        saved_model, _ = loading.load(model_file)
+        scores, model_evaluation = _evaluate_model(
             model_specs,
+            saved_model,
             training_dataset,
             test_dataset,
             evaluation_split,
             loss_function,
-            training_run
+            write_graphs=True
         )
         evaluation_path = metrics.write(model_specs.evaluation_file(), model_evaluation)
 

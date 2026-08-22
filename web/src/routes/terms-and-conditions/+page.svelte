@@ -1,14 +1,20 @@
 <script lang="ts">
 	import PlateBand from '$lib/components/PlateBand.svelte';
-	import { pageTitle, SITE_NAME } from '$lib/site';
+	import PageMetadata from '$lib/components/PageMetadata.svelte';
+	import { SITE_NAME } from '$lib/site';
     import { CONTACT_EMAIL, STATE, COUNTRY } from '$lib/owner';
     import { ADS_ENABLED } from '$lib/ads';
+	import { webPageSchema } from '$lib/seo';
+
+	const DESCRIPTION = 'Terms and conditions for using Bazaar Ball and its NBA predictions.';
 </script>
 
-<svelte:head>
-	<title>{pageTitle('Terms and conditions')}</title>
-	<meta name="description" content="Terms and conditions of this site." />
-</svelte:head>
+<PageMetadata
+	title="Terms and conditions"
+	description={DESCRIPTION}
+	path="/terms-and-conditions"
+	schema={webPageSchema({ name: 'Terms and conditions', description: DESCRIPTION, path: '/terms-and-conditions' })}
+/>
 
 <PlateBand title="Terms and conditions" />
 

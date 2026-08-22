@@ -12,6 +12,24 @@
 	font-display: swap;
 }
 
+/* The plate uses only its supporting and display weights. They are static cuts, so loading both is
+   still less wasteful than carrying the seven weights the plate never prints. */
+@font-face {
+	font-family: 'Barlow Condensed';
+	src: url('/fonts/barlow-condensed-latin-700.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Barlow Condensed';
+	src: url('/fonts/barlow-condensed-latin-800.woff2') format('woff2');
+	font-weight: 800;
+	font-style: normal;
+	font-display: swap;
+}
+
 /* Cut to the run of weights the site sets, 400 through 800. The weights either side of it were a
    third of the file and nothing could ever ask for them. */
 @font-face {
@@ -90,15 +108,17 @@
 	   opposite of the paper in either theme and is never mistaken for over, under or push. */
 	--chart-expected: var(--ink);
 
-	/* Type. One family per job: the serif holds the name and the large headings, the interface face
-	   holds every sentence, and the mono face holds every figure and every micro label. */
+	/* Type. One family per job: the serif holds large paper headings, the plate face holds every
+	   stamped word, the interface face holds every sentence, and the mono face holds every figure and
+	   micro label. */
 	--font-display: 'Instrument Serif', Georgia, serif;
+	--font-plate: 'Barlow Condensed', 'Arial Narrow', sans-serif;
 	--font-ui: 'Inter Tight', system-ui, sans-serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
 	--type-display: clamp(3rem, 9vw, 6rem);
-	/* The plate is stamped rather than typeset, so its own headings are set in the interface face at
-	   its heaviest. This is the size a page's band is stamped at, under the hero's own. */
+	/* The plate is stamped rather than typeset. This is the size a page's band is stamped at, under
+	   the hero's own. */
 	--type-plate-display: clamp(2.25rem, 6vw, 5rem);
 	/* An index standing in a slot, where the name of the thing is what a reader is choosing between
 	   and is set large enough to be the texture of the sheet. Measured against the index holding it,
@@ -459,10 +479,9 @@ button.text-link {
 	outline-offset: 2px;
 }
 
-/* The interface face, not the serif, so the small mark never competes with the name at display
-   size. */
+/* The small mark is stamped too, but stays beneath the name at display size. */
 .wordmark {
-	font-family: var(--font-ui);
+	font-family: var(--font-plate);
 	font-size: var(--type-h3);
 	font-weight: 700;
 	letter-spacing: 0.08em;
@@ -754,7 +773,7 @@ main > .band:first-child {
 .plate h2,
 .plate .type-h1,
 .plate .type-h2 {
-	font-family: var(--font-ui);
+	font-family: var(--font-plate);
 	font-weight: 700;
 	letter-spacing: -0.02em;
 	line-height: 1.1;
@@ -1185,6 +1204,7 @@ select:disabled {
 .button--lead {
 	min-height: calc(var(--tap-target) + var(--space-5));
 	padding-inline: var(--space-7);
+	font-family: var(--font-plate);
 	font-size: var(--type-note);
 	font-weight: 800;
 	letter-spacing: 0.06em;

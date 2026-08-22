@@ -11,7 +11,7 @@ from functools import partial
 from nba_ml import season
 from nba_ml.feature_engineering import team_game_rows
 from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey
-from nba_ml.models import classifier_training
+from nba_ml.models import classifier_training, metrics
 from nba_ml.models.classifier_training import TrainingInputs
 from nba_ml.models.team_stats import features
 from nba_ml.models.team_stats.specifications import MAX_SEQUENCE_LENGTH, TeamStatModelSpecification
@@ -58,3 +58,11 @@ def train(
         training_start_date,
         evaluation_split
     )
+
+def rescore(
+        model_specs: TeamStatModelSpecification,
+        print_debug: bool = True
+        ) -> metrics.ModelEvaluation:
+    """Rewrites a saved model's held-out evaluation without fitting it again."""
+
+    return classifier_training.rescore(model_specs, _training_inputs(model_specs), print_debug)

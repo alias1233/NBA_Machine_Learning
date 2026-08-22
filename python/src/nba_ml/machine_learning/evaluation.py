@@ -28,7 +28,7 @@ EXPECTED_VALUE_RMSE = "expected_value_rmse"
 EXPECTED_VALUE_MEDIAN_ERROR = "expected_value_median_error"
 HIGHEST_PROBABILITY_MAE = "highest_probability_mae"
 HIGHEST_PROBABILITY_RMSE = "highest_probability_rmse"
-CENTRAL_INTERVAL_COVERAGE = "central_interval_coverage"
+CENTRAL_INTERVAL_CALIBRATION_ERROR = "central_interval_calibration_error"
 
 CENTRAL_INTERVAL = 0.8
 """
@@ -207,19 +207,17 @@ def calculate_line_ranked_probability_score(
 
     return float(np.mean(np.sum((predicted_cumulative - happened) ** 2, axis=1)))
 
-def calculate_central_interval_coverage(
+def calculate_central_interval_calibration_error(
     predicted_probabilities: np.ndarray,
     values: ValueScale,
     interval: float = CENTRAL_INTERVAL
     ) -> float:
     """
-    How often the outcome landed inside the middle of the answer, which is what says whether a
-    distribution is as wide as it should be.
+    The gap between outcomes landing inside each selected middle interval and the probability those
+    intervals held on average.
 
-    A model that is right on average can still be wrong about how sure it is. This reads the middle
-    `interval` of each answer as a range of whole numbers and counts how often the real result was
-    in it. A perfectly calibrated model scores exactly `interval`. Below it the answers are too
-    narrow, above it too wide.
+    The inclusive bounds of a discrete interval can hold more or less than `interval`, so observed
+    coverage is calibrated against the probability mass the selected bounds actually contain.
     """
 
     classes = predicted_probabilities.shape[1]
@@ -227,12 +225,21 @@ def calculate_central_interval_coverage(
     cumulative = np.cumsum(values.spread_over_values(predicted_probabilities), axis=1)
 
     tail = (1.0 - interval) / 2.0
-    lowest = lines[np.argmax(cumulative >= tail, axis=1)]
-    highest = lines[np.argmax(cumulative >= 1.0 - tail, axis=1)]
+    lowest_positions = np.argmax(cumulative >= tail, axis=1)
+    highest_positions = np.argmax(cumulative >= 1.0 - tail, axis=1)
+    lowest = lines[lowest_positions]
+    highest = lines[highest_positions]
 
     inside = (values.actual_values >= lowest) & (values.actual_values <= highest)
+    rows = np.arange(len(predicted_probabilities))
+    expected = cumulative[rows, highest_positions]
+    expected -= np.where(
+        lowest_positions > 0,
+        cumulative[rows, np.maximum(lowest_positions - 1, 0)],
+        0.0
+    )
 
-    return float(np.mean(inside))
+    return abs(float(np.mean(inside)) - float(np.mean(expected)))
 
 def class_prior(outputs: np.ndarray, classes: int) -> np.ndarray:
     """
@@ -573,7 +580,7 @@ def score_classification(
         metrics[LINE_RANKED_PROBABILITY_SCORE] = calculate_line_ranked_probability_score(
             predicted_probabilities, values
         )
-        metrics[CENTRAL_INTERVAL_COVERAGE] = calculate_central_interval_coverage(
+        metrics[CENTRAL_INTERVAL_CALIBRATION_ERROR] = calculate_central_interval_calibration_error(
             predicted_probabilities, values
         )
         metrics.update(calculate_classification_ordinal_errors(predicted_probabilities, values))

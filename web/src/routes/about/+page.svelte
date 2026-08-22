@@ -9,50 +9,46 @@
 -->
 <script lang="ts">
 	import AnnotatedAnswer from '$lib/components/AnnotatedAnswer.svelte';
+	import EditorialMeta from '$lib/components/EditorialMeta.svelte';
 	import Faq from '$lib/components/Faq.svelte';
+	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
 	import SectionIndex from '$lib/components/SectionIndex.svelte';
-	import { pageTitle, SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
+	import { pageTitle, PUBLIC_SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
 	import { MODELS_PATH } from '$lib/models';
+	import { articleSchema, faqSchema } from '$lib/seo';
 
-	/**
-	 * Placeholders, apart from the first question. The wording is the user's to settle, so each one
-	 * reads as unwritten.
-	 *
-	 * Which games can be predicted is asked here rather than on a family page, because the answer is
-	 * the same for every family and would otherwise be restated once per family.
-	 */
+	const DESCRIPTION = 'How Bazaar Ball makes NBA predictions, measures model quality, and explains uncertainty.';
+
+	/** Site-wide questions belong here so every prediction page can point to one answer. */
 	const QUESTIONS = [
-		{ 
-			question: `Why can't I find a scheduled game in the Upcoming Games section of a prediction page?`, 
+		{
+			question: 'Why is an upcoming NBA game missing from the Upcoming Games section?',
 			answer: [
 				`The site currently does not support predicting on preseason games, and they do not appear
 				in the Upcoming Games section.`,
 				`If your target game is a regular season or playoff game, then simply wait for the teams 
 				in your target game to finish playing the games that they have scheduled before your target 
 				game, and the Upcoming Games section should automatically update soon after.`,
-				`The only games that are shown in the Upcoming Games section are games between teams that both do not 
-				have an earlier scheduled game. This ensures all predictions are made with updated information.`
+				'This ensures each prediction is based on the latest available information.'
 			]
 		},
-		{ 
-			question: `Why do some probability distribution graphs contain bars that range over multiple individual values?`, 
+		{
+			question: `Why do some model's chart bars cover multiple values?`,
 			answer: [
-				`The models assign a probability to every outcome within the predicted statistic's common 
-				range of occurance. However, for statistics which span a wide range, it is challenging for
-				the model to provide accurate probabilities for every single value within the interval,
-				especially if there are fewer data samples to train on.`,
-				`In these cases, the possible outcomes of the statistic are "bucketed", grouping intervals
-				of outcomes together. This lowers the total number of possible outcomes, reducing the
-				complexity of the task that the model has to do, and increasing accuracy.`
+				`For a statistic with a wide range of possible outcomes, a bar can represent a small interval 
+				of nearby outcomes rather than one exact value. Grouping those values into one bucket reduces 
+				the complexity of the prediction task for the model, increasing its accuracy.`
 			]
 		},
-		{ 
-			question: 'Can I make predictions on mock trades just for fun?', 
+		{
+			question: 'Can I make predictions on mock, what-if rosters?',
 			answer: [
-				`Yes! Predicting supports any custom changes to a team's roster. Simply begin typing in the 
-				player selector's input field to search for players league-wide, even if they do not 
-				belong to the current team. You can also remove players from a team arbitrarily as well.`
+				`Yes! You can remove any players from their teams, and add any player currently in the league 
+				to any team's roster. Simply begin typing in the player selector's input field to search for 
+				players league-wide.`,
+				`Prediction still functions like normal, with the model's predicted outcomes 
+				adjusting based on the custom changes made.`
 			]
 		},
 	];
@@ -60,7 +56,7 @@
 	// The anchors are fixed. Every answer block on the site links to #reading, so that one in
 	// particular can never be renamed.
 	const SECTIONS = [
-		['what', 'What this is'],
+		['what', 'What it predicts'],
 		['reading', 'Reading a prediction'],
 		['how', 'How it works'],
 		['questions', 'FAQ'],
@@ -68,94 +64,86 @@
 	];
 </script>
 
-<svelte:head>
-	<title>{pageTitle('About')}</title>
-	<meta
-		name="description"
-		content="What this site is, how to read a prediction, how it works, and disclaimers."
-	/>
-</svelte:head>
+<PageMetadata
+	title="About"
+	description={DESCRIPTION}
+	path="/about"
+	article
+	schema={[
+		articleSchema({ name: pageTitle('About'), description: DESCRIPTION, path: '/about' }),
+		faqSchema(QUESTIONS)
+	]}
+/>
 
-<PlateBand title="About" lede={SITE_DESCRIPTION} />
+<PlateBand title="About" lede={PUBLIC_SITE_DESCRIPTION} />
 
 <div class="page reading indexed">
 	<SectionIndex sections={SECTIONS} label="Sections of this page" />
 
 	<div class="sections">
 		<section id="what">
-			<h2 class="section-rule">What this is</h2>
+			<h2 class="section-rule">What is Bazaar Ball?</h2>
 			<p>
 				<a href="/">{SITE_NAME}</a>
-				is a collection of machine learning models that predict statistics of future NBA games.
+				is a collection of machine learning models that predicts player, team, and game statistics 
+				for upcoming NBA games. Each model outputs a range of possible outcomes and the probabilities assigned to 
+				each value, rather than one certain answer.
 			</p>
 			<p>
-				Each model outputs a probability distribution over the range of possible outcomes for 
-				a targeted statistic, allowing for precise calculations of the predicted
+				The resulting distribution can be used to calculate the predicted
 				<b class="under">under</b>,
 				<b class="push">push</b>,
 				and
 				<b class="over">over</b>
-				values for a specified line.
+				values for every possible line.
 			</p>
 			<p>
 				Head to the
 				<a href={MODELS_PATH}>Models</a>
-				section to select from the available model categories. Visit a model category's
-				<em>Info</em>
-				page to learn more about what specific models within the category predict.
+				section to choose from the available model categories. Each category’s <em>Info</em> page explains 
+				the models within the category and displays their evaluation metrics.
 			</p>
 		</section>
 
 		<section id="reading">
-			<h2 class="section-rule">Reading a prediction</h2>
+			<h2 class="section-rule">How do I read a prediction?</h2>
 
 			<AnnotatedAnswer />
 		</section>
 
 		<section id="how">
-			<h2 class="section-rule">How it works</h2>
+			<h2 class="section-rule">How does Bazaar Ball make a prediction?</h2>
 
-			<h3><em>Model Architecture</em></h3>
+			<h3><em>What does the model use?</em></h3>
 			<p>
-				The models on this site utilize a multimodal architecture consisting of a Gated Recurrent Unit
-				(GRU) and a Multi-Layer Perceptron (MLP).
-			</p>
-			<p>
-				The GRU is fed sequential game data, encoding in its hidden states a representation of
-				the modeled process. This encoded representation is then fed into the MLP, along with relevant
-				static data points, to produce the final output logits.
+				The models compare recent game results, team context, schedule context, and who is expected to
+				play. A sequence model reads the run of past games, then combines it with the facts about the
+				upcoming game to estimate the likelihood of each outcome.
 			</p>
 
-			<h3><em>Training the Models</em></h3>
+			<h3><em>Where does the data come from?</em></h3>
 			<p>
-				Historical NBA game logs containing player and team box scores are first collected from 
-				our data provider,
-				<a href="https://www.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE</a>.
-				Before training, the raw game logs are processed, removing redundant data points and 
-				engineering new features.
+				Historical schedules, player game statistics, and player availability data are collected from
+				the BALLDONTLIE NBA API.
 			</p>
-			<p>
-				The dataset is partitioned by date into training, validation, and test splits.
-				During the learning phase, the model makes predictions on the training dataset, and 
-				its weights are adjusted based on comparing the predicted values to the actual values,
-				allowing the model to "learn". After the training epochs have elapsed, the weights that 
-				produced the least error when inferencing on the validation dataset are kept. 
-			</p>
-			<p>
-				Each model has a unique data processing step and tailored hyperparameters, each chosen 
-				to improve the accuracy of predictions.
+			<p class="source small">
+				Source: <a href="https://docs.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE NBA API documentation</a>.
 			</p>
 
-			<h3><em>Evaluating the Models</em></h3>
+			<h3><em>How are the models tested?</em></h3>
 			<p>
-				Evaluation metrics are calculated based on a final pass of the trained model on the unseen
-				test split. A simple baseline model, which naively answers with the season's usual spread 
-				of outcomes, is also evaluated on the test split as a comparison tool.
+				Evaluation metrics are calculated based on a final pass of the trained model on a test split
+				that was unseen by the model during training. A simple baseline algorithm, which naively answers 
+				with the season's usual spread of outcomes, is also evaluated on the test split as a comparison tool.
 			</p>
 			<p>
-				These evaluation scores are public, with each model's scores outlined within their category's
+				A model category's 
 				<em>Info</em>
-				page. The baseline model's scores are shown too.
+				page outlines the evaluation metrics of the models within the category, along with the values that the 
+				baseline scored.
+			</p>
+			<p class="source small">
+				Source: <a href="/#models">each model family’s published evaluation metrics</a>.
 			</p>
 		</section>
 
@@ -185,6 +173,8 @@
 				This site is not affiliated with, endorsed by, or sponsored by the National Basketball Association.
 			</p>
 		</section>
+
+		<EditorialMeta />
 	</div>
 </div>
 
@@ -219,4 +209,5 @@
 	.push {
 		color: var(--push);
 	}
+
 </style>

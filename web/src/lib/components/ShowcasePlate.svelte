@@ -50,10 +50,11 @@
 		readAnswer,
 		sharePercentages
 	} from '$lib/odds';
-	import { READING_PATH } from '$lib/site';
 
 	import type { Answer } from '$lib/odds';
 	import type { ShowcaseSample } from '$lib/types';
+
+	import { PUBLIC_SITE_DESCRIPTION, READING_PATH } from '$lib/site';
 
 	type Props = {
 		/** The day's samples, already checked and already short of any game that has been played. */
@@ -87,6 +88,7 @@
 		'basketball_court.jpg',
 		'basketball_court_artistic.jpg'
 	];
+	const SHOW_COLLAGE = false;
 
 	/** How short a bar of a silhouette may be drawn, as a percentage. Below this it is not a bar. */
 	const FLOOR = 3;
@@ -302,14 +304,16 @@
 	onfocusin={() => (held = true)}
 	onfocusout={releaseTurn}
 >
-	{#if card}
-		{#key picked}
-			<span
-				class="hero-artwork"
-				style:--hero-image={`url("/collage/${COLLAGE_IMAGES[picked % COLLAGE_IMAGES.length]}")`}
-				aria-hidden="true"
-			></span>
-		{/key}
+	{#if SHOW_COLLAGE}
+		{#if card}
+			{#key picked}
+				<span
+					class="hero-artwork"
+					style:--hero-image={`url("/collage/${COLLAGE_IMAGES[picked % COLLAGE_IMAGES.length]}")`}
+					aria-hidden="true"
+				></span>
+			{/key}
+		{/if}
 	{/if}
 
 	<!-- The crosses a press registers the plate by. They say nothing to a reader. They are what makes
@@ -336,7 +340,7 @@
 
 	<div class="page composition">
 		<div class="colophon plate">
-			<p class="lede">Predict statistics of upcoming NBA games.</p>
+			<p class="lede">{PUBLIC_SITE_DESCRIPTION}</p>
 		</div>
 
 		{#if cards.length === 0}

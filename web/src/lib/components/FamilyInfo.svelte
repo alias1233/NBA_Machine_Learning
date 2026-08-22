@@ -2,9 +2,10 @@
 <script lang="ts">
 	import ModelIndex from '$lib/components/ModelIndex.svelte';
 	import Notice from '$lib/components/Notice.svelte';
+	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
-	import { familyPath } from '$lib/models';
-	import { pageTitle } from '$lib/site';
+	import { familyInfoPath, familyPath, MODEL_FAMILIES } from '$lib/models';
+	import { articleSchema } from '$lib/seo';
 
 	import type { ListedFamily } from '$lib/models';
 	import type { FamilyInfoModel } from '$lib/types';
@@ -33,12 +34,17 @@
 	}: Props = $props();
 
 	const listed = $derived(families.find(({ name }) => name === family) ?? null);
+	const modelFamily = $derived(MODEL_FAMILIES.find(({ name }) => name === family));
+	const infoPath = $derived(modelFamily ? familyInfoPath(modelFamily) : '/');
 </script>
 
-<svelte:head>
-	<title>{pageTitle(`${title} info`)}</title>
-	<meta name="description" content={description} />
-</svelte:head>
+<PageMetadata
+	title={`${title} info`}
+	{description}
+	path={infoPath}
+	article
+	schema={articleSchema({ name: `${title} info`, description, path: infoPath })}
+/>
 
 <PlateBand title={`${title} info`}>
 	{#snippet action()}
@@ -50,6 +56,7 @@
 </PlateBand>
 
 <div class="page reading">
+
 	<!-- A service that never answered is not an empty family, and only one of the two is worth
 	     waiting for. -->
 	{#if !listed}
@@ -71,6 +78,8 @@
 			{:else}
 				<ModelIndex {models} {family} />
 			{/if}
+
+			<p class="small source"><a href="/about#how">Read the data and evaluation method.</a></p>
 		</section>
 	{/if}
 </div>
@@ -84,5 +93,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
+	}
+
+	.source {
+		margin-block-start: calc(var(--space-2) * -1);
 	}
 </style>

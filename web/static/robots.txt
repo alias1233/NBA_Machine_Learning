@@ -27,12 +27,14 @@ User-agent: LinerBot  # Liner
 User-agent: ExaSearchBot  # Exa search
 User-agent: iaskspider/2.0  # iAsk answer engine
 Allow: /
+Disallow: /models/*?
  
 # ----------------------------------------------------------------------------
 # GOOGLE / GEMINI
 # ----------------------------------------------------------------------------
 User-agent: Google-Extended
 Allow: /
+Disallow: /models/*?
  
  
 # ============================================================================
@@ -55,6 +57,7 @@ User-agent: NotebookLM  # same, alternate UA string
 User-agent: meta-externalfetcher  # Meta 
 User-agent: Meta-ExternalFetcher  # Meta
 Allow: /
+Disallow: /models/*?
  
  
 # ============================================================================
@@ -78,6 +81,7 @@ User-agent: TwinAgent  # Twin agent platform
 User-agent: UseAI  # Use AI workspace/agent platform
 User-agent: Code  # generic coding-agent UA
 Allow: /
+Disallow: /models/*?
  
  
 # ============================================================================
@@ -85,6 +89,7 @@ Allow: /
 # ============================================================================
 User-agent: facebookexternalhit
 Allow: /
+Disallow: /models/*?
  
  
 # ============================================================================
@@ -233,3 +238,12 @@ User-agent: WARDBot
 User-agent: WRTNBot
 User-agent: ZanistaBot
 Disallow: /
+
+# ============================================================================
+# SECTION 9 -- STANDARD WEB SEARCH ENGINES (ALLOWED)
+# ============================================================================
+User-agent: *
+Allow: /
+Disallow: /models/*?
+
+Sitemap: https://bazaarball.com/sitemap.xml

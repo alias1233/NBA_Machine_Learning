@@ -7,11 +7,18 @@
 
 name: nba-ml
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 # api and jobs are one image run two ways, so the build is written once and both share it.
 x-python: &python
   build:
     context: ../python
   image: nba-ml-python:latest
+  logging: *logging
   environment: &python-environment
     NBA_ML_DATA_DIR: /data
     NBA_ML_BACKUP_DIR: /backups
@@ -27,6 +34,8 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    mem_limit: 256m
+    logging: *logging
     ports:
       - "80:80"
       - "443:443"
@@ -48,6 +57,8 @@ services:
       context: ../web
     image: nba-ml-web:latest
     restart: unless-stopped
+    mem_limit: 512m
+    logging: *logging
     environment:
       # The service is on the internal network only, and the site is the only thing that calls it.
       NBA_API_URL: http://api:8000
@@ -62,6 +73,7 @@ services:
   api:
     <<: *python
     restart: unless-stopped
+    mem_limit: 2g
     expose:
       - "8000"
     healthcheck:
@@ -74,6 +86,7 @@ services:
 
   jobs:
     <<: *python
+    mem_limit: 4g
     environment:
       <<: *python-environment
       BALL_DONT_LIE_KEY: ${BALL_DONT_LIE_KEY:?set BALL_DONT_LIE_KEY in deploy/.env}

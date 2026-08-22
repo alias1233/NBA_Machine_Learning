@@ -22,17 +22,16 @@
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import FamilySheet from '$lib/components/FamilySheet.svelte';
 	import Notice from '$lib/components/Notice.svelte';
+	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import ShowcasePlate from '$lib/components/ShowcasePlate.svelte';
 	import { MODELS_PATH, MODELS_SECTION } from '$lib/models';
-	import { SITE_DESCRIPTION, SITE_NAME } from '$lib/site';
+	import { webApplicationSchema } from '$lib/seo';
+	import { PRIVATE_SITE_DESCRIPTION } from '$lib/site';
 
 	let { data } = $props();
 </script>
 
-<svelte:head>
-	<title>{SITE_NAME}</title>
-	<meta name="description" content={SITE_DESCRIPTION} />
-</svelte:head>
+<PageMetadata description={PRIVATE_SITE_DESCRIPTION} path="/" schema={webApplicationSchema()} />
 
 <ShowcasePlate samples={data.samples} heldOver={data.heldOver} answering={data.answering} />
 

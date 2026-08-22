@@ -1,0 +1,10 @@
+# Install as /etc/logrotate.d/nba-ml after changing the path if the repository lives elsewhere.
+/srv/nba-ml/deploy/logs/nba-ml.log {
+    weekly
+    maxsize 10M
+    rotate 5
+    compress
+    delaycompress
+    missingok
+    notifempty
+}

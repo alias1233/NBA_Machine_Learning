@@ -27,6 +27,7 @@
 	import AnswerBlock from '$lib/components/AnswerBlock.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import MatchupHead from '$lib/components/MatchupHead.svelte';
+	import PredictionSubmit from '$lib/components/PredictionSubmit.svelte';
 	import PredictionPage from '$lib/components/PredictionPage.svelte';
 	import RosterControls from '$lib/components/RosterControls.svelte';
 	import TeamChoice from '$lib/components/TeamChoice.svelte';
@@ -254,10 +255,13 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
-	description="Free machine learning predictions for an NBA team's total points, rebounds, assists and other box score totals for an upcoming game."
+	privateDescription="Free machine learning predictions for an NBA team's total points, rebounds, assists and other box score totals for an upcoming game."
+	publicDescription="Predictions for every point, rebound, assist and three-pointer total that an NBA team scores in a game."
 	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
+	prediction={data.prediction}
+	model={data.model}
 	hasAnswer={data.prediction !== null || data.error !== null}
 >
 	{#snippet board()}
@@ -339,20 +343,7 @@
 			</div>
 
 			<div class="form-submit" bind:this={submitButton}>
-				<!-- The button carries the reason it is disabled, so it is not left to a line beside it that
-				     a screen reader has no reason to reach. -->
-				<button
-					class="button"
-					type="submit"
-					disabled={predicting || missing !== ''}
-					aria-describedby={missing && !predicting ? 'submit-missing' : undefined}
-				>
-					{predicting ? 'Predicting' : 'Run a prediction'}
-				</button>
-
-				{#if missing && !predicting}
-					<p id="submit-missing" class="small muted" transition:flow>{missing}</p>
-				{/if}
+				<PredictionSubmit pending={predicting} {missing} />
 			</div>
 		</form>
 	{/snippet}

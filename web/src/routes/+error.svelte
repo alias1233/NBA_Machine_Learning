@@ -19,6 +19,7 @@
 
 <svelte:head>
 	<title>{pageTitle(heading)}</title>
+	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
 <PlateBand title={heading} lede={line}>

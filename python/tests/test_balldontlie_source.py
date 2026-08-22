@@ -646,7 +646,7 @@ def test_scheduled_jobs_are_locked_and_skip_non_game_days():
 
     assert "nba-collect --source balldontlie schedule" in crontab
     assert "nba-update-serving" not in crontab
-    assert crontab.count("flock") == 3
+    assert crontab.count("flock") == 4
     assert "/var/lock" not in crontab
     assert "/var/log" not in crontab
 

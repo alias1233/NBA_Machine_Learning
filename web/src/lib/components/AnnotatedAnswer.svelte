@@ -62,7 +62,7 @@
 		{
 			part: 'lead',
 			term: 'Expected',
-			body: 'Every outcome averaged together, with the likelier ones counting for more. A single game usually lands near this number rather than on it.'
+			body: 'The expected value of the predicted statistic. On average, this value would be the closest to the true statistic.'
 		},
 		{
 			part: 'chart',
@@ -72,22 +72,22 @@
 		{
 			part: 'line',
 			term: 'The line',
-			body: 'The number you are asking about. Move it and the three chances follow it. Nothing is sent anywhere, so you can move it as much as you like.'
+			body: 'Sets the line for calculating the under, push, and over values.'
 		},
 		{
 			part: 'under',
 			term: 'Under',
-			body: 'The chance the real result comes in below your line. It is every bar to the left of it added up.'
+			body: 'The total probability the real result comes in below the line. It is the total sum of the probabilities of outcomes lower than the line.'
 		},
 		{
 			part: 'push',
 			term: 'Push',
-			body: 'The chance the result lands exactly on your line. Only a whole number can be landed on, so a line of 24.5 always reads 0 percent.'
+			body: 'The chance the real result is exactly the line value. Only whole numbers can be landed on, so a line of 24.5 always reads 0 percent.'
 		},
 		{
 			part: 'over',
 			term: 'Over',
-			body: 'The chance the real result comes in above your line. It is every bar to the right of it added up.'
+			body: 'The total probability the real result comes in above the line. It is the total sum of the probabilities of outcomes greater than the line.'
 		}
 	];
 

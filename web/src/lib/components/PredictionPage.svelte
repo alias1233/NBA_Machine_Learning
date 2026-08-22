@@ -33,24 +33,31 @@
 
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import Notice from '$lib/components/Notice.svelte';
+	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
 	import { flow, MOTION_SLOW } from '$lib/motion';
 	import { phone } from '$lib/screen';
 	import { stopWalking, walkTo } from '$lib/scroll';
-	import { pageTitle } from '$lib/site';
+	import { webPageSchema } from '$lib/seo';
 
 	import type { Snippet } from 'svelte';
 
 	type Props = {
 		title: string;
-		/** One sentence, for a search result, a shared link, and the band's own lede. */
-		description: string;
+		/** One sentence, for a search result and a shared link. */
+		privateDescription: string;
+		/** One sentence, shown as the page lede.*/
+		publicDescription: string;
 		/** The family's Info page, linked under the title before a reader asks for a number. */
 		infoHref: string;
 		/** False when the service offers nothing this page can draw, which is its empty state. */
 		hasModels: boolean;
 		/** False where the service did not answer at all, which is not the same as nothing published. */
 		answering: boolean;
+		/** A successful response. Its identity distinguishes each completed prediction. */
+		prediction: unknown | null;
+		/** The completed prediction's model, recorded without any player or game data. */
+		model: string;
 		/**
 		 * True where the address bar already names a request that was answered or refused, which
 		 * stands the answer region up on arrival rather than opening it. A shared link and a reload
@@ -68,10 +75,13 @@
 
 	let {
 		title,
-		description,
+		privateDescription,
+		publicDescription,
 		infoHref,
 		hasModels,
 		answering,
+		prediction,
+		model,
 		hasAnswer,
 		board,
 		matchup,
@@ -81,11 +91,24 @@
 
 	let answerColumn = $state<HTMLElement>();
 	let controlsColumn = $state<HTMLElement>();
+	let trackedPrediction = $state.raw<unknown>(null);
 
 	/** Whether the reader has asked for an answer on this page, which is what opens the region. */
 	let asked = $state(false);
 
 	const showingAnswer = $derived(hasAnswer || asked);
+	const path = $derived(infoHref.slice(0, -'/info'.length));
+
+	$effect(() => {
+		if (prediction === null || prediction === trackedPrediction) return;
+
+		window.dataLayer?.push({
+			event: 'prediction_made',
+			prediction_family: path.slice('/models/'.length),
+			prediction_model: model
+		});
+		trackedPrediction = prediction;
+	});
 
 	/**
 	 * Opens the answer region and walks the reader to it.
@@ -128,12 +151,14 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{pageTitle(title)}</title>
-	<meta name="description" content={description} />
-</svelte:head>
+<PageMetadata
+	{title}
+	description=privateDescription
+	{path}
+	schema={webPageSchema({ name: title, description: privateDescription, path })}
+	/>
 
-<PlateBand {title} lede={description}>
+<PlateBand {title} lede={publicDescription}>
 	{#snippet action()}
 		<!-- How the number is reached, before a reader asks for one. -->
 		<a class="small text-link" href={infoHref}>More info about these models</a>

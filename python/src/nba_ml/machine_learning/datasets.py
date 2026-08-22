@@ -263,7 +263,8 @@ def build_classification_datasets(
     num_classifications: int | None = None,
     output_value_step: int = 1,
     impossible_value: int | None = None,
-    standardize_input: bool = False
+    standardize_input: bool = False,
+    input_scalers: tuple[StandardScaler, StandardScaler] | None = None
     ) -> tuple[
         SequenceGameDataset,
         SequenceGameDataset,
@@ -281,22 +282,28 @@ def build_classification_datasets(
         impossible_value names a whole number inside it that the statistic cannot take.
 
     The scalers are fit only on the games and samples of the training split, and come back None
-    unless standardize_input is set.
+    unless standardize_input is set. Passing input_scalers applies an already fitted pair instead.
     """
 
     all_samples = [training_samples, validation_samples, test_samples]
 
     sequence_scaler = None
     static_scaler = None
-    if standardize_input:
-        training_games = np.concatenate([
-            sequence[:training_game_count]
-            for sequence, training_game_count
-            in zip(game_sequences.sequences, game_sequences.training_game_counts)
-        ])
+    if input_scalers is not None and not standardize_input:
+        raise ValueError("Input scalers can only be applied while standardizing inputs.")
 
-        sequence_scaler = StandardScaler().fit(training_games)
-        static_scaler = StandardScaler().fit(training_samples.static_inputs)
+    if standardize_input:
+        if input_scalers is None:
+            training_games = np.concatenate([
+                sequence[:training_game_count]
+                for sequence, training_game_count
+                in zip(game_sequences.sequences, game_sequences.training_game_counts)
+            ])
+
+            sequence_scaler = StandardScaler().fit(training_games)
+            static_scaler = StandardScaler().fit(training_samples.static_inputs)
+        else:
+            sequence_scaler, static_scaler = input_scalers
 
         game_sequences, all_samples = _standardize_sequence_data(
             game_sequences,

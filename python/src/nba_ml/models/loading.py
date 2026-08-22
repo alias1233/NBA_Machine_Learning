@@ -1,9 +1,8 @@
 """
 Reading a saved model back off disk, for any family.
 
-A model file holds the network's shape, its weights, the two scalers fitted with it, and the columns
-it was fit on, so a model can never be mismatched with any of them. Training writes the layout named
-here and inference reads it.
+A model file holds the network's shape, its weights, the two scalers fitted with it, the columns it
+was fit on, and its evaluation settings. Training writes the layout named here and inference reads it.
 """
 
 import threading
@@ -19,6 +18,7 @@ SEQUENCE_SCALER = 'sequence_scaler'
 STATIC_SCALER = 'static_scaler'
 SEQUENCE_COLUMNS = 'sequence_columns'
 STATIC_COLUMNS = 'static_columns'
+EVALUATION_SETTINGS = 'evaluation_settings'
 
 Fingerprint = tuple[int, int]
 """When a file was last written and how big it is, which is what tells one file's contents apart."""

@@ -10,8 +10,8 @@ from nba_ml import season
 from nba_ml.api.app import family_info_models, model_evaluation
 from nba_ml.cli import train
 from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey
-from nba_ml.machine_learning import evaluation
-from nba_ml.models import classifier_training, metrics
+from nba_ml.machine_learning import evaluation, serialization, trainer
+from nba_ml.models import classifier_training, loading, metrics
 from nba_ml.models.game_stats import training as game_stat_training
 from nba_ml.models.game_stats import specifications as game_stat_specifications
 from nba_ml.models.player_stats import training as player_stat_training
@@ -255,6 +255,96 @@ def test_a_finished_run_writes_a_held_out_score_the_service_reads_back():
     served = model_evaluation("team_stats", "team_points")
     assert served is not None
     assert [metric.key for metric in served.metrics] == list(model_specification.reported_metrics)
+
+
+def test_rescoring_uses_the_recorded_split_and_scalers_without_changing_the_model(monkeypatch):
+    """A legacy model can be rescored from its report, with its original inputs still intact."""
+
+    team_games.store(fake_data.team_game_frame())
+    model_specification = _one_epoch(specifications.TEAM_POINTS_MODEL)
+    split = EvaluationSplit(start_date=datetime(2024, 10, 27))
+    graph_calls = []
+    monkeypatch.setattr(trainer, "graph_loss_progress", lambda *args: graph_calls.append("loss"))
+    monkeypatch.setattr(
+        evaluation, "graph_classification", lambda *args, **kwargs: graph_calls.append("evaluation")
+    )
+    training.train(
+        model_specification,
+        use_cached_build=False,
+        save_cached_build=False,
+        print_debug=False,
+        training_start_date=datetime(fake_data.SEASON_YEAR, season.SEASON_START_MONTH, 1),
+        evaluation_split=split
+    )
+
+    saved = serialization.load_data_from_file(model_specification.model_file())
+    assert loading.EVALUATION_SETTINGS in saved
+    assert classifier_training._read_saved_evaluation_settings(saved) == classifier_training.EvaluationSettings(
+        datetime(fake_data.SEASON_YEAR, season.SEASON_START_MONTH, 1),
+        replace(split, split_on=SplitKey.GAME)
+    )
+    del saved[loading.EVALUATION_SETTINGS]
+    serialization.save_data_to_file(model_specification.model_file(), saved)
+
+    model_before = model_specification.model_file().read_bytes()
+    report_before = model_specification.training_report_file().read_text(encoding="utf-8")
+    graphs_before = {
+        path.relative_to(model_specification.graphs_directory()): path.read_bytes()
+        for path in model_specification.graphs_directory().rglob("*") if path.is_file()
+    }
+    built = classifier_training._build_datasets
+    captured = {}
+
+    def build_datasets(*args, **kwargs):
+        captured["settings"] = (kwargs["training_start_date"], args[2])
+        captured["scalers"] = kwargs["input_scalers"]
+
+        return built(*args, **kwargs)
+
+    monkeypatch.setattr(classifier_training, "_build_datasets", build_datasets)
+
+    rescored = training.rescore(model_specification, print_debug=False)
+
+    assert captured["settings"] == (
+        datetime(fake_data.SEASON_YEAR, season.SEASON_START_MONTH, 1),
+        replace(split, split_on=SplitKey.GAME)
+    )
+    assert captured["scalers"][loading.SEQUENCE_SCALER].mean_ == pytest.approx(
+        saved[loading.SEQUENCE_SCALER].mean_
+    )
+    assert captured["scalers"][loading.STATIC_SCALER].mean_ == pytest.approx(
+        saved[loading.STATIC_SCALER].mean_
+    )
+    assert rescored.scored_on == metrics.TEST_SPLIT_LABEL
+    assert graph_calls == ["loss", "evaluation"]
+    assert model_specification.model_file().read_bytes() == model_before
+    assert model_specification.training_report_file().read_text(encoding="utf-8") == report_before
+    assert {
+        path.relative_to(model_specification.graphs_directory()): path.read_bytes()
+        for path in model_specification.graphs_directory().rglob("*") if path.is_file()
+    } == graphs_before
+
+
+def test_rescore_without_a_model_runs_every_saved_model(monkeypatch):
+    """A bare --rescore is the batch form, like retraining every selected model."""
+
+    saved_models = (specifications.TEAM_POINTS_MODEL, game_stat_specifications.GAME_TOTAL_MODEL)
+    for model in saved_models:
+        model.model_file().parent.mkdir(parents=True, exist_ok=True)
+        model.model_file().touch()
+
+    rescored = []
+    for category in {model.model_category for model in saved_models}:
+        monkeypatch.setitem(
+            train.RESCORERS,
+            category,
+            lambda model, **kwargs: rescored.append(model.name)
+        )
+    monkeypatch.setattr(sys, "argv", ["nba-train", "--rescore", "--quiet"])
+
+    train.main()
+
+    assert rescored == [model.name for model in saved_models]
 
 
 def test_a_run_whose_evaluation_period_holds_no_game_stops_rather_than_reporting_nothing():

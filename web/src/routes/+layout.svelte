@@ -28,8 +28,8 @@
 
 	import { longGameDay } from '$lib/games';
 	import { MODELS_PATH, MODELS_SECTION, familyPath, plateOf } from '$lib/models';
+	import { jsonLd, webSiteSchema } from '$lib/seo';
 	import { SITE_NAME } from '$lib/site';
-	import { ADS_ENABLED } from '$lib/ads.js'
 
 	let { children, data } = $props();
 
@@ -272,6 +272,10 @@
 	});
 </script>
 
+<svelte:head>
+	{@html `<script type="application/ld+json">${jsonLd(webSiteSchema())}</script>`}
+</svelte:head>
+
 <svelte:window
 	bind:scrollY
 	bind:innerWidth={viewportWidth}
@@ -429,10 +433,7 @@
 		<ul class="links">
 			<li><a class="text-link" href="/about">About</a></li>
 			<li><a class="text-link" href="/terms-and-conditions">Terms and conditions</a></li>
-
-			{#if ADS_ENABLED} 
-				<li><a class="text-link" href="/privacy">Privacy</a></li>
-			{/if}
+			<li><a class="text-link" href="/privacy">Privacy</a></li>
 		</ul>
 	</div>
 </footer>

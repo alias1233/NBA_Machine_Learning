@@ -11,15 +11,16 @@ Implemented capabilities:
 - Feature engineering helpers and data processing
 - Training and inferencing on models
 - FastAPI endpoints for server to server communication
-- A website that predicts on an upcoming game, or on a game typed out by hand
+- A website that predicts on an upcoming game
 
-Working models:
+All twenty four models are trained and have a held-out evaluation:
 
 - Player Stat Models: predicts what a player does in a future game. Points, rebounds, assists,
   three pointers, steals, blocks and turnovers, the pairs and the trio of them added together, and
   whether they record a double double or a triple double.
-- Team Stat Models: predicts a specific team's stat total.
-- Game Stat Models: predicts statistics of a game.
+- Team Stat Models: predicts a team's points, rebounds, assists or three-pointers.
+- Game Stat Models: predicts the home team's margin or win chance, and game totals for points,
+  rebounds, assists or three-pointers.
 
 ## Layout
 
@@ -37,9 +38,12 @@ One rented Linux server.
 git clone <repository> /srv/nba-ml && cd /srv/nba-ml/deploy
 cp .env.example .env && nano .env            # DOMAIN and ACME_EMAIL
 mkdir -p data backups logs && sudo chown -R 10001:10001 data backups
+sudo cp logrotate /etc/logrotate.d/nba-ml
 docker compose build jobs
 docker compose run --rm -v /srv/nba-ml/nba-serving-data.tar.gz:/release.tar.gz:ro jobs nba-serving-data load /release.tar.gz
 docker compose run --rm jobs nba-build-features --quiet
+docker compose run --rm jobs                    # refresh rosters and rebuild features
+docker compose run --rm jobs nba-showcase       # publish the home-page samples
 docker compose up -d --build                 # caddy, web, api
 crontab crontab                              # hourly collect and build, nightly backup
 ```

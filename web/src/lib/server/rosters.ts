@@ -35,7 +35,8 @@ const readIds = (parameters: URLSearchParams, name: string) =>
 	parameters
 		.getAll(name)
 		.map(Number)
-		.filter((id) => Number.isInteger(id) && id > 0);
+		.filter((id) => Number.isInteger(id) && id > 0)
+		.slice(0, 15);
 
 async function namePlayers(ids: number[]): Promise<Player[]> {
 	const found = await Promise.all(ids.map((id) => getPlayer(id).catch(() => null)));

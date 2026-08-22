@@ -15,6 +15,9 @@ NBA_ML=/srv/nba-ml/deploy
 # slow provider response from overlapping the next hour's write.
 0 * * * * flock -n $NBA_ML/.jobs.lock sh -c 'cd $NBA_ML && docker compose run --rm jobs' >> $NBA_ML/logs/nba-ml.log 2>&1
 
+# Draw the home page samples after the day's first collection and feature build.
+30 13 * * * flock -n $NBA_ML/.jobs.lock sh -c 'cd $NBA_ML && docker compose run --rm jobs nba-showcase' >> $NBA_ML/logs/nba-ml.log 2>&1
+
 # The databases and the model files, which are the only things here that cannot be rebuilt. Nightly,
 # after the hour's collection has finished. Keeps a week.
 20 4 * * * flock -w 3600 $NBA_ML/.jobs.lock sh -c 'cd $NBA_ML && docker compose run --rm jobs nba-backup' >> $NBA_ML/logs/nba-ml.log 2>&1

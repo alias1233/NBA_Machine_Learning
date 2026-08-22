@@ -1,7 +1,7 @@
 /**
  * The two ad slots, and whether ads run at all.
  *
- * Off until the privacy page carries real wording and a consent banner exists. While it is off a
+ * Off until a consent banner exists. While it is off a
  * slot renders nothing: no label, no reserved box, no gap. Turning it on is this one line.
  */
 

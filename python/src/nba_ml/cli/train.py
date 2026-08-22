@@ -38,6 +38,13 @@ A trainer takes a specification and the keyword arguments below. A family missin
 training module yet.
 """
 
+RESCORERS: dict[str, Callable[..., Any]] = {
+    player_stat_specifications.MODEL_CATEGORY: player_stat_training.rescore,
+    team_stat_specifications.MODEL_CATEGORY: team_stat_training.rescore,
+    game_stat_specifications.MODEL_CATEGORY: game_stat_training.rescore
+}
+"""What rescored models of each family, keyed by model category."""
+
 def models_trained_before(day: datetime) -> list[ModelSpecification]:
     """
     Every model whose saved file was written before this day, in the order the families list them.
@@ -59,7 +66,21 @@ def models_trained_before(day: datetime) -> list[ModelSpecification]:
     return stale
 
 def _selected_models(arguments: argparse.Namespace) -> list[ModelSpecification]:
-    """The models this run fits, in the order it fits them."""
+    """The models this run fits or rescores, in the order it handles them."""
+
+    if arguments.rescore:
+        if arguments.model is not None:
+            found = families.find_model(arguments.model)
+            assert found is not None
+
+            return [found[1]]
+
+        return [
+            specification
+            for family in families.ALL_FAMILIES
+            for specification in family.specifications.values()
+            if specification.model_category in RESCORERS and specification.model_file().exists()
+        ]
 
     if arguments.retrain_since is not None:
         selected = []
@@ -102,17 +123,19 @@ def _train_one(
         evaluation_split=evaluation_split
     )
 
+def _rescore_one(specification: ModelSpecification, arguments: argparse.Namespace):
+    RESCORERS[specification.model_category](specification, print_debug=not arguments.quiet)
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Trains one model, or every model that has not been trained since a given day, "
-                    "and saves each with a report of its run."
+        description="Trains a model, or rescores saved models without fitting their weights again."
     )
-    selection = parser.add_mutually_exclusive_group(required=True)
-    selection.add_argument(
+    parser.add_argument(
         "--model",
         choices=families.ALL_MODEL_NAMES,
-        help="Which model to train, named as it is in its family's specifications.py."
+        help="Which model to train or rescore, named as it is in its family's specifications.py."
     )
+    selection = parser.add_mutually_exclusive_group()
     selection.add_argument(
         "--retrain-since",
         type=datetime.fromisoformat,
@@ -123,6 +146,14 @@ def main():
             "always included, so a day far in the past trains only what nothing can serve today. "
             "Pass --no-cache with this, since each player model would otherwise leave about a "
             "gigabyte of preprocessed build behind."
+        )
+    )
+    selection.add_argument(
+        "--rescore",
+        action="store_true",
+        help=(
+            "Rescore every saved model without fitting weights, using each model's recorded split "
+            "settings and fitted input scalers. Add --model to rescore one."
         )
     )
     parser.add_argument(
@@ -174,28 +205,54 @@ def main():
     parser.add_argument("--quiet", action="store_true", help="Only print what the training loop reports.")
     arguments = parser.parse_args()
 
+    if arguments.model is not None and arguments.retrain_since is not None:
+        parser.error("--model and --retrain-since cannot be used together.")
+
+    if not arguments.rescore and arguments.model is None and arguments.retrain_since is None:
+        parser.error("one of --model, --retrain-since, or --rescore is required.")
+
+    if arguments.rescore:
+        incompatible = [
+            flag for flag, used in (
+                ("--skip-evaluations", arguments.skip_evaluations),
+                ("--rebuild-cache", arguments.rebuild_cache),
+                ("--no-cache", arguments.no_cache),
+                ("--evaluation-start", arguments.evaluation_start is not None),
+                ("--validation-fraction", arguments.validation_fraction != classifier_training.VALIDATION_FRACTION),
+                ("--training-start-season", arguments.training_start_season != season.ARCHIVE_START_SEASON)
+            ) if used
+        ]
+        if incompatible:
+            parser.error(f"{' and '.join(incompatible)} cannot be used with --rescore.")
+
     selected = _selected_models(arguments)
 
     if not selected:
-        print(f"No model is waiting to be trained since {arguments.retrain_since.date()}.")
+        if arguments.rescore:
+            print("No saved model is waiting to be rescored.")
+        else:
+            print(f"No model is waiting to be trained since {arguments.retrain_since.date()}.")
 
         return
 
-    default_split = classifier_training.default_evaluation_split()
+    evaluation_split = None
+    if not arguments.rescore:
+        default_split = classifier_training.default_evaluation_split()
 
-    try:
-        # Worked out once, so every model of a batch is scored on exactly the same games even where
-        # the run crosses midnight.
-        evaluation_split = replace(
-            default_split,
-            start_date=arguments.evaluation_start or default_split.start_date,
-            validation_fraction=arguments.validation_fraction
-        )
-    except ValueError as error:
-        raise SystemExit(str(error))
+        try:
+            # Worked out once, so every model of a batch is scored on exactly the same games even where
+            # the run crosses midnight.
+            evaluation_split = replace(
+                default_split,
+                start_date=arguments.evaluation_start or default_split.start_date,
+                validation_fraction=arguments.validation_fraction
+            )
+        except ValueError as error:
+            raise SystemExit(str(error))
 
     if len(selected) > 1:
-        print(f"Training {len(selected)} models: {', '.join(model.name for model in selected)}.")
+        verb = "Rescoring" if arguments.rescore else "Training"
+        print(f"{verb} {len(selected)} models: {', '.join(model.name for model in selected)}.")
 
     failed = []
 
@@ -204,7 +261,11 @@ def main():
             print(f"\n===== MODEL {position} OF {len(selected)}: {specification.name} =====")
 
         try:
-            _train_one(specification, arguments, evaluation_split)
+            if arguments.rescore:
+                _rescore_one(specification, arguments)
+            else:
+                assert evaluation_split is not None
+                _train_one(specification, arguments, evaluation_split)
         except Exception:
             # A batch carries on, because one family failing is no reason to leave the rest unfitted.
             # The traceback is printed rather than swallowed, and the run still ends in a failure.
@@ -212,13 +273,15 @@ def main():
             failed.append(specification.name)
 
     if failed:
+        action = "rescore" if arguments.rescore else "train"
         raise SystemExit(
-            f"\n{len(failed)} of {len(selected)} models failed to train: {', '.join(failed)}. "
+            f"\n{len(failed)} of {len(selected)} models failed to {action}: {', '.join(failed)}. "
             "Each traceback is above."
         )
 
     if len(selected) > 1:
-        print(f"\nTrained all {len(selected)} models.")
+        action = "Rescored" if arguments.rescore else "Trained"
+        print(f"\n{action} all {len(selected)} models.")
 
 if __name__ == '__main__':
     main()

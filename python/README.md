@@ -24,7 +24,7 @@ nba_ml/database.py               the database layer
 ## Running
 
 `python/` holds its own `pyproject.toml` and lock file. `uv sync` installs the package, which puts
-six commands on the path. They work from any directory.
+ten commands on the path. They work from any directory.
 
 ```
 uv sync
@@ -71,6 +71,7 @@ data/databases/                              the collected SQLite files
 data/feature_builds/<family>/<version>/      the published whole-league features the service reads
 data/models/<family>/<model>/                model.pth, training_report.txt, evaluation.json, graphs/
 data/training_cache/<family>/<model>/        the preprocessed training build, disposable
+data/showcase.json                           the published home-page samples
 data/backups/                                dated archives of the databases and the model files
 ```
 

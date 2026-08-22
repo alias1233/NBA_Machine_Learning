@@ -1,22 +1,26 @@
 <script lang="ts">
-	import Notice from '$lib/components/Notice.svelte';
+	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
-	import { pageTitle, SITE_NAME, DOMAIN_NAME } from '$lib/site';
+	import { SITE_NAME, DOMAIN_NAME } from '$lib/site';
 	import { CONTACT_EMAIL } from '$lib/owner';
 	import { ADS_ENABLED } from '$lib/ads';
+	import { webPageSchema } from '$lib/seo';
+
+	const DESCRIPTION = 'What Bazaar Ball collects and what it sets on your device.';
 </script>
 
-<svelte:head>
-	<title>{pageTitle('Privacy')}</title>
-	<meta name="description" content="What this site collects and what it sets on your device." />
-</svelte:head>
+<PageMetadata
+	title="Privacy"
+	description={DESCRIPTION}
+	path="/privacy"
+	schema={webPageSchema({ name: 'Privacy', description: DESCRIPTION, path: '/privacy' })}
+/>
 
 <PlateBand title="Privacy" />
 
 <main class="page privacy">
-	{#if ADS_ENABLED}
-		<article class="privacy-copy">
-			<p id="privacy-updated" class="updated">Last updated: August 21, 2026</p>
+	<article class="privacy-copy">
+			<p id="privacy-updated" class="updated">Last updated: August 22, 2026</p>
 
 			<section>
 				<p>
@@ -47,21 +51,24 @@
 				</ul>
 				<p>
 					This information is collected through standard server logs, cookies, and the third-party
-					tools described below (Google AdSense and Google Analytics). We use it in aggregate to
+					tools described below (Google Analytics{#if ADS_ENABLED} and Google AdSense{/if}). We use it in aggregate to
 					understand traffic and usage patterns — we do not use it to identify you personally.
 				</p>
 				<h3>Cookies and Similar Technologies</h3>
-				<p>Cookies are small text files stored on your device. The Site uses cookies for two purposes:</p>
+				<p>Cookies are small text files stored on your device. The Site uses cookies for analytics{#if ADS_ENABLED} and advertising{/if}.</p>
 				<ul>
-					<li>Advertising — served through Google AdSense</li>
+					{#if ADS_ENABLED}
+						<li>Advertising — served through Google AdSense</li>
+					{/if}
 					<li>Analytics — served through Google Analytics</li>
 				</ul>
 				<p>
-					You can control or disable cookies through your browser settings. Disabling cookies may affect
-					how ads are displayed but will not prevent you from viewing predictions on the Site.
+					You can control or disable cookies through your browser settings. Disabling cookies will not
+					prevent you from viewing predictions on the Site{#if ADS_ENABLED} but may affect how ads are displayed{/if}.
 				</p>
 			</section>
 
+			{#if ADS_ENABLED}
 			<section>
 				<h2>2. Advertising (Google AdSense)</h2>
 				<p>
@@ -74,6 +81,7 @@
 				<p>More detail on how Google handles data for advertising is available at Google's Privacy &amp; Terms site.</p>
 				<p>We do not control the specific ads shown to you, and we do not have access to the personal data Google collects for ad targeting.</p>
 			</section>
+			{/if}
 
 			<section>
 				<h2>3. Analytics (Google Analytics)</h2>
@@ -94,7 +102,9 @@
 				<ul>
 					<li>Operate and maintain the Site</li>
 					<li>Understand and improve Site traffic, performance, and usage patterns</li>
-					<li>Display and measure the performance of ads</li>
+					{#if ADS_ENABLED}
+						<li>Display and measure the performance of ads</li>
+					{/if}
 					<li>Respond to emails or inquiries you send us</li>
 				</ul>
 				<p>We do not use any collected information to make decisions about individual users, and we do not sell personal information to third parties.</p>
@@ -104,7 +114,9 @@
 				<h2>5. Third-Party Service Providers</h2>
 				<p>We share limited data (primarily automatically-collected data described in Section 1) with the following third-party service providers, each of which has its own privacy policy governing its use of that data:</p>
 				<ul>
-					<li>Google AdSense — advertising</li>
+					{#if ADS_ENABLED}
+						<li>Google AdSense — advertising</li>
+					{/if}
 					<li>Google Analytics — site analytics</li>
 				</ul>
 				<p>We do not share data with any other third parties for marketing or advertising purposes.</p>
@@ -125,7 +137,9 @@
 				<p>Because the Site doesn't have accounts, there's very little personal data tied to you individually. Your main choices are:</p>
 				<ul>
 					<li>Cookies: Adjust or block cookies through your browser settings.</li>
-					<li>Personalized ads: Opt out via Google Ads Settings or aboutads.info.</li>
+					{#if ADS_ENABLED}
+						<li>Personalized ads: Opt out via Google Ads Settings or aboutads.info.</li>
+					{/if}
 					<li>Analytics: Opt out via the Google Analytics Opt-out Add-on.</li>
 					<li>Email data: If you've emailed us, you can request that we delete that correspondence by contacting us at the address below.</li>
 				</ul>
@@ -152,12 +166,7 @@
 				<p>If you have questions about this Privacy Policy or how your information is handled, contact us at:</p>
 				<p>{CONTACT_EMAIL}</p>
 			</section>
-		</article>
-	{:else}
-		<Notice tone="warning">
-			This page is not written. No ads and no analytics currently run on this site.
-		</Notice>
-	{/if}
+	</article>
 </main>
 
 <style>

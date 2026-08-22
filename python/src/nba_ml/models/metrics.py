@@ -58,7 +58,7 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.EXPECTED_VALUE_MAE,
             "Average error",
-            "How far the model's expected answer landed from what actually happened, averaged over every "
+            "The distance between the model's expected answer and the true outcome, averaged over every "
             "tested game.",
             MetricUnit.VALUE,
             higher_is_better=False
@@ -66,7 +66,7 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.EXPECTED_VALUE_MEDIAN_ERROR,
             "Typical error",
-            "The median error of the expected answer and the truth. Half the predictions landed at least "
+            "The median error of the expected answer and the truth. Half the predictions were at least "
             "this close, so a handful of outlier games does not affect the metric.",
             MetricUnit.VALUE,
             higher_is_better=False
@@ -74,7 +74,7 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.EXPECTED_VALUE_RMSE,
             "Root mean squared error",
-            "The average error, weighing a large miss far more heavily than a small one.",
+            "The average error, except it weighs large misses far more heavily than a minor one.",
             MetricUnit.VALUE,
             higher_is_better=False
         ),
@@ -93,21 +93,18 @@ ALL_METRICS: dict[str, Metric] = {
             higher_is_better=False
         ),
         Metric(
-            evaluation.CENTRAL_INTERVAL_COVERAGE,
-            "How often the middle of the answer was right",
-            "The model gives a chance to every outcome. This is how often the real result fell "
-            f"inside the middle {evaluation.CENTRAL_INTERVAL:.0%} of that answer. A model that "
-            f"is perfectly calibrated scores exactly {evaluation.CENTRAL_INTERVAL:.0%}. A lower "
-            "figure means it claims to be more certain than it is, and a higher means it spreads "
-            "out its answers more than it should.",
+            evaluation.CENTRAL_INTERVAL_CALIBRATION_ERROR,
+            "Interval calibration error",
+            "Measures how accurately a model's prediction intervals match the true outcome. If a model "
+            "predicts a 90% confidence range, this tracks how much the actual data falls inside that range "
+            "versus the expected 90% of the time.",
             MetricUnit.PROBABILITY,
-            higher_is_better=True,
-            ideal=evaluation.CENTRAL_INTERVAL
+            higher_is_better=False
         ),
         Metric(
             evaluation.ACCURACY,
             "Exact answers",
-            "How often the outcome the model called likeliest is the outcome that occured.",
+            "How often the outcome that the model gave the highest probability of occuring was the actual outcome.",
             MetricUnit.PROBABILITY,
             higher_is_better=True
         ),
@@ -147,8 +144,8 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.LINE_RANKED_PROBABILITY_SCORE,
             "Line score",
-            "The error in the predicted chance of the outcome surpassing a line is against the actual "
-            "probability the outcome surpassed a line, added up over every line the model covers. It "
+            "The error in the predicted chance of the outcome surpassing a line against the actual "
+            "probability the outcome surpassed a line, added up over every possible line. This metric "
             "can compare models whose answers cover different intervals.",
             MetricUnit.SCORE,
             higher_is_better=False
@@ -183,7 +180,7 @@ ALL_METRICS: dict[str, Metric] = {
 ORDERED_ANSWER_METRICS = (
     evaluation.EXPECTED_VALUE_MAE,
     evaluation.EXPECTED_VALUE_MEDIAN_ERROR,
-    evaluation.CENTRAL_INTERVAL_COVERAGE,
+    evaluation.CENTRAL_INTERVAL_CALIBRATION_ERROR,
     evaluation.LINE_RANKED_PROBABILITY_SCORE,
     evaluation.ACCURACY,
     evaluation.CALIBRATION_ERROR
