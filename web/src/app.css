@@ -265,37 +265,10 @@
 	--pencil-stagger: 180ms;
 	/* The registration crosses the plate is printed with, one per corner. */
 	--registration: 14px;
-	/*
-	 * A slot cut through a sheet, and what the cut casts onto what is standing in it.
-	 *
-	 * The press is one press whatever stock it is printing on, so a slot is the same ink on every
-	 * family's sheet rather than that family's own deep ink. That is what makes it read as a cut
-	 * rather than as a second colour the family chose, and it is why this is one value and not one
-	 * per stock. It does not vary by theme, for the same reason nothing else on a plate does.
-	 */
-	--plate-slot: #100f0e;
-	--plate-slot-cut: inset 0 2px 6px rgb(0 0 0 / 0.5), inset 0 -1px 3px rgb(0 0 0 / 0.35);
-	/* The rule between two things standing in a slot. Neutral, because the slot is. */
-	--rule-slot: 1px solid rgb(255 255 255 / 0.13);
-
-	/*
-	 * The home Models listing is a press composition, not a row of matching cards. Its deep board is
-	 * the bed of the press, and the first family anchors the run while the two others bind to its
-	 * edge. The values live here so the arrangement remains part of the shared visual system.
-	 */
-	--models-board-ground: var(--plate-deep);
-	--models-board-gap: var(--space-4);
-	--models-board-inset: var(--space-4);
-	--models-board-shadow: inset 0 0 0 1px var(--plate-rule);
-	--models-lead-span: 1.45fr;
-	--models-support-min: 17rem;
-	--models-sheet-min-height: 31rem;
-	--models-lead-inset: var(--space-6);
-	--models-support-inset: var(--space-4);
-	--models-sheet-rule: 1px;
-	--models-sheet-cue-inset: var(--space-3);
-	--models-sheet-lift: calc(var(--space-2) * -1);
-	--models-sheet-hover-shadow: 0 8px 16px var(--acetate-shadow), 0 24px 42px var(--acetate-shadow);
+	/* The Models index uses one shaped hollow frame per family. The page remains the shared ground. */
+	--models-frame-min-height: 34rem;
+	--models-frame-stagger: 20px;
+	--models-frame-hover-glow: drop-shadow(0 6px 12px currentColor);
 
 	/*
 	 * Layout.
@@ -682,6 +655,7 @@ main > .band:first-child {
  * substituted where it is declared and would otherwise carry the blue's rules down with it.
  */
 [data-plate='player-stats'] {
+	--models-frame-highlight: light-dark(#009b5f, #2bff9e);
 	--plate: #0a3f2d;
 	--plate-deep: #06291d;
 	--plate-ink-muted: #9dc4b1;
@@ -693,6 +667,7 @@ main > .band:first-child {
 }
 
 [data-plate='team-stats'] {
+	--models-frame-highlight: light-dark(#e0003a, #ff7190);
 	--plate: #59121f;
 	--plate-deep: #3e0c15;
 	--plate-ink-muted: #d9a5a8;
@@ -704,6 +679,7 @@ main > .band:first-child {
 }
 
 [data-plate='game-stats'] {
+	--models-frame-highlight: light-dark(#7040ef, #b698ff);
 	--plate: #2b1a5e;
 	--plate-deep: #1c1040;
 	--plate-ink-muted: #b9aee2;
@@ -1262,6 +1238,18 @@ select:disabled {
 
 ::view-transition-new(root) {
 	animation: cross-fade var(--motion) var(--ease-in);
+	mix-blend-mode: normal;
+}
+
+/* The wordmark is one moving stamp. Let its new image resize with its shared transition instead of
+   cross-fading two weights on top of each other. */
+::view-transition-old(site-wordmark) {
+	animation: none;
+	opacity: 0;
+}
+
+::view-transition-new(site-wordmark) {
+	animation: none;
 	mix-blend-mode: normal;
 }
 

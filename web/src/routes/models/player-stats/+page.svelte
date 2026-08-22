@@ -331,7 +331,7 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
-	description="The chance of every points, rebounds, assists and other box score total for an NBA player in one game."
+	description="Free machine learning predictions for an NBA player's points, rebounds, assists and other box score totals for an upcoming game."
 	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}

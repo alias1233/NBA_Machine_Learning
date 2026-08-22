@@ -254,7 +254,7 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
-	description="The chance of every points, rebounds, assists and three-pointer total for an NBA team in one game."
+	description="Free machine learning predictions for an NBA team's total points, rebounds, assists and other box score totals for an upcoming game."
 	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}

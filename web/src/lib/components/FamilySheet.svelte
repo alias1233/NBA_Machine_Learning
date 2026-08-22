@@ -1,108 +1,204 @@
-<!--
-	One model family, printed as a sheet on the home page's index.
-
-	The sheet is the family's own stock, the same ground its prediction page and its About page are
-	printed on, so a reader has seen where they are going before they arrive. It reads down in three
-	registers: what the family is, the models it holds, and the two ways into it.
-
-	The middle register is the point of it. A family is not a picture, it is the models in it, so the
-	sheet prints them by name, at a size that makes the names the texture of the sheet, with the
-	sentence that says what each one answers stepped back under it.
-
-	They stand in a slot cut through the stock: one ink on every sheet, whatever the family is printed
-	on, so the index reads as a cut down through the board rather than as a second colour the family
-	chose. The whole family is in there and the roll feeds it past on its own. See ModelRoll.svelte.
--->
+<!-- One model family in a shaped home-page frame. It starts hollow and fills with the block plane on
+     hover or keyboard focus. -->
 <script lang="ts">
 	import ModelRoll from '$lib/components/ModelRoll.svelte';
 	import { familyInfoPath, familyPath } from '$lib/models';
 
-	import type { ListedFamily } from '$lib/models';
+	import type { ListedFamily, ListedModel } from '$lib/models';
 
 	type Props = {
 		family: ListedFamily;
-		/** The first family is the anchor of the home page's press composition. */
-		position: number;
 	};
 
-	let { family, position }: Props = $props();
+	let { family }: Props = $props();
 
 	const models = $derived(family.models);
+	let rollPosition = $state(0);
 </script>
 
-<!-- The family's own stock. One attribute is the whole of what a family colours. -->
-<li class:lead={position === 0} class="family plate" data-plate={family.slug}>
-	<span class="registration top-start" aria-hidden="true"></span>
-	<span class="registration top-end" aria-hidden="true"></span>
-	<span class="registration bottom-start" aria-hidden="true"></span>
-	<span class="registration bottom-end" aria-hidden="true"></span>
+{#snippet modelEntry(model: ListedModel)}
+	<p class="name">{model.title}</p>
+	<p class="what">{model.description}</p>
+	{#if !model.published}
+		<p class="tag micro">Not trained yet</p>
+	{/if}
+{/snippet}
 
-	<div class="said">
-		<h3 class="type-h2">{family.title}</h3>
-		<p class="words">{family.description}</p>
-	</div>
+{#snippet familyContent(masked: boolean)}
+	<div class:masked-content={masked} class="family-content">
+		<div class="said">
+			<h3 class="type-h2">{family.title}</h3>
+			<p class="words">{family.description}</p>
+		</div>
 
-	<div class="index">
-		<p class="count micro">{models.length} {models.length === 1 ? 'model' : 'models'}</p>
+		<div class="index">
+			<p class="count micro">{models.length} {models.length === 1 ? 'model' : 'models'}</p>
 
-		<ModelRoll {models} label={family.title}>
-			{#snippet entry(model)}
-				<p class="name">{model.title}</p>
-				<p class="what">{model.description}</p>
-				{#if !model.published}
-					<p class="tag micro">Not trained yet</p>
+			{#if masked}
+				<ModelRoll {models} label={family.title} position={rollPosition} passive>
+					{#snippet entry(model)}
+						{@render modelEntry(model)}
+					{/snippet}
+				</ModelRoll>
+			{:else}
+				<ModelRoll {models} label={family.title} bind:position={rollPosition}>
+					{#snippet entry(model)}
+						{@render modelEntry(model)}
+					{/snippet}
+				</ModelRoll>
+			{/if}
+		</div>
+
+		<div class="ways">
+			{#if family.published}
+				{#if masked}
+					<span class="button">Run a prediction</span>
+					<span class="small text-link">More info about these models</span>
+				{:else}
+					<a class="button" href={familyPath(family)}>Run a prediction</a>
+					<a class="small text-link" href={familyInfoPath(family)}>More info about these models</a>
 				{/if}
-			{/snippet}
-		</ModelRoll>
+			{:else}
+				<span class="tag micro">Not published yet</span>
+			{/if}
+		</div>
 	</div>
+{/snippet}
 
-	<!-- A family with nothing trained behind it has nowhere to lead, so it says so instead of offering
-	     a page that cannot answer. -->
-	<div class="ways">
-		{#if family.published}
-			<a class="button" href={familyPath(family)}>Run a prediction</a>
-			<a class="small text-link" href={familyInfoPath(family)}>More info about these models</a>
-		{:else}
-			<span class="tag micro">Not published yet</span>
-		{/if}
+<li
+	class="family"
+	data-plate={family.slug}
+	style:--frame-clip={`url(#family-frame-${family.slug})`}
+>
+	<!-- The normalized path lets the HTML fill retain the SVG frame's exact shape at every size. -->
+	<svg class="frame-clip" aria-hidden="true">
+		<defs>
+			<clipPath id={`family-frame-${family.slug}`} clipPathUnits="objectBoundingBox">
+				<path
+					d="M.0173077.0081818h.4923077c.0211538 0 .0403846.0045455.0538462.0127273l.0423077.0263636c.0115385.0072727.0307692.0109091.05.0109091h.3269231c.0096154 0 .0173077.0036364.0173077.0081818v.9254545c0 .0045455-.0076923.0081818-.0173077.0081818H.0173077c-.0096154 0-.0173077-.0036364-.0173077-.0081818V.0163636c0-.0045455.0076923-.0081818.0173077-.0081818Z"
+				/>
+			</clipPath>
+		</defs>
+	</svg>
+
+	<!-- A flipped press cut. The step at the upper-right leaves the page showing through the frame. -->
+	<svg class="frame" viewBox="0 0 520 1100" preserveAspectRatio="none" aria-hidden="true">
+		<path
+			d="M9 9h256c11 0 21 5 28 14l22 29c6 8 16 12 26 12h170c5 0 9 4 9 9v1018c0 5-4 9-9 9H9c-5 0-9-4-9-9V18c0-5 4-9 9-9Z"
+			vector-effect="non-scaling-stroke"
+		/>
+	</svg>
+
+	{@render familyContent(false)}
+
+	<!-- The visual copy is clipped by the same moving fill as its block ground, so its ink changes
+	     exactly where the contrast changes. -->
+	<div class="masked-fill" aria-hidden="true">
+		{@render familyContent(true)}
 	</div>
 </li>
 
 <style>
-	/*
-	 * Portrait, a family is a brick: what it is, the models it holds, and the ways into it, stacked.
-	 * Landscape, the page subgrids it into a column a screen tall. Either way the three registers are
-	 * in the same order and the ways in are at the foot.
-	 */
 	.family {
 		position: relative;
-		display: grid;
-		grid-template-rows: min-content minmax(0, 1fr) min-content;
-		gap: var(--space-4);
-		padding: var(--space-5);
-		min-height: var(--models-sheet-min-height);
-		/* A sheet lies on the board rather than being printed into it, so it is lit along its top edge
-		   and casts onto the board under it. The one place on paper that carries the plate's own
-		   shadow, because the ground it falls on is printed stock. */
-		box-shadow: inset 0 var(--models-sheet-rule) 0 var(--acetate-sheen), var(--sheet-shadow);
-		transition:
-			transform var(--motion) var(--ease-in),
-			box-shadow var(--motion) var(--ease-in);
+		min-height: var(--models-frame-min-height);
+		color: var(--ink);
+		isolation: isolate;
+		--plane-accent: light-dark(var(--plate), var(--models-frame-highlight));
+		--plane-accent-on: light-dark(var(--plate-ink), var(--block-ink));
+		--plane-accent-hover: light-dark(
+			var(--plate-deep),
+			color-mix(in oklab, var(--models-frame-highlight) 85%, white)
+		);
+		--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
+		--rule-accent: 2px solid var(--accent);
+		--waiting: var(--surface-sunken);
 	}
 
-	.family::after {
+	.frame-clip {
 		position: absolute;
-		inset: var(--models-sheet-cue-inset);
-		content: '';
-		border: var(--rule-plate);
-		border-left: 0;
+		inline-size: 0;
+		block-size: 0;
+	}
+
+	.frame {
+		position: absolute;
+		z-index: 3;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
 		pointer-events: none;
 	}
 
-	.family:hover,
-	.family:focus-within {
-		transform: translateY(var(--models-sheet-lift));
-		box-shadow: inset 0 var(--models-sheet-rule) 0 var(--acetate-sheen), var(--models-sheet-hover-shadow);
+	.family-content {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		grid-template-rows: min-content minmax(0, 1fr) min-content;
+		gap: var(--space-4);
+		height: 100%;
+		padding: var(--space-7) var(--space-5) var(--space-5);
+	}
+
+	.masked-fill {
+		position: absolute;
+		z-index: 2;
+		inset: 0;
+		clip-path: var(--frame-clip);
+		pointer-events: none;
+	}
+
+	.masked-content {
+		position: absolute;
+		inset: 0;
+		background: var(--block);
+		color: var(--block-ink);
+		clip-path: ellipse(100% 0% at 50% 100%);
+		transition: clip-path var(--motion-slow) var(--ease-in);
+		--plane-accent: var(--accent-block);
+		--plane-accent-on: var(--block);
+		--plane-accent-hover: var(--accent-block-hover);
+		--plane-pencil: light-dark(var(--pencil), var(--pencil-deep));
+		--hairline: var(--hairline-block);
+		--hairline-panel: var(--hairline-block);
+		--rule-accent: 2px solid var(--accent-block);
+		--waiting: var(--hairline-block);
+	}
+
+	.frame path {
+		fill: transparent;
+		stroke: var(--block);
+		stroke-width: 1;
+		transition:
+			color var(--motion-fast) var(--ease-in),
+			filter var(--motion) var(--ease-in),
+			stroke var(--motion-fast) var(--ease-in),
+			stroke-width var(--motion-fast) var(--ease-in);
+	}
+
+	@media (hover: hover) {
+		.family:hover .frame path {
+			color: var(--block);
+			stroke: currentColor;
+			stroke-width: 3;
+			filter: var(--models-frame-hover-glow);
+		}
+
+		.family:hover .masked-content {
+			clip-path: ellipse(100% 110% at 50% 50%);
+		}
+	}
+
+	.family:has(:global(:focus-visible)) .frame path {
+		color: var(--block);
+		stroke: currentColor;
+		stroke-width: 3;
+		filter: var(--models-frame-hover-glow);
+	}
+
+	.family:has(:global(:focus-visible)) .masked-content {
+		clip-path: ellipse(100% 110% at 50% 50%);
 	}
 
 	.said {
@@ -112,7 +208,7 @@
 	}
 
 	.words {
-		color: var(--plate-ink-muted);
+		color: var(--ink-muted);
 		font-size: var(--type-small);
 	}
 
@@ -127,35 +223,31 @@
 		flex-direction: column;
 		gap: var(--space-3);
 		min-height: 0;
+		padding: var(--space-4);
 	}
 
 	.count {
-		color: var(--plate-ink-muted);
+		color: var(--ink-muted);
 	}
 
 	.index :global(.stage) {
 		flex: 1;
 	}
 
-	/* The slot itself: one ink on every family's sheet, cut into the stock and shadowed by its own
-	   edge, so an entry is never the tone of the sheet it is printed on. */
 	.index :global(.ground) {
-		background: var(--plate-slot);
-		box-shadow: var(--plate-slot-cut);
+		background: transparent;
+		box-shadow: none;
 	}
 
 	.index :global(.roll) {
 		padding-inline: var(--space-4);
 	}
 
-	/* A rule between entries, drawn in the slot's own neutral rather than the family's, for the same
-	   reason the slot is. */
 	.index :global(.roll li) {
 		padding-block: var(--space-3);
-		border-top: var(--rule-slot);
+		border-top: var(--rule);
 	}
 
-	/* The model's own word, which is what a reader is choosing between. */
 	.name {
 		font-size: var(--type-plate-index);
 		font-weight: 800;
@@ -166,19 +258,41 @@
 
 	.what {
 		margin-block-start: var(--space-2);
-		color: var(--plate-ink-muted);
+		color: var(--ink-muted);
 		font-size: var(--type-small);
 	}
 
-	/* A model nothing stands behind yet is named in the muted ink and says so in words, so the state
-	   is never carried by the tone alone. */
 	.name:has(~ .tag) {
-		color: var(--plate-ink-muted);
+		color: var(--ink-muted);
 	}
 
 	.tag {
 		margin-block-start: var(--space-2);
-		color: var(--plate-ink-muted);
+		color: var(--ink-muted);
+	}
+
+	.masked-content .words,
+	.masked-content .count,
+	.masked-content .what,
+	.masked-content .name:has(~ .tag),
+	.masked-content .tag {
+		color: var(--block-muted);
+	}
+
+	.masked-content .text-link {
+		color: var(--plane-accent);
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+	}
+
+	/* The visible layer carries the focus ring too, because it sits over the real control while filled. */
+	.family:has(.family-content:not(.masked-content) .button:focus-visible) .masked-content .button,
+	.family:has(.family-content:not(.masked-content) .text-link:focus-visible) .masked-content .text-link,
+	.family:has(.family-content:not(.masked-content) :global(.roll:focus-visible))
+		.masked-content :global(.roll) {
+		outline: var(--rule-accent);
+		outline-offset: 2px;
 	}
 
 	/* The two ways into a family, side by side while there is room for both and stacked where there
@@ -190,34 +304,17 @@
 		gap: var(--space-3) var(--space-4);
 	}
 
-	/* A way to read about a family is printed in the one ink rather than in the spot colour, which
-	   belongs to the action rather than to a link beside it. It also clears 4.5:1 on every stock,
-	   which the spot ink does not. */
-	.ways .text-link {
-		--plane-accent: var(--plate-ink);
-	}
-
-	/*
-	 * Landscape, the lead family takes the full press height and the two supporting sheets share the
-	 * other edge. Each index still takes exactly the room between its own heading and ways in.
-	 */
-	@media (orientation: landscape) {
+	@media (min-width: 64rem) and (orientation: landscape) {
 		.family {
 			min-height: 0;
 		}
+	}
 
-		.family.lead {
-			grid-row: 1 / -1;
-			grid-template-rows: min-content minmax(0, 1fr) min-content;
-			padding: var(--models-lead-inset);
-		}
-
-		.family:not(.lead) {
-			padding: var(--models-support-inset);
-		}
-
-		.family.lead .said {
-			gap: var(--space-3);
+	/* Every family remains one tab. Its models roll within the available middle register on phones
+	   and smaller screens instead of making a longer tab for a larger family. */
+	@media (width < 64rem), (orientation: portrait) {
+		.family {
+			height: var(--models-frame-min-height);
 		}
 	}
 

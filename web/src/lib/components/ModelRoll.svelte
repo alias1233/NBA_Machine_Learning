@@ -9,9 +9,9 @@
 	It is a real scroll region, so a wheel, a finger, a scrollbar and the arrow keys all work on it,
 	and nobody is ever waiting on the creep to reach a model they can already see.
 
-	The loop is three identical copies of the family with the reader held in the middle one, so the
-	roll runs out in neither direction and the copies it is made of are never visible. Where the whole
-	family fits, or where the reader asked for no motion, there is one copy and no loop.
+	The roll reaches each end, rests, then returns. It never repeats a model just to keep moving, so
+	the count above it stays an honest picture of how much the family holds. Where the whole family
+	fits, or where the reader asked for no motion, it stands still.
 -->
 <script lang="ts">
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -25,20 +25,33 @@
 		label: string;
 		/** How fast the roll creeps, in pixels a second. */
 		speed?: number;
+		/** The position shared with the visual copy used by the family frame's fill transition. */
+		position?: number;
+		/** A visual copy follows the interactive roll but never starts a second interaction. */
+		passive?: boolean;
 		/** How one model prints. The roll owns the feeding and the sheet owns the printing. */
 		entry: Snippet<[ListedModel]>;
 	};
 
-	let { models, label, speed = 20, entry }: Props = $props();
+	let {
+		models,
+		label,
+		speed = 20,
+		position = $bindable(0),
+		passive = false,
+		entry
+	}: Props = $props();
 
 	/** How long after the reader last moved the roll themselves before it picks up again. */
 	const REST = 2500;
+	/** How long the roll rests at either end before it returns. */
+	const TURN_PAUSE = 1600;
 
 	let scroller = $state<HTMLElement>();
 	let printed = $state<HTMLElement>();
 
-	/** One copy of the family, which is the distance the roll wraps by. */
-	let cycle = $state(0);
+	/** The height of the one, complete family list. */
+	let content = $state(0);
 	/** What the scroller has room for. */
 	let room = $state(0);
 	/** Whether the reader is resting on the roll, which holds it where it is. */
@@ -57,18 +70,22 @@
 	let at = 0;
 	/** When the reader last moved the roll themselves. Read inside the frame, so it is not tracked. */
 	let worked = 0;
+	/** Which end the roll is travelling toward. It survives a reader briefly resting on it. */
+	let direction = 1;
+	/** The moment the roll may leave the end it just reached. */
+	let pausedUntil = 0;
 
 	/** More models than there is room for, so the reader has to be able to move it themselves. */
-	const overflows = $derived(cycle > room + 1);
+	const overflows = $derived(content > room + 1);
 
 	/** A reader who asked for no motion is given the same roll standing still. */
-	const loops = $derived(overflows && !prefersReducedMotion.current);
+	const moves = $derived(overflows && !prefersReducedMotion.current);
 
 	$effect(() => {
-		if (!scroller || !printed) return;
+		if (passive || !scroller || !printed) return;
 
 		const measure = new ResizeObserver(() => {
-			cycle = printed!.offsetHeight;
+			content = printed!.offsetHeight;
 			room = scroller!.clientHeight;
 		});
 
@@ -78,9 +95,18 @@
 		return () => measure.disconnect();
 	});
 
+	// The contrast layer is visual only. It follows the one real roll so its words remain on the
+	// same line while the frame's fill passes over them.
+	$effect(() => {
+		if (!passive || !scroller) return;
+
+		at = position;
+		scroller.scrollTop = position;
+	});
+
 	// Nothing feeds while the section is off the screen, which is most of the time a reader is here.
 	$effect(() => {
-		if (!scroller) return;
+		if (passive || !scroller) return;
 
 		const watch = new IntersectionObserver(([seeing]) => (seen = seeing.isIntersecting));
 
@@ -89,18 +115,15 @@
 		return () => watch.disconnect();
 	});
 
-	// The reader stands in the middle copy, so there is a whole family of runway either way.
 	$effect(() => {
-		if (loops && cycle > 0) stand(cycle);
-	});
+		const roller = scroller;
 
-	$effect(() => {
-		if (!loops || !seen || held || !scroller) return;
+		if (passive || !moves || !seen || held || !roller) return;
 
 		let frame = 0;
 		let last = 0;
 
-		at = scroller.scrollTop;
+		at = roller.scrollTop;
 
 		const creep = (now: number) => {
 			frame = requestAnimationFrame(creep);
@@ -111,10 +134,18 @@
 
 			last = now;
 
-			if (now - worked < REST) return;
+			if (now - worked < REST || now < pausedUntil) return;
 
-			stand(at + (speed * since) / 1000);
-			hold();
+			const end = direction > 0 ? roller.scrollHeight - roller.clientHeight : 0;
+			const next = at + direction * (speed * since) / 1000;
+
+			if ((direction > 0 && next >= end) || (direction < 0 && next <= end)) {
+				stand(end);
+				direction *= -1;
+				pausedUntil = now + TURN_PAUSE;
+			} else {
+				stand(next);
+			}
 		};
 
 		frame = requestAnimationFrame(creep);
@@ -124,16 +155,9 @@
 
 	function stand(to: number) {
 		at = to;
+		position = to;
 
 		if (scroller) scroller.scrollTop = to;
-	}
-
-	/** Holds the reader in the middle copy, however the roll got out of it. */
-	function hold() {
-		if (!loops || cycle <= 0) return;
-
-		if (at >= cycle * 2) stand(at - cycle);
-		else if (at < cycle) stand(at + cycle);
 	}
 
 	/**
@@ -143,14 +167,14 @@
 	 * own and anything further away is the reader's.
 	 */
 	function moved() {
-		if (!scroller) return;
+		if (!scroller || passive) return;
 
 		if (Math.abs(scroller.scrollTop - at) > 1) {
 			at = scroller.scrollTop;
+			position = at;
 			worked = performance.now();
 		}
 
-		hold();
 	}
 
 	/**
@@ -160,14 +184,14 @@
 	 */
 	function rest(on: boolean) {
 		return (event: PointerEvent) => {
-			if (event.pointerType !== 'touch') held = on;
+			if (!passive && event.pointerType !== 'touch') held = on;
 		};
 	}
 </script>
 
 <!-- The roll is laid out by the sheet and never the other way round, so what it holds takes no part
      in how tall the sheet is. Everything printed on it stands inside this box. -->
-<div class="stage" style:--reach="{cycle}px">
+<div class="stage" style:--reach="{content}px">
 	<span class="ground" aria-hidden="true"></span>
 
 	<!-- A region the reader can scroll has to be reachable by keyboard, whether or not it is a
@@ -175,33 +199,21 @@
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<div
 		class="roll"
-		class:loops
 		bind:this={scroller}
-		role={overflows ? 'group' : undefined}
-		aria-label={overflows ? `${label}, scrollable` : undefined}
-		tabindex={overflows ? 0 : undefined}
+		role={overflows && !passive ? 'group' : undefined}
+		aria-label={overflows && !passive ? `${label}, scrollable` : undefined}
+		tabindex={overflows && !passive ? 0 : undefined}
 		onscroll={moved}
 		onpointerenter={rest(true)}
 		onpointerleave={rest(false)}
-		onfocusin={() => (held = true)}
-		onfocusout={() => (held = false)}
-	>
+		onfocusin={() => !passive && (held = true)}
+		onfocusout={() => !passive && (held = false)}
+		>
 		<ol class="printed" bind:this={printed}>
 			{#each models as model (model.name)}
 				<li>{@render entry(model)}</li>
 			{/each}
 		</ol>
-
-		<!-- The two copies the loop is made of. They carry no meaning and are never read aloud. -->
-		{#if loops}
-			{#each [0, 1] as copy (copy)}
-				<ol class="printed" aria-hidden="true">
-					{#each models as model (model.name)}
-						<li>{@render entry(model)}</li>
-					{/each}
-				</ol>
-			{/each}
-		{/if}
 	</div>
 </div>
 
@@ -246,42 +258,10 @@
 		display: none;
 	}
 
-	/* Entries come off the roll rather than being cut by an edge, which is what says there is more of
-	   the family above and below whatever is standing. Only a roll that feeds is faded. */
-	.loops {
-		/* Deep enough that a name goes off the roll rather than being cut through its own letters,
-		   and never so deep on a short screen that it takes a third of what is standing. */
-		--fade: min(var(--space-6), 9%);
-		mask-image: linear-gradient(
-			to bottom,
-			transparent,
-			black var(--fade),
-			black calc(100% - var(--fade)),
-			transparent
-		);
-	}
-
 	.printed {
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
 
-	/*
-	 * Portrait, the sheet is a brick and the section runs as long as the families need, so there is
-	 * no screen to fit and nothing to feed past. The family prints whole and the page scrolls it,
-	 * which is also the one scroll a finger should find under it.
-	 */
-	@media (orientation: portrait) {
-		.ground {
-			height: 100%;
-		}
-
-		/* Back in the flow, but still positioned, so it stays in front of the ground it runs on. */
-		.roll {
-			position: relative;
-			inset: auto;
-			overflow: visible;
-		}
-	}
 </style>

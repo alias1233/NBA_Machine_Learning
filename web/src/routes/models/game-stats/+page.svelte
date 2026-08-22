@@ -256,7 +256,7 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
-	description="The chance of every final margin, every points, rebounds, assists and three-pointer total, and each team winning one NBA game."
+	description="Free machine learning predictions for an upcoming NBA game's outcomes. Supports win percentages, point differentials, total box scores, and more."
 	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}

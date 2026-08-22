@@ -50,7 +50,7 @@
 		readAnswer,
 		sharePercentages
 	} from '$lib/odds';
-	import { READING_PATH, SITE_DESCRIPTION } from '$lib/site';
+	import { READING_PATH } from '$lib/site';
 
 	import type { Answer } from '$lib/odds';
 	import type { ShowcaseSample } from '$lib/types';
@@ -336,7 +336,7 @@
 
 	<div class="page composition">
 		<div class="colophon plate">
-			<p class="lede">{SITE_DESCRIPTION}</p>
+			<p class="lede">Predict statistics of upcoming NBA games.</p>
 		</div>
 
 		{#if cards.length === 0}
@@ -733,6 +733,22 @@
 		.button--lead {
 			flex: 1;
 		}
+
+		/* The Models folder begins at the lower-left edge of a portrait screen. Keep the hero's action
+		   on its clear side, while narrow landscape keeps the balanced layout above. */
+		@media (orientation: portrait) {
+			.act {
+				padding-inline-start: calc(var(--tap-target) * 4 - var(--space-4));
+				padding-inline-end: 0;
+			}
+		}
+
+		@media (width < 24rem) and (orientation: portrait) {
+			.button--lead {
+				font-size: 1rem;
+				letter-spacing: 0.04em;
+			}
+		}
 	}
 
 	/* Down the page, which is where the listing is. It travels on the way in, so the control says
@@ -926,7 +942,16 @@
 	 * reason a phone is: the hero is one screen, and a drawing squeezed to a sliver to make room for
 	 * an index of six is the wrong half to keep.
 	 */
-	@media (min-width: 64rem) and (min-height: 53rem) {
+	@media (min-width: 64rem) and (min-height: 53rem) and (orientation: landscape) {
+		/* Keep the action over the chosen sheet and lift the slate as one desktop composition. */
+		.hero {
+			padding-block-end: calc(var(--space-3) + var(--space-6));
+		}
+
+		.act {
+			margin-block-start: calc(var(--space-6) * -1);
+		}
+
 		.slate-region {
 			display: flex;
 		}

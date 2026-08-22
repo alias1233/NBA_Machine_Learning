@@ -6,21 +6,17 @@
 	samples were drawn by a job this morning and are read off a file. See ShowcasePlate.svelte and
 	python/src/nba_ml/showcase.py.
 
-	The Models section is the site's index and the one thing the hero leads to. It reads on the
-	reader's own page, headed like every other page on the site, with one board of block paper laid
-	across it holding the families. The board is the object here, which is what a block is for: the
-	page is where the reader is and the board is the thing set into it.
+	The Models section is the site's index and the one thing the hero leads to. It reads directly on
+	the reader's own page. Each family is held by its own block-paper frame, so the page stays visible
+	between the three choices and the frames themselves are the objects in the section.
 
-	It is one screen on a landscape device, and a link to it lands on its own top edge, so the
-	heading, the whole board and the line under it are all in sight at once and every way into a
-	family can be pressed without a scroll. Portrait, the families stack as bricks and the section
-	runs as long as they need, because there a screen cannot hold three families and be read.
+	A wide landscape device holds the three frames side by side at the same height. A smaller screen
+	lets the grid break into fewer columns, so every family remains readable and usable.
 
-	A family is not a picture, it is the models in it, so each sheet prints them by name with what
+	A family is not a picture, it is the models in it, so each frame prints them by name with what
 	each one answers. See FamilySheet.svelte.
 
-	What is not a family, which today is only the line saying more are coming, stands under the board
-	rather than on it.
+	What is not a family, which today is only the line saying more are coming, stands below the frames.
 -->
 <script lang="ts">
 	import AdSlot from '$lib/components/AdSlot.svelte';
@@ -39,6 +35,7 @@
 </svelte:head>
 
 <ShowcasePlate samples={data.samples} heldOver={data.heldOver} answering={data.answering} />
+
 
 <section class="models lands-flush" id={MODELS_SECTION}>
 	<a class="models-tab" href={MODELS_PATH}>Models</a>
@@ -60,13 +57,11 @@
 				<Notice>No model can be listed while the prediction service is not answering.</Notice>
 			{/if}
 		{:else}
-			<div class="board">
-				<ul class="families">
-					{#each data.families as family, position (family.name)}
-						<FamilySheet {family} {position} />
-					{/each}
-				</ul>
-			</div>
+			<ul class="families">
+				{#each data.families as family (family.name)}
+					<FamilySheet {family} />
+				{/each}
+			</ul>
 		{/if}
 
 		<p class="more muted">More models <span class="tag micro">Coming soon</span></p>
@@ -75,12 +70,8 @@
 	</div>
 </section>
 
+
 <style>
-	/*
-	 * The section is the reader's own page, which is what every screen under a band is. Only the board
-	 * inside it is block paper, because the families are an object set into the page rather than a
-	 * field of it.
-	 */
 	.models {
 		position: relative;
 		display: flex;
@@ -124,23 +115,15 @@
 		gap: var(--space-5);
 	}
 
-	.board {
-		display: flex;
-		flex-direction: column;
-	}
-
-	/* The families form one press composition. The first sheet anchors the run and the others bind to
-	   its edge, which makes the page read as a single object rather than three equal cards. */
 	.families {
 		display: grid;
 		flex: 1;
-		gap: var(--models-board-gap);
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+		grid-auto-rows: minmax(var(--models-frame-min-height), auto);
+		gap: var(--space-5);
 		margin: 0;
-		padding: var(--models-board-inset);
-		background: var(--models-board-ground);
-		box-shadow: var(--models-board-shadow);
+		padding: 0;
 		list-style: none;
-		isolation: isolate;
 	}
 
 	.more {
@@ -152,15 +135,15 @@
 
 	/*
 	 * Landscape, the whole section is one screen, starting at the top edge it lands on. The
-	 * board takes whatever the heading and the line under it leave, so both its edges are in sight
-	 * and the way into every family can be pressed without a scroll.
+	 * frames take whatever the heading and the line under it leave, so every family stays in sight
+	 * and every way into it can be pressed without a scroll.
 	 *
 	 * Orientation rather than width, because what decides this is whether the device has height to
 	 * spend or scroll to save, which is the same question the stacked bricks answer the other way.
 	 * The smallest screen is what it is measured against, so a phone's browser bars coming back
 	 * cannot push the foot of the board off the bottom.
 	 */
-	@media (orientation: landscape) {
+	@media (min-width: 64rem) and (orientation: landscape) {
 		.models {
 			/* Held closer to the hero than a section on paper usually is, because here the room above
 			   the heading is room off the board, and the board is what has to fit. */
@@ -169,17 +152,20 @@
 			min-height: 100svh;
 		}
 
-		.board {
-			flex: 1;
+		.families {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			grid-template-rows: minmax(0, 1fr);
+			grid-auto-rows: minmax(0, 1fr);
 			min-height: 0;
+			padding-block-end: calc(var(--models-frame-stagger) * 2);
 		}
 
-		.families {
-			grid-template-columns: minmax(0, var(--models-lead-span)) minmax(
-				var(--models-support-min),
-				1fr
-			);
-			grid-template-rows: repeat(2, minmax(0, 1fr));
+		:global(.families > .family:nth-child(2)) {
+			translate: 0 var(--models-frame-stagger);
+		}
+
+		:global(.families > .family:nth-child(3)) {
+			translate: 0 calc(var(--models-frame-stagger) * 2);
 		}
 	}
 </style>

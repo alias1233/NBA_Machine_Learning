@@ -258,10 +258,12 @@
 	});
 
 	// The scroll has already been made by the time this runs, so the page travels again from here.
-	// A menu the reader tapped open has been answered by arriving somewhere, so it closes, and the
-	// direction starts again from where the new page landed rather than from the last one.
+	// Menu and focus state can belong to a header navigation just removed, so start the new page with
+	// neither holding its header open. The direction starts again from where the new page landed.
 	afterNavigate(() => {
 		document.documentElement.classList.remove('arriving');
+		overMenu = false;
+		holdingFocus = false;
 		revealed = false;
 		scrolledUp = false;
 		lastScroll = window.scrollY;
@@ -295,10 +297,17 @@
 <!-- The first thing focus reaches, and the one way past a header that is holding itself away. -->
 <a class="skip button" href="#content">Skip to content</a>
 
-{#snippet masthead(modelsTabId: string, refs: HeaderRefs)}
+{#snippet masthead(modelsTabId: string, refs: HeaderRefs, heroWordmark = false)}
 	{@const ownsMenu = refs === activeRefs}
 	<div class="page masthead" bind:this={refs.masthead}>
-		<a class="wordmark" href="/">{SITE_NAME}</a>
+		<a
+			class="wordmark"
+			class:hero-wordmark={heroWordmark}
+			class:wordmark-transition={heroWordmark ? !pastHero && !arrivingAtModels : !home}
+			href="/"
+		>
+			{SITE_NAME}
+		</a>
 
 		<nav>
 			<ul class="tabs">
@@ -368,7 +377,7 @@
 		onfocusin={onHeaderFocusIn}
 		onfocusout={onHeaderFocusOut}
 	>
-		{@render masthead('hero-models-tab', heroRefs)}
+		{@render masthead('hero-models-tab', heroRefs, true)}
 	</header>
 
 	<!-- The fixed header waits behind the hero copy, then takes over with its own transition. -->
@@ -525,6 +534,18 @@
 		color: var(--ink);
 		text-decoration: none;
 		white-space: nowrap;
+	}
+
+	/* The title grows into the hero's larger stamp only while that copy owns the screen. Once Models
+	   takes over, its normal home header stays out of this transition. */
+	.wordmark-transition {
+		view-transition-name: site-wordmark;
+	}
+
+	.hero-wordmark {
+		font-size: clamp(1.125rem, 1rem + 0.9vw, 1.75rem);
+		font-weight: 800;
+		letter-spacing: 0.055em;
 	}
 
 	nav {
@@ -701,6 +722,26 @@
 
 		.tabs {
 			gap: var(--space-3);
+		}
+	}
+
+	@media (width < 24rem) {
+		.masthead {
+			gap: var(--space-2);
+		}
+
+		.tabs {
+			gap: 0;
+		}
+
+		.tabs > li > a {
+			justify-content: center;
+			min-width: var(--tap-target);
+			padding-inline: 0;
+		}
+
+		.hero-wordmark {
+			font-size: 1.1rem;
 		}
 	}
 </style>
