@@ -34,9 +34,29 @@ deploy/ : the Docker Compose stack, the Caddyfile, and the cron entries.
 
 One rented Linux server.
 
+On the server, clone the repository:
+
 ```sh
-git clone <repository> /srv/nba-ml && cd /srv/nba-ml/deploy
-cp .env.example .env && nano .env            # DOMAIN and ACME_EMAIL
+git clone <repository> /srv/nba-ml
+```
+
+On the developer machine, after collection and training, create the first-start snapshot and copy it
+to the server. Replace `<server>` with its SSH host:
+
+```sh
+cd <local-repository>/python
+uv run nba-serving-data pack ../nba-serving-data.tar.gz
+scp ../nba-serving-data.tar.gz <server>:/srv/nba-ml/
+```
+
+`nba-serving-data.tar.gz` contains the trained models and the five-year game-data window the server
+needs. Docker mounts it read-only as `/release.tar.gz` and verifies it into the empty `data/` directory.
+
+Back on the server:
+
+```sh
+cd /srv/nba-ml/deploy
+cp .env.example .env && nano .env            # DOMAIN, ACME_EMAIL, and BALL_DONT_LIE_KEY
 mkdir -p data backups logs && sudo chown -R 10001:10001 data backups
 sudo cp logrotate /etc/logrotate.d/nba-ml
 docker compose build jobs
@@ -46,13 +66,6 @@ docker compose run --rm jobs                    # refresh rosters and rebuild fe
 docker compose run --rm jobs nba-showcase       # publish the home-page samples
 docker compose up -d --build                 # caddy, web, api
 crontab crontab                              # hourly collect and build, nightly backup
-```
-
-Create `nba-serving-data.tar.gz` on the developer machine after training and collection:
-
-```sh
-cd python && uv run nba-serving-data pack ../nba-serving-data.tar.gz
-scp nba-serving-data.tar.gz <server>:/srv/nba-ml/
 ```
 
 Updating is `git pull && docker compose up -d --build`. Both are picked up without a restart: a new

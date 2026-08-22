@@ -292,8 +292,10 @@
 	};
 
 	const sampledLabel = $derived(
-		heldOver ? `Sampled predictions from ${dayOf(heldOver)}.` : "Today's sampled predictions."
+		(heldOver ? `Sampled predictions from ${dayOf(heldOver)}.` : "Today's sampled predictions.")
 	);
+
+	const disclaimer = `Predictions are not betting advice, and are not guaranteed.`;
 </script>
 
 <!-- Focus landing anywhere in the hero holds the turn, because somebody dragging the line or moving
@@ -433,7 +435,7 @@
 					</dl>
 				{/if}
 
-				<p class="sampled-label small muted">{sampledLabel}</p>
+				<p class="disclaimer small muted">{disclaimer}</p>
 			</div>
 
 			{@render intoModels()}
@@ -443,6 +445,7 @@
 			     because the listing is what the screen is for and the set is how a reader changes what
 			     it is answering. -->
 			<div class="slate-region">
+				<p class="sampled-label small muted">{sampledLabel}</p>
 				<div class="slate block">
 					<ul aria-label={sampledLabel}>
 						{#each cards as entry, index (entry.sample.model + index)}
@@ -693,8 +696,16 @@
 		margin: 0;
 	}
 
-	.sampled-label {
+	.disclaimer {
 		max-width: var(--measure);
+	}
+
+	.sampled-label {
+		position: absolute;
+		inset-block-end: calc(100% + var(--space-1));
+		inset-inline-start: 0;
+		margin: 0;
+		color: var(--plate-ink-muted);
 	}
 
 	/*
@@ -781,6 +792,7 @@
 	 * the whole sheet and the turn is what moves between samples.
 	 */
 	.slate-region {
+		position: relative;
 		display: none;
 		flex-direction: column;
 	}
