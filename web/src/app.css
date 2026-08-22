@@ -1,5 +1,5 @@
 /*
- * Every colour, type size, space, radius and duration the site uses is named here, and nothing
+ * Every color, type size, space, radius and duration the site uses is named here, and nothing
  * outside this file holds a raw one. `light-dark()` picks per theme from a single declaration, so a
  * token is never written twice and there is no theme-specific block.
  */
@@ -94,7 +94,7 @@
 	--plane-accent-hover: var(--accent-hover);
 	--over: light-dark(#0b6845, #4bcf9a);
 	--under: light-dark(#b01d57, #f072b0);
-	/* An outcome landing exactly on the line. A third data colour rather than the neutral tone,
+	/* An outcome landing exactly on the line. A third data color rather than the neutral tone,
 	   because a push is a result and not the absence of one. */
 	--push: light-dark(#8c6d10, #e8bf5c);
 	--warn-wash: light-dark(#f8edd6, #2a2211);
@@ -217,6 +217,8 @@
 	--motion-fast: 120ms;
 	--motion: 200ms;
 	--motion-slow: 320ms;
+	--motion-impact: 680ms;
+	--answer-bar-stagger: 8ms;
 	--loading-pulse: 333ms;
 	--ease-in: cubic-bezier(0.2, 0, 0, 1);
 	--ease-out: cubic-bezier(0.4, 0, 1, 1);
@@ -231,7 +233,7 @@
 	 * site is sure of is printed; everything the reader is asking is drawn.
 	 *
 	 * These do not vary by theme. A printed plate is one object under any light, and inverting it
-	 * would say the ink changed colour when the room did. The rest of the site is still on the five
+	 * would say the ink changed color when the room did. The rest of the site is still on the five
 	 * planes above and is migrated separately.
 	 *
 	 * Every value here is sampled from the approved comp rather than chosen again, so what shipped is
@@ -245,7 +247,7 @@
 	/* The one printed ink everything readable is set in. */
 	--plate-ink: #ece3d1;
 	--plate-ink-muted: #a9b9e0;
-	/* The spot colour, printed. It marks the run of outcomes above the line and fills the one action. */
+	/* The spot color, printed. It marks the run of outcomes above the line and fills the one action. */
 	--plate-spot: #f35411;
 	--plate-spot-on: #0a1d4a;
 	/* The spot ink under the pointer. A press lays one ink, so this is the same ink run heavier. */
@@ -627,7 +629,7 @@ button.text-link {
  *
  * The lead the root keeps clear of the header would leave a strip of the section above showing at
  * the top of the screen, and a strip of another ground reads as the page having stopped short of
- * where it was going. So the lead is cancelled here and the change of ground lands on the top edge
+ * where it was going. So the lead is canceled here and the change of ground lands on the top edge
  * of the screen exactly. Nothing is kept clear for the header, which stands over the target's own
  * first stretch, the way it already stands over the band a page opens with.
  *
@@ -831,7 +833,7 @@ main > .band:first-child {
 
 /*
  * The two containers, and no others. Both are --radius-lg with --space-5 of padding, no border and
- * no shadow. The transparent top edge is what a link and the answer colour in without moving
+ * no shadow. The transparent top edge is what a link and the answer color in without moving
  * anything.
  */
 .panel,
@@ -1000,7 +1002,7 @@ a.block:focus-visible {
 	border-top-color: var(--plane-accent);
 }
 
-/* A tag takes its colour from what it sits on, so one shape serves a block, an accent card and a
+/* A tag takes its color from what it sits on, so one shape serves a block, an accent card and a
    page. */
 .tag {
 	display: inline-flex;
@@ -1139,7 +1141,7 @@ select {
 }
 
 /* A date field is drawn by the platform, and on iOS that means an intrinsic width no rule above can
-   reach and a value centred in it. Dropping the native appearance is what hands both back. */
+   reach and a value centered in it. Dropping the native appearance is what hands both back. */
 input[type='date'] {
 	appearance: none;
 }
@@ -1200,7 +1202,7 @@ select:disabled {
 /* The loudest control on the site, once, in the hero. Taller and wider than the standard target,
    and stamped in the plate's own lettering rather than set in the interface face at button weight,
    because being the one thing on a screen worth pressing is a size and a register, not only a
-   colour. */
+   color. */
 .button--lead {
 	min-height: calc(var(--tap-target) + var(--space-5));
 	padding-inline: var(--space-7);
@@ -1328,7 +1330,7 @@ select:disabled {
 	}
 }
 
-/* Nothing draws, opens or scrolls smoothly. Colour and opacity still change, at --motion-fast.
+/* Nothing draws, opens or scrolls smoothly. Color and opacity still change, at --motion-fast.
    Never disable a state change, only its animation. */
 @media (prefers-reduced-motion: reduce) {
 	*,

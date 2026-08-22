@@ -25,6 +25,11 @@ def collected_data():
     model_file = paths.model_file("player_stats", "points")
     model_file.parent.mkdir(parents=True, exist_ok=True)
     model_file.write_bytes(b"weights")
+    paths.evaluation_file("player_stats", "points").write_text("{}", encoding="utf-8")
+    paths.training_report_file("player_stats", "points").write_text("report", encoding="utf-8")
+    graph = paths.graphs_directory("player_stats", "points") / "training.png"
+    graph.parent.mkdir()
+    graph.write_bytes(b"graph")
 
 
 def _row_count(database_file, table):
@@ -49,6 +54,11 @@ def test_a_serving_archive_keeps_only_the_needed_game_window_and_loads_it(tmp_pa
 
     assert (loaded / source_identity.MARKER.name).read_text(encoding="utf-8") == "balldontlie\n"
     assert (loaded / serving_data.MODELS / "player_stats" / "points" / "model.pth").read_bytes() == b"weights"
+    assert (loaded / serving_data.MODELS / "player_stats" / "points" / "evaluation.json").read_text(
+        encoding="utf-8"
+    ) == "{}"
+    assert not (loaded / serving_data.MODELS / "player_stats" / "points" / "training_report.txt").exists()
+    assert not (loaded / serving_data.MODELS / "player_stats" / "points" / "graphs").exists()
     assert _row_count(
         loaded / serving_data.DATABASES / team_games.FILEPATH.name,
         team_games.NAME

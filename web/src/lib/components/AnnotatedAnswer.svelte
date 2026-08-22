@@ -21,12 +21,12 @@
 	import type { ModelOutput } from '$lib/types';
 
 	/** A made-up points answer, shaped like the ones a player model gives: a chance per whole number. */
-	const CENTRE = 24;
+	const CENTER = 24;
 	const SPREAD = 7;
 	const OUTCOMES = 55;
 
 	const weights = Array.from({ length: OUTCOMES }, (_, points) =>
-		Math.exp(-((points - CENTRE) ** 2) / (2 * SPREAD ** 2))
+		Math.exp(-((points - CENTER) ** 2) / (2 * SPREAD ** 2))
 	);
 	const total = weights.reduce((running, weight) => running + weight, 0);
 
@@ -51,7 +51,7 @@
 
 	// A whole number rather than the half one a real answer opens on, so all three odds carry a
 	// figure and the push this names is worth reading.
-	const LINE = CENTRE;
+	const LINE = CENTER;
 
 	/** Which column a term sits in on a wide page. The first three take the left of the block. */
 	const LEFT_COLUMN = 3;
@@ -131,7 +131,7 @@
 	/**
 	 * The two ends of the shortest segment between a label and the part it names.
 	 *
-	 * Clamping the label's centre into the part gives the nearest point on the part, and clamping that
+	 * Clamping the label's center into the part gives the nearest point on the part, and clamping that
 	 * back into the label gives the nearest point on the label. One rule, so a leader points the same
 	 * way whether the label sits beside the block or under it, and reaches the edge of neither box.
 	 */

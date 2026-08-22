@@ -15,8 +15,11 @@ import type { TransitionConfig } from 'svelte/transition';
 /** `--motion`. A rolling figure, a region opening, and the first phase of the answer column reveal. */
 export const MOTION = 200;
 
-/** `--motion-slow`. The chart drawing in, and how far the page travels to reach the answer. */
+/** `--motion-slow`. How far the page travels to reach the answer. */
 export const MOTION_SLOW = 320;
+
+/** `--motion-impact`. The one authored entrance a prediction page earns. */
+export const MOTION_IMPACT = 680;
 
 /** `--ease-in` as a curve a script can run. Both cover half the distance in the first fifth of it. */
 const EASE = cubicOut;

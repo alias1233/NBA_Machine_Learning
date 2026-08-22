@@ -82,7 +82,7 @@
 	/** The daily sample order also chooses the printed plate's photograph. */
 	const COLLAGE_IMAGES = [
 		'basketball_through_hoop.jpg',
-		'bizzare_basketball.png',
+		'bizarre_basketball.png',
 		'basketball_on_floor.jpg',
 		'dunk.jpg',
 		'basketball_court.jpg',
@@ -120,7 +120,7 @@
 		if (tallest <= 0) return [];
 
 		// Thinned by taking every nth outcome rather than by summing runs of them, because this is a
-		// shape to recognise the answer by and not a figure anything is read off.
+		// shape to recognize the answer by and not a figure anything is read off.
 		const step = Math.max(Math.ceil(probabilities.length / bars), 1);
 
 		return probabilities
@@ -582,7 +582,7 @@
 	/*
 	 * The answer, on the reader's own paper, given the whole page column. It is the page plane, so the
 	 * chart, the handle and the three figures are drawn exactly as a prediction page draws them, in
-	 * the over, under and push colours the whole site reads a distribution in.
+	 * the over, under and push colors the whole site reads a distribution in.
 	 */
 	.answer {
 		position: relative;
@@ -711,7 +711,7 @@
 	/*
 	 * The one action of the site, stamped in spot ink on the plate between two printed rules. It is
 	 * the middle of the screen and the whole point of it, so nothing else on the ground competes: the
-	 * rules run out to both edges of the column and leave it standing alone in the centre.
+	 * rules run out to both edges of the column and leave it standing alone in the center.
 	 */
 	.act {
 		display: grid;
@@ -728,7 +728,7 @@
 	}
 
 	/* Narrow, there is no room either side of the block for a rule to run, so the block takes the whole
-	   column and the rules that centred it come off. The action leaves room at the lower right for the
+	   column and the rules that centered it come off. The action leaves room at the lower right for the
 	   page edge that meets it there. */
 	@media (width < 48rem) {
 		.act {

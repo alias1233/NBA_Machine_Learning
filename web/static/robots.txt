@@ -1,7 +1,7 @@
 # ============================================================================
 # robots.txt
 #
- Sourced from the ai-robots-txt/ai.robots.txt project as of August 2026
+# Sourced from the ai-robots-txt/ai.robots.txt project as of August 2026
 # ============================================================================
  
  

@@ -130,9 +130,23 @@
 	});
 
 	const thin = $derived(answered && pastGames !== null && pastGames < FEW_PAST_GAMES);
+
+	/** Track client-side completions so each newly delivered answer draws its bars once. */
+	// svelte-ignore state_referenced_locally
+	let seenAnswer = $state.raw<Answer | null>(answer);
+	let drawBars = $state(false);
+
+	$effect(() => {
+		const next = answer;
+
+		if (loading || next === null || next === seenAnswer) return;
+
+		drawBars = true;
+		seenAnswer = next;
+	});
 </script>
 
-<!-- The one container carrying the accent top edge unhovered, because it is the answer. -->
+<!-- The one container carrying the accent top edge without hovering, because it is the answer. -->
 <section class="block answer">
 	<div class="brief">
 		<header>
@@ -160,7 +174,7 @@
 			     space as well and the block does not change size when the answer lands. -->
 			<div class="figure-row">
 				{#if answered}
-					<p class="figure-lead" class:printed={!example}>{leadFigure}</p>
+					<p class="figure-lead">{leadFigure}</p>
 				{:else}
 					<div class="reserved lead-figure" class:waiting={loading}></div>
 				{/if}
@@ -180,7 +194,7 @@
 
 	<div class="reading-area">
 		{#if kind === 'category_distribution'}
-			<CategoryReading {categories} {loading} />
+			<CategoryReading {categories} {loading} animateBars={drawBars} />
 		{:else}
 			<!-- The detailed view covers the page, so it is given the words this block names itself
 			     with. -->
@@ -192,6 +206,7 @@
 				{heading}
 				{subheading}
 				{example}
+				animateBars={drawBars}
 			/>
 		{/if}
 	</div>
@@ -261,13 +276,6 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--space-3);
-	}
-
-	/* The last thing the press lays down, so the eye ends on the figure the answer came to. It is
-	   held back past the start of the reading beside it, and it is the full impression rather than
-	   the reading's strike, because nothing clips it and a headline figure can afford to land. */
-	.figure-lead.printed {
-		animation: stamp 420ms var(--ease-in) 120ms backwards;
 	}
 
 	/* Given its width, because it holds nothing to take one from. The block plane hands it the

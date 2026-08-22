@@ -27,7 +27,7 @@ type Block = 'start' | 'end';
 const TRAVEL = MOTION_SLOW;
 
 /** Close enough that one eased step would round to nothing, so what is left is closed in one. */
-const SNAP = 2;
+const SNAP = 4;
 
 /**
  * How long past the end of its flow a walk keeps following, so a target that never settles cannot
@@ -146,7 +146,7 @@ export async function walkTo(
 	return new Promise((resolve) => {
 		let frame = 0;
 		let last = performance.now();
-		let travelling = false;
+		let traveling = false;
 
 		// The reader taking the page over ends the walk, because the page is theirs from then on.
 		const stop = () => {
@@ -170,13 +170,13 @@ export async function walkTo(
 
 			// Not worth moving for yet. The flow can still push it off screen, so this keeps watching
 			// until the flow is over rather than giving up on the first frame.
-			if (!travelling && !always && fullyVisible(target)) {
+			if (!traveling && !always && fullyVisible(target)) {
 				if (now >= following) stop();
 				else frame = requestAnimationFrame(step);
 				return;
 			}
 
-			travelling = true;
+			traveling = true;
 
 			const left = destination(target, block, offset) - window.scrollY;
 

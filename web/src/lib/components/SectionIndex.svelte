@@ -139,7 +139,7 @@
 		color: var(--plane-accent);
 	}
 
-	/* The section being read, in the accent and set heavier, with the rule beside it. Never colour
+	/* The section being read, in the accent and set heavier, with the rule beside it. Never color
 	   alone. */
 	.entries a[aria-current] {
 		color: var(--plane-accent);

@@ -46,9 +46,19 @@
 		subheading: string;
 		/** True where the block stands for an answer rather than being one, so it owns no address bar. */
 		example?: boolean;
+		/** Draw the bars when a client-delivered answer arrives. */
+		animateBars?: boolean;
 	};
 
-	let { distribution, stat, openOn, heading, subheading, example = false }: Props = $props();
+	let {
+		distribution,
+		stat,
+		openOn,
+		heading,
+		subheading,
+		example = false,
+		animateBars = false
+	}: Props = $props();
 
 	const URL_SYNC_DELAY = 300;
 
@@ -122,7 +132,7 @@
 	<OddsReadout {odds} />
 
 	<div class="plot">
-		<DistributionChart {distribution} {stat} {line} {range} {summary} />
+		<DistributionChart {distribution} {stat} {line} {range} {summary} animate={animateBars} />
 	</div>
 </div>
 
@@ -139,7 +149,7 @@
 	</button>
 </LineControl>
 
-<!-- The same surface at the size of the screen, so it sits on this one and takes its colours. It
+<!-- The same surface at the size of the screen, so it sits on this one and takes its colors. It
      floats above the page rather than in it, so it adds nothing to the height held around it. -->
 {#if detailed}
 	<DetailedChart

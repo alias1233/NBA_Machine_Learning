@@ -70,7 +70,7 @@
 	let at = 0;
 	/** When the reader last moved the roll themselves. Read inside the frame, so it is not tracked. */
 	let worked = 0;
-	/** Which end the roll is travelling toward. It survives a reader briefly resting on it. */
+	/** Which end the roll is traveling toward. It survives a reader briefly resting on it. */
 	let direction = 1;
 	/** The moment the roll may leave the end it just reached. */
 	let pausedUntil = 0;

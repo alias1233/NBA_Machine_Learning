@@ -328,7 +328,7 @@ def test_rescoring_uses_the_recorded_split_and_scalers_without_changing_the_mode
 def test_rescore_without_a_model_runs_every_saved_model(monkeypatch):
     """A bare --rescore is the batch form, like retraining every selected model."""
 
-    saved_models = (specifications.TEAM_POINTS_MODEL, game_stat_specifications.GAME_TOTAL_MODEL)
+    saved_models = (specifications.TEAM_POINTS_MODEL, game_stat_specifications.TOTAL_POINTS)
     for model in saved_models:
         model.model_file().parent.mkdir(parents=True, exist_ok=True)
         model.model_file().touch()

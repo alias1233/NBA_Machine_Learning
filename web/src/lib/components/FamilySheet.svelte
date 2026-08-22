@@ -8,9 +8,11 @@
 
 	type Props = {
 		family: ListedFamily;
+		/** A touch keeps its frame filled until the reader taps somewhere else. */
+		touchActive?: boolean;
 	};
 
-	let { family }: Props = $props();
+	let { family, touchActive = false }: Props = $props();
 
 	const models = $derived(family.models);
 	let rollPosition = $state(0);
@@ -67,6 +69,8 @@
 
 <li
 	class="family"
+	class:touch-active={touchActive}
+	data-family={family.name}
 	data-plate={family.slug}
 	style:--frame-clip={`url(#family-frame-${family.slug})`}
 >
@@ -188,6 +192,17 @@
 		.family:hover .masked-content {
 			clip-path: ellipse(100% 110% at 50% 50%);
 		}
+	}
+
+	.family.touch-active .frame path {
+		color: var(--block);
+		stroke: currentColor;
+		stroke-width: 3;
+		filter: var(--models-frame-hover-glow);
+	}
+
+	.family.touch-active .masked-content {
+		clip-path: ellipse(100% 110% at 50% 50%);
 	}
 
 	.family:has(:global(:focus-visible)) .frame path {

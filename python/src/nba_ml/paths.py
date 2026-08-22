@@ -69,6 +69,18 @@ def evaluation_file(category: str, name: str) -> Path:
 
     return model_directory(category, name) / "evaluation.json"
 
+def published_model_files() -> list[Path]:
+    """Saved weights and their evaluations, which are the files a prediction server reads."""
+
+    files = []
+    for weights in MODELS_DIRECTORY.glob("*/*/model.pth"):
+        if weights.is_file():
+            files.append(weights)
+            evaluation = weights.with_name("evaluation.json")
+            if evaluation.is_file():
+                files.append(evaluation)
+    return sorted(files)
+
 def graphs_directory(category: str, name: str) -> Path:
     return model_directory(category, name) / "graphs"
 

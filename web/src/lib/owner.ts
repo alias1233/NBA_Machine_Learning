@@ -11,6 +11,6 @@ export const AUTHOR = {
 	bio: 'Machine learning engineer with an interest in basketball.'
 };
 
-/** Juristiction */
+/** Jurisdiction */
 export const STATE = `New York`;
 export const COUNTRY = `The United States of America`;

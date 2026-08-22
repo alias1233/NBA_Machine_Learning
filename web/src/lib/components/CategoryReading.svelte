@@ -23,9 +23,11 @@
 		/** The finished answer, or null while one is being worked out. */
 		categories: CategoryAnswer | null;
 		loading: boolean;
+		/** Draw the bars when a client-delivered answer arrives. */
+		animateBars?: boolean;
 	};
 
-	let { categories, loading }: Props = $props();
+	let { categories, loading, animateBars = false }: Props = $props();
 
 	/** What a yes or no answer takes, which is every model answering this way today. */
 	const RESERVED_ROWS = 2;
@@ -45,13 +47,17 @@
 
 <Reading answered={categories !== null && !loading}>
 	{#snippet answer()}
-		<dl>
-			{#each rows as row (row.name)}
+		<dl class:drawing={animateBars}>
+			{#each rows as row, index (row.name)}
 				<div class="row">
 					<dt class="small">{sentenceCase(row.name)}</dt>
 					<dd class="figure">{row.share}%</dd>
 					<div class="track" aria-hidden="true">
-						<div class="bar" style:width={row.width}></div>
+						<div
+							class="bar"
+							style:width={row.width}
+							style:animation-delay={`${Math.min(index * 40, 80)}ms`}
+						></div>
 					</div>
 				</div>
 			{/each}
@@ -100,16 +106,24 @@
 	.bar {
 		height: 100%;
 		background: var(--chart-neutral);
-		/* Run out from the end it is measured from, once, on arrival, the same as every other bar on
-		   the site. A bar that was simply there says nothing about being a length. Its width never
-		   changes after that: there is no line to drag here, and a new answer is a new bar. */
-		transform-origin: left;
-		animation: run var(--motion-slow) var(--ease-in) backwards;
+		/* Its width never changes after arrival: there is no line to drag here. */
+	}
+
+	/* The notable category prints first, then the row that qualifies it. */
+	.drawing .bar {
+		animation-name: run;
+		animation-duration: var(--motion);
+		animation-timing-function: var(--ease-in);
+		animation-fill-mode: backwards;
 	}
 
 	@keyframes run {
 		from {
-			transform: scaleX(0);
+			clip-path: inset(0 100% 0 0);
+		}
+
+		to {
+			clip-path: inset(0);
 		}
 	}
 

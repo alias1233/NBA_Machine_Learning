@@ -50,7 +50,8 @@ How many games two players must record the same line in before they are taken to
 
 One agreement across fifteen columns is already near proof, and lowering this to one matched every
 player correctly when it was measured. Three costs almost nothing, because the only players it turns
-away played one or two games in the whole overlap. Figures are in docs/STATUS.md.
+away played one or two games in the whole overlap. The figures are in the training reports the
+runs wrote.
 """
 
 IMPORTED_PHASES = {

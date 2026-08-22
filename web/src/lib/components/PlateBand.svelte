@@ -81,7 +81,7 @@
 		font-size: var(--type-note);
 	}
 
-	/* A way out of the page is printed in the one ink rather than in the spot colour, which belongs to
+	/* A way out of the page is printed in the one ink rather than in the spot color, which belongs to
 	   the action a page leads with and not to a link beside its title. */
 	.action {
 		margin-block-start: var(--space-1);

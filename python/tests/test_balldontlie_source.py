@@ -644,11 +644,21 @@ def test_deployment_passes_the_key_only_to_the_balldontlie_job():
 def test_scheduled_jobs_are_locked_and_skip_non_game_days():
     crontab = (Path(__file__).resolve().parents[2] / "deploy" / "crontab").read_text(encoding="utf-8")
 
+    jobs = [line for line in crontab.splitlines() if line and not line.startswith("#") and "=" not in line.split()[0]]
+
+    assert "NBA_ML=/srv/bazaarball/deploy" in crontab
     assert "nba-collect --source balldontlie schedule" in crontab
     assert "nba-update-serving" not in crontab
-    assert crontab.count("flock") == 4
+    assert len(jobs) == 4
+    assert all(" root sh -c " in job and "flock -E 99" in job for job in jobs)
     assert "/var/lock" not in crontab
     assert "/var/log" not in crontab
+
+    # Losing the race is written down rather than disappearing, and only the hourly job gives up on
+    # the spot: a daily job that walked away would leave the day without a refresh or a draw.
+    assert all('|| echo "Skipped' in job for job in jobs)
+    assert len([job for job in jobs if "flock -E 99 -n" in job]) == 1
+    assert len([job for job in jobs if "flock -E 99 -w" in job]) == 3
 
 
 def test_data_directory_cannot_mix_provider_identifiers():

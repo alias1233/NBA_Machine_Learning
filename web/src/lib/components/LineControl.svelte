@@ -181,8 +181,8 @@
 	}
 
 	/*
-	 * A range input stops the centre of its thumb half a thumb inside each end, and a chart stops the
-	 * centre of its first bar half a column inside. Stretching the track by a thumb and pulling it
+	 * A range input stops the center of its thumb half a thumb inside each end, and a chart stops the
+	 * center of its first bar half a column inside. Stretching the track by a thumb and pulling it
 	 * back by a column is what makes those two the same place, so the thumb sits exactly over the
 	 * split it makes. It hangs half a thumb past each end doing so, which the padding of whatever it
 	 * sits in absorbs.

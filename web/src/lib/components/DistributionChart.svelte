@@ -15,9 +15,6 @@
 	below legible, because the exact figures are one press away.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
-
-	import { MOTION_SLOW } from '$lib/motion';
 	import { axisAt, axisSpan, axisTicks, expectedValue, outcomeOf, outcomes } from '$lib/odds';
 
 	import type { ChartRange, Distribution } from '$lib/odds';
@@ -33,9 +30,11 @@
 		summary: string;
 		/** The detailed view: a probability axis, what the model expects, and a figure over each bar. */
 		detailed?: boolean;
+		/** Whether this instance should print its bars in. */
+		animate?: boolean;
 	};
 
-	let { distribution, stat, line, range, summary, detailed = false }: Props = $props();
+	let { distribution, stat, line, range, summary, detailed = false, animate = true }: Props = $props();
 
 	// Measured against one column of the drawing, in pixels, because what fits is a question about
 	// the bars rather than about the screen.
@@ -119,7 +118,6 @@
 
 	/** Which outcome is being read, as a position in the answer, or null when none is. */
 	let reading = $state<number | null>(null);
-	let drawn = $state(false);
 
 	const read = $derived(
 		reading !== null && reading >= range.first && reading <= range.last
@@ -167,13 +165,6 @@
 		);
 	}
 
-	// Once the draw is over the class comes off, so a bar the line brings into range later arrives
-	// without replaying it.
-	onMount(() => {
-		const timer = setTimeout(() => (drawn = true), MOTION_SLOW);
-
-		return () => clearTimeout(timer);
-	});
 </script>
 
 <figure
@@ -200,7 +191,7 @@
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 			<div
 				class="bars"
-				class:drawing={!drawn}
+				class:drawing={animate}
 				data-explain="chart"
 				role="img"
 				aria-label={summary}
@@ -212,7 +203,7 @@
 				onkeydown={readByKey}
 				onblur={() => (reading = null)}
 			>
-				<!-- A bar the line falls inside is neither over nor under, which is the push colour at
+				<!-- A bar the line falls inside is neither over nor under, which is the push color at
 				     every bucket width: at a width of one it is the outcome the line landed on. -->
 				{#each bars as bar, index (bar.value)}
 					<div class="column">
@@ -226,7 +217,7 @@
 							class:under={bar.highest < line}
 							class:split={bar.lowest <= line && bar.highest >= line}
 							class:reading={range.first + index === reading}
-							style="height: {(bar.probability / axis.top) * 100}%"
+							style="height: {(bar.probability / axis.top) * 100}%; --arrival-order: {index}"
 						></div>
 					</div>
 				{/each}
@@ -324,7 +315,7 @@
 		background: var(--under);
 	}
 
-	/* The outcome the line cuts through. A colour of its own, because a push is a result rather than
+	/* The outcome the line cuts through. A color of its own, because a push is a result rather than
 	   the absence of one. */
 	.bar.split {
 		background: var(--push);
@@ -339,14 +330,24 @@
 		white-space: nowrap;
 	}
 
-	/* Once, on first render. Recolouring as the line moves is instant and never runs this. */
+	/* A client-delivered answer rises from the baseline from left to right. Transform keeps the quick
+	   growth out of layout, and a short beat between bars makes the run read as one fluid press. */
 	.drawing .bar {
-		animation: draw var(--motion-slow) var(--ease-in) backwards;
+		animation: arrive var(--motion) var(--ease-in)
+			calc(var(--arrival-order) * var(--answer-bar-stagger)) backwards;
 	}
 
-	@keyframes draw {
+	@keyframes arrive {
 		from {
+			opacity: 0.35;
 			transform: scaleY(0);
+			filter: brightness(1.7) saturate(0.7);
+		}
+
+		to {
+			opacity: 1;
+			transform: scaleY(1);
+			filter: none;
 		}
 	}
 

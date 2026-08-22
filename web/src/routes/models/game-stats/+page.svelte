@@ -340,15 +340,15 @@
 		</form>
 	{/snippet}
 
-	{#snippet result()}
+	{#snippet result(opening: boolean)}
 		<div>
-			{#if data.error && !predicting}
+			{#if data.error && !predicting && !opening}
 				<Notice tone="error">{data.error}</Notice>
 			{:else}
 				<AnswerBlock
-					{answer}
+					answer={opening ? null : answer}
 					output={asked?.output ?? null}
-					loading={predicting}
+					loading={predicting || opening}
 					stat={shown.stat}
 					heading={shown.heading}
 					headingLevel={3}

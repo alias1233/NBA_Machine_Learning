@@ -241,7 +241,7 @@ export type Scenario = {
  * The same, for both sides of a game.
  *
  * A team or game model reads one row that carries what each side has available, so a request names
- * both. A defence missing its best player changes what the team it faces is expected to score.
+ * both. A defense missing its best player changes what the team it faces is expected to score.
  */
 export type GameRosters = {
 	home: Scenario;

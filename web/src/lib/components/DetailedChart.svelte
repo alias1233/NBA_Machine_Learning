@@ -423,7 +423,7 @@
 		color: var(--ink);
 	}
 
-	/* Current colour, a stroke and no fill, at the size of the word beside it. */
+	/* Current color, a stroke and no fill, at the size of the word beside it. */
 	th svg {
 		flex: none;
 		width: 1em;
@@ -435,7 +435,7 @@
 	 * thing between the bars and the edge of the screen is the probability axis itself and its
 	 * figures stop a hair short of that edge. Every pixel that buys goes to the bars.
 	 *
-	 * The right edge keeps its gutter. The last outcome's mark is centred on the last bar and hangs
+	 * The right edge keeps its gutter. The last outcome's mark is centered on the last bar and hangs
 	 * past it, so a drawing flush to that edge would cut the number off.
 	 */
 	@media (width < 40rem) {

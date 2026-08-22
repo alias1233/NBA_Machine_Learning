@@ -27,14 +27,49 @@
 	import { MODELS_PATH, MODELS_SECTION } from '$lib/models';
 	import { webApplicationSchema } from '$lib/seo';
 	import { PRIVATE_SITE_DESCRIPTION } from '$lib/site';
+	import { isTap } from '$lib/touch';
 
 	let { data } = $props();
+
+	let activeTouchFamily = $state<string | null>(null);
+	let touchStartedOutside: { id: number; x: number; y: number } | null = null;
+
+	function touchFamily(event: PointerEvent) {
+		if (event.pointerType !== 'touch') return;
+
+		const section = document.getElementById(MODELS_SECTION);
+		const family =
+			section?.contains(event.target as Node) && event.target instanceof Element
+				? event.target.closest<HTMLElement>('[data-family]')
+				: null;
+
+		if (family?.dataset.family) {
+			activeTouchFamily = family.dataset.family;
+			touchStartedOutside = null;
+			return;
+		}
+
+		touchStartedOutside = { id: event.pointerId, x: event.clientX, y: event.clientY };
+	}
+
+	function releaseTouchFamily(event: PointerEvent) {
+		if (event.pointerType !== 'touch' || touchStartedOutside?.id !== event.pointerId) return;
+
+		if (isTap(touchStartedOutside, event)) activeTouchFamily = null;
+
+		touchStartedOutside = null;
+	}
 </script>
 
 <PageMetadata description={PRIVATE_SITE_DESCRIPTION} path="/" schema={webApplicationSchema()} />
 
 <ShowcasePlate samples={data.samples} heldOver={data.heldOver} answering={data.answering} />
 
+<svelte:window
+	onpointerdown={touchFamily}
+	onpointerup={releaseTouchFamily}
+	onpointercancel={() => (touchStartedOutside = null)}
+/>
 
 <section class="models lands-flush" id={MODELS_SECTION}>
 	<a class="models-tab" href={MODELS_PATH}>Models</a>
@@ -58,7 +93,7 @@
 		{:else}
 			<ul class="families">
 				{#each data.families as family (family.name)}
-					<FamilySheet {family} />
+					<FamilySheet {family} touchActive={activeTouchFamily === family.name} />
 				{/each}
 			</ul>
 		{/if}
@@ -68,7 +103,6 @@
 		<AdSlot place="homeModels" />
 	</div>
 </section>
-
 
 <style>
 	.models {

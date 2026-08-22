@@ -23,8 +23,10 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 	}
 
+	# Beside the cron log rather than in /data, which holds the certificates: a log is worth reading
+	# from the host and the certificates are worth never deleting by reaching for a log.
 	log {
-		output file /data/access.log {
+		output file /var/log/caddy/access.log {
 			roll_size 10MiB
 			roll_keep 5
 		}

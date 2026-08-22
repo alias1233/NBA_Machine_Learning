@@ -7,7 +7,7 @@
 	of them and a list that has to be opened is a control standing in front of a choice that fits.
 
 	Both teams' rosters are the reader's to change, not only the named team's. A team's row carries
-	what the side it faces has available, so a defence missing its best player changes what the named
+	what the side it faces has available, so a defense missing its best player changes what the named
 	team is expected to do. Each side opens already filled in with who is expected to take the floor,
 	so a reader who changes nothing is still answered about the game that will actually be played.
 
@@ -348,15 +348,15 @@
 		</form>
 	{/snippet}
 
-	{#snippet result()}
+	{#snippet result(opening: boolean)}
 		<div>
-			{#if data.error && !predicting}
+			{#if data.error && !predicting && !opening}
 				<Notice tone="error">{data.error}</Notice>
 			{:else}
 				<AnswerBlock
-					{answer}
+					answer={opening ? null : answer}
 					output={asked?.output ?? null}
-					loading={predicting}
+					loading={predicting || opening}
 					stat={shown.stat}
 					heading={shown.heading}
 					headingLevel={3}

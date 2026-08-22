@@ -62,7 +62,7 @@ Where this family is fit, each part measured against the alternatives on 2026-08
 Fewer samples did not want a faster learning rate, as it might sound: every rate above this one was
 worse, and the fastest tried was 1.2% worse. Nor did they want more memory of past games. Widening
 the network either side of these numbers cost accuracy, which is what a family with 51,000 samples
-should be expected to do. See docs/STATUS.md for the figures.
+should be expected to do. The figures are in the training reports the runs wrote.
 """
 
 @dataclass(frozen=True)
@@ -124,9 +124,9 @@ A basketball game cannot end level, so zero is named as the one outcome that can
 off the line entirely. The first bucket above it is a home win by one, two or three.
 """
 
-GAME_TOTAL_MODEL = GameStatModelSpecification(
-    name="game_total",
-    title="Game total",
+TOTAL_POINTS = GameStatModelSpecification(
+    name="total_points",
+    title="Total points",
     description="The points both teams score together.",
     # 171 to 275, in threes. Wider than the other two because a total is two scores added, so it
     # spreads about half as much again. Each end folds in about 1%, against 2.8% in the middle.
@@ -210,7 +210,7 @@ ALL_MODEL_SPECIFICATIONS = {
     specification.name: specification
     for specification in (
         POINT_DIFFERENTIAL_MODEL,
-        GAME_TOTAL_MODEL,
+        TOTAL_POINTS,
         WIN_PROBABILITY_MODEL,
         TOTAL_REBOUNDS_MODEL,
         TOTAL_ASSISTS_MODEL,

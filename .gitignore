@@ -16,3 +16,5 @@ DESIGN.md
 deploy/.env
 deploy/data/
 deploy/backups/
+deploy/logs/
+deploy/.jobs.lock

@@ -1,5 +1,5 @@
 # The whole site on one server: TLS at the edge, the site, the service, and the jobs that feed it.
-# Only caddy is reachable from the internet. See docs/ARCHITECTURE.md.
+# Only caddy is reachable from the internet. The deployment steps are in the root README.
 #
 # Run from this directory:
 #   docker compose up -d --build      the three long running services
@@ -45,6 +45,8 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The access log, next to the cron log the README already says to read.
+      - ./logs:/var/log/caddy
       # The certificates it obtains, which must outlive the container or the next start asks for
       # new ones and meets the certificate authority's rate limit.
       - caddy_data:/data

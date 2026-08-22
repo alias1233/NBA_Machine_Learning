@@ -129,7 +129,7 @@
 	}
 
 	/* Drawn over the printed rule, wider than it at both ends, because a drawn line does not stop
-	   where a printed one does. It is a mark rather than a letter, so the pencil colours it. */
+	   where a printed one does. It is a mark rather than a letter, so the pencil colors it. */
 	.drawn-rule {
 		position: absolute;
 		inset: auto calc(var(--space-2) * -1) -3px;

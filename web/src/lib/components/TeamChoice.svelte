@@ -87,7 +87,7 @@
 	/*
 	 * A surface with the stroke that says a thing takes input, which is what every field on this page
 	 * takes. Picking one is marked by the ring, by full-strength ink and by the control's own checked
-	 * state, so nothing about the choice is carried by colour.
+	 * state, so nothing about the choice is carried by color.
 	 */
 	.side {
 		position: relative;

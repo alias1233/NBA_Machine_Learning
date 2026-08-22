@@ -1,5 +1,5 @@
-# Install as /etc/logrotate.d/nba-ml after changing the path if the repository lives elsewhere.
-/srv/nba-ml/deploy/logs/nba-ml.log {
+# Install with: sudo install -m 0644 deploy/logrotate /etc/logrotate.d/bazaarball
+/srv/bazaarball/deploy/logs/nba-ml.log {
     weekly
     maxsize 10M
     rotate 5
@@ -7,4 +7,5 @@
     delaycompress
     missingok
     notifempty
+    create 0644 root root
 }

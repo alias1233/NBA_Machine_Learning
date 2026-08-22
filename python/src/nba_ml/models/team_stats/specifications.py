@@ -52,7 +52,7 @@ Seven times fewer samples than a player model, so the fully connected half is ha
 player models carry. Every learning rate faster than this one read worse, which is the opposite of
 what fewer weight updates per epoch might suggest. Nothing here wants more capacity: a wider memory
 of past games was measured worse on the game statistics models, which read the same rows.
-See docs/STATUS.md for the figures.
+The figures are in the training reports the runs wrote.
 """
 
 @dataclass(frozen=True)

@@ -35,7 +35,7 @@
 	import Notice from '$lib/components/Notice.svelte';
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
-	import { flow, MOTION_SLOW } from '$lib/motion';
+	import { MOTION, MOTION_IMPACT, MOTION_SLOW, settled } from '$lib/motion';
 	import { phone } from '$lib/screen';
 	import { stopWalking, walkTo } from '$lib/scroll';
 	import { webPageSchema } from '$lib/seo';
@@ -70,7 +70,7 @@
 		matchup?: Snippet;
 		controls: Snippet;
 		/** One element. It holds the answer, the skeleton and a failure alike. */
-		result: Snippet;
+		result: Snippet<[opening: boolean]>;
 	};
 
 	let {
@@ -95,6 +95,9 @@
 
 	/** Whether the reader has asked for an answer on this page, which is what opens the region. */
 	let asked = $state(false);
+	// svelte-ignore state_referenced_locally
+	let opened = $state(hasAnswer);
+	let opening = $state(false);
 
 	const showingAnswer = $derived(hasAnswer || asked);
 	const path = $derived(infoHref.slice(0, -'/info'.length));
@@ -111,26 +114,38 @@
 	});
 
 	/**
-	 * Opens the answer region and walks the reader to it.
+	 * Walks to the answer region, then opens its first skeleton.
 	 *
-	 * The region is opened by the press rather than by the answer, so the reader watches the room the
-	 * answer will land in arrive with the skeleton already on it. Nothing is awaited by the caller,
-	 * because the request it is answering goes out in the same breath.
+	 * The request is already running while the page travels. On the first request, only the target and
+	 * its label enter the page before the walk. The skeleton starts its reveal once the walk is under
+	 * way, then stays until its entrance finishes so a fast response cannot replace it mid-motion.
 	 *
 	 * The walk waits a tick for the region to be in the page, because until it is there is nothing to
 	 * walk to. Beside the parameters the answer almost always ends up in front of the reader anyway,
 	 * so the walk does nothing there. Under them, which is every narrow screen, it is a page away
 	 * from the button that asked for it.
 	 *
-	 * On larger screens the request is the flow, so the page follows an answer that moves its target.
-	 * A phone's answer already holds its finished space, so it stops after the opening reveal instead
-	 * of fighting the browser's own viewport movement.
+	 * Later requests keep the existing block in place and follow it while its answer changes size.
 	 */
 	export async function reveal(asking?: Promise<unknown>): Promise<void> {
 		stopWalking();
 		asked = true;
 
 		await tick();
+
+		if (!opened) {
+			const walking = walkTo(answerColumn, { block: 'start', flowing: 0, always: true });
+
+			// Let the page cover most of the distance first, so the sheet starts just before it arrives.
+			await Promise.race([walking, settled(MOTION)]);
+
+			opening = true;
+			opened = true;
+			await tick();
+			await Promise.all([walking, settled(MOTION_IMPACT)]);
+			opening = false;
+			return;
+		}
 
 		walkTo(answerColumn, { block: 'start', flowing: phone.current ? MOTION_SLOW : asking });
 
@@ -207,14 +222,13 @@
 				does not run on the first frame and nothing about a shared link was revealed to anyone.
 			-->
 			{#if showingAnswer}
-				<section
-					class="answer"
-					aria-labelledby="answer-column"
-					bind:this={answerColumn}
-					transition:flow={{ duration: MOTION_SLOW }}
-				>
+				<section class="answer" aria-labelledby="answer-column" bind:this={answerColumn}>
 					<h2 class="column-label micro" id="answer-column">Answer</h2>
-					{@render result()}
+					<!-- Its invisible first scaffold gives the scroll enough page to put this target at the
+					     top. The same scaffold begins its reveal just before the walk finishes. -->
+					<div class="answer-result" class:preparing={!opened} class:opening>
+						{@render result(!opened || opening)}
+					</div>
 				</section>
 			{/if}
 		</div>
@@ -269,10 +283,77 @@
 		container-name: answer-column;
 	}
 
+	.answer-result {
+		min-width: 0;
+	}
+
+	.answer-result.preparing {
+		visibility: hidden;
+	}
+
+	/* The first skeleton is fed into view like a fresh sheet, just before the page reaches its mark. */
+	.answer-result.opening {
+		position: relative;
+		isolation: isolate;
+		animation: open-answer var(--motion-impact) var(--ease-in);
+	}
+
+	.answer-result.opening::after {
+		content: '';
+		position: absolute;
+		z-index: 1;
+		inset: 0;
+		background: linear-gradient(
+			to right,
+			transparent calc(100% - 2px),
+			var(--accent-block) calc(100% - 2px)
+		);
+		opacity: 0;
+		pointer-events: none;
+		animation: open-edge var(--motion-impact) var(--ease-in);
+	}
+
+	@keyframes open-answer {
+		from {
+			clip-path: inset(0 100% 0 0);
+		}
+
+		to {
+			clip-path: inset(0);
+		}
+	}
+
+	@keyframes open-edge {
+		from {
+			opacity: 0;
+			transform: translateX(-100%);
+		}
+
+		8%,
+		82% {
+			opacity: 1;
+		}
+
+		to {
+			opacity: 0;
+			transform: translateX(0);
+		}
+	}
+
 	@media (width < 40rem) {
 		/* The response replaces a reserved drawing. It must not become the browser's scroll anchor. */
 		.answer {
 			overflow-anchor: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.answer-result.opening {
+			animation: none;
+		}
+
+		.answer-result.opening::after {
+			display: none;
 		}
 	}
 

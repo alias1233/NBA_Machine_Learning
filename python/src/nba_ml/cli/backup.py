@@ -68,7 +68,7 @@ def _write_archive(archive: Path) -> tuple[int, int]:
     with tempfile.TemporaryDirectory(prefix="nba-ml-backup-") as working:
         databases = Path(working) / DATABASES
         copied = _copy_databases(databases)
-        models = sorted(path for path in paths.MODELS_DIRECTORY.rglob("*") if path.is_file())
+        models = paths.published_model_files()
 
         with tarfile.open(archive, "w:gz") as writing:
             writing.add(databases, arcname=DATABASES)

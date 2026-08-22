@@ -5,7 +5,7 @@
 	go to the family's own page, so this page does not grow a section every time a family is added.
 
 	Reading a prediction is the annotated answer block rather than a passage, because the block is
-	what a reader has to learn and it teaches itself once it is labelled.
+	what a reader has to learn and it teaches itself once it is labeled.
 -->
 <script lang="ts">
 	import AnnotatedAnswer from '$lib/components/AnnotatedAnswer.svelte';
@@ -34,7 +34,7 @@
 			]
 		},
 		{
-			question: `Why do some model's chart bars cover multiple values?`,
+			question: `Why do some models' chart bars cover multiple values?`,
 			answer: [
 				`For a statistic with a wide range of possible outcomes, a bar can represent a small interval 
 				of nearby outcomes rather than one exact value. Grouping those values into one bucket reduces 
@@ -47,7 +47,7 @@
 				`Yes! You can remove any players from their teams, and add any player currently in the league 
 				to any team's roster. Simply begin typing in the player selector's input field to search for 
 				players league-wide.`,
-				`Prediction still functions like normal, with the model's predicted outcomes 
+				`Predictions still function normally, with the model's predicted outcomes
 				adjusting based on the custom changes made.`
 			]
 		},

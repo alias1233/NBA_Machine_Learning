@@ -87,7 +87,7 @@ export const expectedAround = (roster: Roster | undefined, playerId: number | nu
 	};
 };
 
-/** Which side of the chosen game each roster belongs to, so a control can be labelled by its team. */
+/** Which side of the chosen game each roster belongs to, so a control can be labeled by its team. */
 export const sidesOf = (
 	game: ScheduledGame | null
 ): { side: RosterSide; team: ScheduledGame['home_team'] }[] =>

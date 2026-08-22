@@ -8,7 +8,13 @@
  * Run with `npm test`. Node reads the TypeScript directly, so there is nothing to install.
  */
 
-import { answerSentence, familyInfoPath, figureNote, MODEL_FAMILIES, namedCategories } from './models.ts';
+import {
+	answerSentence,
+	familyInfoPath,
+	figureNote,
+	MODEL_FAMILIES,
+	namedCategories
+} from './models.ts';
 
 import type { GameSides } from './models.ts';
 import type { Answer } from './odds.ts';

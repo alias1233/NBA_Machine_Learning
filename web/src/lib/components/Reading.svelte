@@ -6,18 +6,12 @@
 	the height of whatever is in it, so the two flow into each other and nothing inside carries a
 	motion of its own.
 
-	The swap is a print rather than a replacement. The reserved space clears while the answer is
-	struck onto it, so the two overlap in the one place instead of one appearing after the other has
-	gone. That is why both stand in the same cell for those frames: the surface keeps its size while
-	they trade, which is the same reason the two are drawn to the same size in the first place. The
-	two are timed to hand over rather than to be quick, so the surface is never briefly empty between
-	them.
-
-	The strike is the site's impression and comes up out of register rather than travelling, so it
-	can be printed inside a clipped edge without anything moving under it.
+	The reserved space and answer overlap in one cell, so the surface keeps its size while they trade.
+	The answer block owns the arrival motion because it knows whether the result is the first one or a
+	replacement. Keeping that decision out of this swap prevents two effects from playing at once.
 -->
 <script lang="ts">
-	import { appear, flowingHeight, MOTION } from '$lib/motion';
+	import { flowingHeight } from '$lib/motion';
 
 	import type { Snippet } from 'svelte';
 
@@ -27,23 +21,17 @@
 		answer: Snippet;
 		/** Reserved space at the size the answer will take, and never named. */
 		skeleton: Snippet;
-		/**
-		 * True where the block stands for an answer rather than being one, which is the About page's
-		 * annotated block. Nothing landed there, so nothing is printed, and the leader lines drawn to
-		 * its parts are measured against a drawing that is not moving.
-		 */
-		example?: boolean;
 	};
 
-	let { answered, answer, skeleton, example = false }: Props = $props();
+	let { answered, answer, skeleton }: Props = $props();
 </script>
 
 <div class="surface reading" use:flowingHeight>
 	<div class="swap">
 		{#if answered}
-			<div class:printed={!example} out:appear={{ duration: MOTION }}>{@render answer()}</div>
+			<div>{@render answer()}</div>
 		{:else}
-			<div out:appear={{ duration: MOTION }}>{@render skeleton()}</div>
+			<div>{@render skeleton()}</div>
 		{/if}
 	</div>
 </div>
@@ -63,11 +51,5 @@
 	.swap > * {
 		grid-area: 1 / 1;
 		min-width: 0;
-	}
-
-	/* Held for a beat, so the impression comes up into space that is already clearing rather than
-	   over one still standing at full strength. */
-	.printed {
-		animation: strike var(--motion-slow) var(--ease-in) 60ms backwards;
 	}
 </style>

@@ -25,8 +25,8 @@
 		border-color: var(--warn-border);
 	}
 
-	/* The one place a data colour is allowed outside data, because a red error is a convention older
-	   than this site. The tone is carried by the words as well, never by the colour alone. */
+	/* The one place a data color is allowed outside data, because a red error is a convention older
+	   than this site. The tone is carried by the words as well, never by the color alone. */
 	.error p {
 		color: var(--under);
 	}

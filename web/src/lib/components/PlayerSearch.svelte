@@ -27,6 +27,7 @@
 	import { onDestroy } from 'svelte';
 
 	import { appear, flowingHeight } from '$lib/motion';
+	import { isTap } from '$lib/touch';
 
 	import type { Player, Roster } from '$lib/types';
 
@@ -60,9 +61,6 @@
 
 	/** How many names the list stands in for while it waits for them. */
 	const RESERVED_ROWS = 5;
-
-	/** How far a finger can travel, in pixels, and still be a press rather than a scroll. */
-	const TAP_TRAVEL = 10;
 
 	/** What the list calls a search, which is the whole league rather than the game's own teams. */
 	const LEAGUE = 'Across the league';
@@ -236,7 +234,7 @@
 	 * A mouse press is a press the moment it goes down. A finger is not: putting one on the page is
 	 * as often the start of a scroll as it is a dismissal, and closing on that alone took the list
 	 * away from every reader who tried to scroll it into view. So a touch closes the list only where
-	 * it is lifted roughly where it landed. A scroll is cancelled rather than lifted, and one that
+	 * it is lifted roughly where it landed. A scroll is canceled rather than lifted, and one that
 	 * travels is a drag rather than a press either way.
 	 */
 	$effect(() => {
@@ -257,10 +255,9 @@
 		const onUp = (event: PointerEvent) => {
 			if (from === null) return;
 
-			const travelled = Math.hypot(event.clientX - from.x, event.clientY - from.y);
-			from = null;
+			if (isTap(from, event) && outside(event)) open = false;
 
-			if (travelled <= TAP_TRAVEL && outside(event)) open = false;
+			from = null;
 		};
 
 		const onCancel = () => (from = null);
@@ -345,7 +342,7 @@
 								makes of a tap is dispatched after the box has given up focus, which on a phone
 								hides the keyboard and moves the page out from under the finger, so by then the
 								click can land on anything or on nothing. Lifting is unambiguous: a swipe that
-								scrolls the list is cancelled rather than lifted, so it takes nobody.
+								scrolls the list is canceled rather than lifted, so it takes nobody.
 
 								The click is still handled, because that is what assistive technology and a
 								mouse send. Whichever of the two arrives second finds the list closed.
@@ -402,7 +399,7 @@
 		cursor: pointer;
 	}
 
-	/* Current colour, a stroke and no fill, at the size of the word beside it. */
+	/* Current color, a stroke and no fill, at the size of the word beside it. */
 	.clear svg {
 		width: 1em;
 		height: 1em;

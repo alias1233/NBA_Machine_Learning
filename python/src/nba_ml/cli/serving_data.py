@@ -100,7 +100,7 @@ def _required_database_files() -> list[Path]:
 
 
 def _model_files() -> list[Path]:
-    return sorted(path for path in paths.MODELS_DIRECTORY.rglob("*") if path.is_file())
+    return paths.published_model_files()
 
 
 def pack(archive: Path, window_start_date: date | None = None) -> Path:

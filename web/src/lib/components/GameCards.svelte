@@ -55,7 +55,7 @@
 	let { games, selected, hrefOf, onchoose, onpreview }: Props = $props();
 
 	/**
-	 * The crest printed on every back: the four suits set on the two axes around a centre pip.
+	 * The crest printed on every back: the four suits set on the two axes around a center pip.
 	 *
 	 * The same four paths the corner indices are drawn from, laid out here rather than in the markup
 	 * so the placement is read as one figure. Each is a 24 box dropped into a 14 cell of the 48 the
@@ -202,7 +202,7 @@
 						{#each CREST as { suit: figure, at } (figure)}
 							<path class:red={isRed(figure)} transform={at} d={SUIT_PATH[figure]} />
 						{/each}
-						<circle class="centre" cx="24" cy="24" r="2.3" />
+						<circle class="center" cx="24" cy="24" r="2.3" />
 					</svg>
 				</span>
 			</a>
@@ -247,7 +247,7 @@
 	 * against and no breakpoint decides them. It is also what the reader's tag hangs off, which is
 	 * the card's own footprint on the board.
 	 *
-	 * The cell is also where the board's vanishing point stands, one to a card and centred on it, so
+	 * The cell is also where the board's vanishing point stands, one to a card and centered on it, so
 	 * a card turning over turns toward the reader looking at that card and not toward the middle of
 	 * the screen.
 	 */
@@ -448,7 +448,7 @@
 	}
 
 	/*
-	 * The crest: the four suits on the two axes around a centre pip, printed on a disc of bare stock
+	 * The crest: the four suits on the two axes around a center pip, printed on a disc of bare stock
 	 * so the figure reads out of the lattice rather than over it. The two reds carry the spot ink and
 	 * the two blacks the dark, which is the same rule the corner pips are printed by.
 	 */
@@ -469,7 +469,7 @@
 	}
 
 	.crest path.red,
-	.centre {
+	.center {
 		fill: var(--plate-spot);
 	}
 
@@ -627,7 +627,7 @@
 	}
 
 	/* Hearts and diamonds print in the plate's spot ink. It clears 3:1 against bone and not 4.5:1, so
-	   it colours the pip and never a letter: every word on a card is printed in the one dark ink. */
+	   it colors the pip and never a letter: every word on a card is printed in the one dark ink. */
 	.card.red .pip,
 	.card.red .watermark {
 		color: var(--plate-spot);
@@ -684,7 +684,7 @@
 	 * on the board rather than on the card, so a card turning over turns and the tag under it does
 	 * not, and a card carrying one is exactly the same card as one that is not.
 	 *
-	 * Colour is never the only marker of the chosen card: it lifts, it straightens, it is ringed, it
+	 * Color is never the only marker of the chosen card: it lifts, it straightens, it is ringed, it
 	 * carries this, and it carries aria-current.
 	 */
 	.tags {

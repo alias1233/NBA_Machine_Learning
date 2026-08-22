@@ -82,7 +82,7 @@ export const familyInfoPath = (family: ModelFamily) => `${familyPath(family)}/in
  * Which stock a page is printed on: the family whose pages it is one of, or null for the site's own.
  *
  * Every plate on the site prints in the same two inks and only the ground changes, so this is the
- * whole of what a family colours. The value is the family's slug, which `app.css` names the grounds
+ * whole of what a family colors. The value is the family's slug, which `app.css` names the grounds
  * by, and it covers a family's prediction page and its Info page alike.
  */
 export const plateOf = (pathname: string): string | null =>

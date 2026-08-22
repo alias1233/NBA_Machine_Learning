@@ -29,6 +29,11 @@ def published_model_file():
     model_file = paths.model_file("player_stats", "points")
     model_file.parent.mkdir(parents=True, exist_ok=True)
     model_file.write_bytes(b"weights")
+    paths.evaluation_file("player_stats", "points").write_text("{}", encoding="utf-8")
+    paths.training_report_file("player_stats", "points").write_text("report", encoding="utf-8")
+    graph = paths.graphs_directory("player_stats", "points") / "training.png"
+    graph.parent.mkdir()
+    graph.write_bytes(b"graph")
 
     return model_file
 
@@ -42,6 +47,9 @@ def test_an_archive_holds_the_databases_and_the_model_files():
     assert f"{backup.DATABASES}/{player_games.FILEPATH.name}" in held
     assert f"{backup.DATABASES}/{team_games.FILEPATH.name}" in held
     assert f"{backup.MODELS}/player_stats/points/model.pth" in held
+    assert f"{backup.MODELS}/player_stats/points/evaluation.json" in held
+    assert f"{backup.MODELS}/player_stats/points/training_report.txt" not in held
+    assert f"{backup.MODELS}/player_stats/points/graphs/training.png" not in held
     assert source_identity.MARKER.name in held
 
 def test_a_backed_up_database_opens_and_holds_the_rows_it_held(tmp_path):

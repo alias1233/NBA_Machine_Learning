@@ -135,7 +135,7 @@
 		return () => document.removeEventListener('pointerdown', closeOutside);
 	});
 
-	// Centred on its tab, unless the tab sits close enough to the edge that centring would put the
+	// Centered on its tab, unless the tab sits close enough to the edge that centering would put the
 	// menu past the page gutter. Then it moves left by exactly what would have been cut off. A
 	// hidden menu is still laid out, so this measures whatever the menu is doing.
 	$effect(() => {
@@ -147,9 +147,9 @@
 
 		const gutter = parseFloat(getComputedStyle(activeRefs.masthead).paddingRight);
 		const edge = activeRefs.masthead.getBoundingClientRect().right - gutter;
-		const centre = activeRefs.menuRoot.getBoundingClientRect().left + activeRefs.menuRoot.offsetWidth / 2;
+		const center = activeRefs.menuRoot.getBoundingClientRect().left + activeRefs.menuRoot.offsetWidth / 2;
 
-		menuNudge = Math.max(centre + activeRefs.menuList.offsetWidth / 2 - edge, 0);
+		menuNudge = Math.max(center + activeRefs.menuList.offsetWidth / 2 - edge, 0);
 	});
 
 	let scrollY = $state(0);
@@ -588,7 +588,7 @@
 		color: var(--plane-accent);
 	}
 
-	/* Accent text plus a rule, never colour alone. */
+	/* Accent text plus a rule, never color alone. */
 	.tabs > li > a[aria-current] {
 		border-bottom-color: var(--plane-accent);
 	}
@@ -604,7 +604,7 @@
 		border-radius: var(--radius);
 	}
 
-	/* Centred on the Models tab, and moved left by whatever centring would have hung past the page
+	/* Centered on the Models tab, and moved left by whatever centering would have hung past the page
 	   gutter. It floats over the page, so it carries the shadow. */
 	.menu > ul {
 		position: absolute;

@@ -28,15 +28,33 @@
 		subheading: string;
 		/** True where the block stands for an answer rather than being one, so it owns no address bar. */
 		example?: boolean;
+		/** Draw the bars when a client-delivered answer arrives. */
+		animateBars?: boolean;
 	};
 
-	let { distribution, loading, stat, openOn, heading, subheading, example = false }: Props =
-		$props();
+	let {
+		distribution,
+		loading,
+		stat,
+		openOn,
+		heading,
+		subheading,
+		example = false,
+		animateBars = false
+	}: Props = $props();
 </script>
 
-<Reading answered={distribution !== null && !loading} {example}>
+<Reading answered={distribution !== null && !loading}>
 	{#snippet answer()}
-		<DistributionAnswer distribution={distribution!} {stat} {openOn} {heading} {subheading} {example} />
+		<DistributionAnswer
+			distribution={distribution!}
+			{stat}
+			{openOn}
+			{heading}
+			{subheading}
+			{example}
+			{animateBars}
+		/>
 	{/snippet}
 
 	{#snippet skeleton()}
