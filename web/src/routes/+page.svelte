@@ -17,6 +17,13 @@
 	each one answers. See FamilySheet.svelte.
 
 	What is not a family, which today is only the line saying more are coming, stands below the frames.
+
+	Everything under the hero is one sheet of page, and it is one object rather than a run of sections
+	because the hero stands still while the page travels over it. See .over-plate below.
+
+	At the foot of that sheet the site says what a reader can do here, in its own standing prose. That
+	is the only text on this page written for this page, so it is what a search engine has to read the
+	page as being about. See SiteBrief.svelte.
 -->
 <script lang="ts">
 	import AdSlot from '$lib/components/AdSlot.svelte';
@@ -24,6 +31,7 @@
 	import Notice from '$lib/components/Notice.svelte';
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import ShowcasePlate from '$lib/components/ShowcasePlate.svelte';
+	import SiteBrief from '$lib/components/SiteBrief.svelte';
 	import { MODELS_PATH, MODELS_SECTION } from '$lib/models';
 	import { webApplicationSchema } from '$lib/seo';
 	import { PRIVATE_SITE_DESCRIPTION } from '$lib/site';
@@ -71,46 +79,64 @@
 	onpointercancel={() => (touchStartedOutside = null)}
 />
 
-<section class="models lands-flush" id={MODELS_SECTION}>
-	<a class="models-tab" href={MODELS_PATH}>Models</a>
+<div class="over-plate">
+	<section class="models lands-flush" id={MODELS_SECTION}>
+		<a class="models-tab" href={MODELS_PATH}>Models</a>
 
-	<div class="page inside">
-		<div class="head">
-			<h2 class="page-title type-h1">Models</h2>
-		</div>
+		<div class="page inside">
+			<div class="head">
+				<h2 class="page-title type-h1">Models</h2>
+			</div>
 
-		<!-- A dead service leaves this list empty too, and telling a reader nothing is published would
-		     name the wrong cause. The footer says the same thing at the same moment. -->
-		{#if data.families.length === 0}
-			{#if data.health}
-				<Notice>No model is published yet.</Notice>
+			<!-- A dead service leaves this list empty too, and telling a reader nothing is published would
+			     name the wrong cause. The footer says the same thing at the same moment. -->
+			{#if data.families.length === 0}
+				{#if data.health}
+					<Notice>No model is published yet.</Notice>
+				{:else}
+					<!-- Names the cause but not the recovery. The hero above and the footer below both already
+					     tell the reader to come back, and three of that on one screen is two too many. It still
+					     stands alone for somebody who arrived straight at this section. -->
+					<Notice>No model can be listed while the prediction service is not answering.</Notice>
+				{/if}
 			{:else}
-				<!-- Names the cause but not the recovery. The hero above and the footer below both already
-				     tell the reader to come back, and three of that on one screen is two too many. It still
-				     stands alone for somebody who arrived straight at this section. -->
-				<Notice>No model can be listed while the prediction service is not answering.</Notice>
+				<ul class="families">
+					{#each data.families as family (family.name)}
+						<FamilySheet {family} touchActive={activeTouchFamily === family.name} />
+					{/each}
+				</ul>
 			{/if}
-		{:else}
-			<ul class="families">
-				{#each data.families as family (family.name)}
-					<FamilySheet {family} touchActive={activeTouchFamily === family.name} />
-				{/each}
-			</ul>
-		{/if}
 
-		<p class="more muted">More models <span class="tag micro">Coming soon</span></p>
+			<p class="more muted">More models <span class="tag micro">Coming soon</span></p>
 
-		<AdSlot place="homeModels" />
-	</div>
-</section>
+			<AdSlot place="homeModels" />
+		</div>
+	</section>
+
+	<SiteBrief />
+</div>
 
 <style>
+	/*
+	 * The page, and everything printed on it, as one sheet lying over the hero.
+	 *
+	 * The hero stands still while the reader scrolls, which makes it a positioned object, and a
+	 * section under it that is not one would be painted over by it rather than covering it. So the
+	 * whole page below the hero is one positioned sheet carrying the page tone, and anything added to
+	 * it later travels over the plate without having to know any of this.
+	 */
+	.over-plate {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		background: var(--page);
+	}
+
 	.models {
 		position: relative;
 		display: flex;
 		flex-direction: column;
 		padding-block: var(--space-6) var(--space-5);
-		background: var(--page);
 	}
 
 	/* The listing's first piece of paper. Its page edge stays square while the far edge takes the

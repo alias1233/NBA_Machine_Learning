@@ -27,9 +27,16 @@
 {/snippet}
 
 {#snippet familyContent(masked: boolean)}
-	<div class:masked-content={masked} class="family-content">
+	<div class:masked-content={masked} class:block-plane={masked} class="family-content">
 		<div class="said">
-			<h3 class="type-h2">{family.title}</h3>
+			<!-- The fill copy is the same words a second time. It is hidden from a screen reader, but a
+			     crawler reads the DOM, so only the visible copy is a heading and the fill takes the
+			     heading's size off the type role instead. -->
+			{#if masked}
+				<p class="type-h2">{family.title}</p>
+			{:else}
+				<h3 class="type-h2">{family.title}</h3>
+			{/if}
 			<p class="words">{family.description}</p>
 		</div>
 
@@ -153,21 +160,13 @@
 		pointer-events: none;
 	}
 
+	/* The paper and the whole ink family come from .block-plane in app.css. Only the fill's own
+	   geometry is here. */
 	.masked-content {
 		position: absolute;
 		inset: 0;
-		background: var(--block);
-		color: var(--block-ink);
 		clip-path: ellipse(100% 0% at 50% 100%);
 		transition: clip-path var(--motion-slow) var(--ease-in);
-		--plane-accent: var(--accent-block);
-		--plane-accent-on: var(--block);
-		--plane-accent-hover: var(--accent-block-hover);
-		--plane-pencil: light-dark(var(--pencil), var(--pencil-deep));
-		--hairline: var(--hairline-block);
-		--hairline-panel: var(--hairline-block);
-		--rule-accent: 2px solid var(--accent-block);
-		--waiting: var(--hairline-block);
 	}
 
 	.frame path {

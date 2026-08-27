@@ -166,12 +166,15 @@
 	}
 </script>
 
+<!-- Not indexed: a prediction page is a form to work in rather than a page to read, and it is left
+     out of the sitemap to match. See PageMetadata.svelte. -->
 <PageMetadata
 	{title}
-	description=privateDescription
+	description={privateDescription}
 	{path}
+	noindex
 	schema={webPageSchema({ name: title, description: privateDescription, path })}
-	/>
+/>
 
 <PlateBand {title} lede={publicDescription}>
 	{#snippet action()}

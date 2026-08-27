@@ -4,11 +4,12 @@
 	The plate is the site talking. Its transparent header names the site, then an answer sheet carries
 	the sample that is up. The slate, on the opposite theme's paper, carries the day's set at the foot.
 
-	It reads down in four printed registers. The foot line says what the site does. The answer is given
-	the whole page column, because a distribution is a drawing and every pixel of width is another
-	outcome a reader can tell apart. The one action of the site is stamped in spot ink between two
-	printed rules. Then the slate is the day's index rather than the day's answer, so it lies under the
-	action rather than over it.
+	It reads down in four printed registers. The foot line says what the site does, and it is the
+	page's heading, because the sample under it carries a different question every morning. The
+	answer is given the whole page column, because a distribution is a drawing and every pixel of
+	width is another outcome a reader can tell apart. The one action of the site is stamped in spot
+	ink between two printed rules. Then the slate is the day's index rather than the day's answer, so
+	it lies under the action rather than over it.
 
 	Everything the site is sure of is printed and everything the reader is asking is drawn. The drawn
 	part is the wet-erase X over the sample they picked and the line they set across the answer.
@@ -342,7 +343,7 @@
 
 	<div class="page composition">
 		<div class="colophon plate">
-			<p class="lede">{PUBLIC_SITE_DESCRIPTION}</p>
+			<h1 class="heading">{PUBLIC_SITE_DESCRIPTION}</h1>
 		</div>
 
 		{#if cards.length === 0}
@@ -564,15 +565,29 @@
 		min-height: 0;
 	}
 
-	.lede {
-		max-width: 40ch;
-		color: var(--plate-ink);
-		font-size: var(--type-note);
-		font-weight: 500;
+	/*
+	 * The page's heading, and the first thing printed on the plate. It is stamped in the plate's own
+	 * face at its heavier cut, like every other word printed on a plate here, because it is what the
+	 * site says for itself before a sample says anything.
+	 *
+	 * Sized to hold one line wherever the column has room for one, which is every landscape screen.
+	 * It stays under the stamp a page band takes, since this one is a sentence rather than a page's
+	 * name, and under the floor it wraps, balanced, rather than shrinking to stay in a row.
+	 *
+	 * Printed a tint down from the full plate ink, so it is told apart from the wordmark stamped
+	 * directly above it without giving up any of its weight. The wordmark names the site and this
+	 * says what the site does, and one ink for both read as one long stamp.
+	 */
+	.heading {
+		color: color-mix(in oklab, var(--plate-ink) 64%, var(--plate-ink-muted));
+		font-size: clamp(1.5rem, 3.2vw, 2.5rem);
+		font-weight: 800;
+		line-height: 1.05;
+		text-wrap: balance;
 	}
 
-	/* The description is printed on the separating rule rather than in the stronger one, which is a
-	   box a figure sits in and carries a meaning of its own. */
+	/* The heading is printed on the separating rule rather than in the stronger one, which is a box
+	   a figure sits in and carries a meaning of its own. */
 	.colophon {
 		padding-block-start: var(--space-2);
 		background: none;
@@ -897,7 +912,7 @@
 
 	/* The plate prints itself once: its foot line settles, then the sheet and its action arrive. */
 	@media (prefers-reduced-motion: no-preference) {
-		.lede {
+		.heading {
 			animation: settle var(--motion-slow) var(--ease-in) 200ms both;
 		}
 

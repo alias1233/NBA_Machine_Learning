@@ -1,17 +1,14 @@
 import { SITE_ORIGIN, SITE_UPDATED_AT } from '$lib/site';
 
-const paths = [
-	'/',
-	'/about',
-	'/models/player-stats',
-	'/models/player-stats/info',
-	'/models/team-stats',
-	'/models/team-stats/info',
-	'/models/game-stats',
-	'/models/game-stats/info',
-	'/privacy',
-	'/terms-and-conditions'
-];
+/**
+ * Every page the site asks to be indexed.
+ *
+ * The prediction pages and their Info pages are not here. Google has crawled them and declined
+ * them, and a sitemap that keeps offering pages a crawler keeps refusing is a weaker signal for
+ * every URL beside them, the home page included. They carry a matching `noindex` so the two say the
+ * same thing. See PageMetadata.svelte.
+ */
+const paths = ['/', '/about', '/privacy', '/terms-and-conditions'];
 
 export const GET = () => {
 	const urls = paths

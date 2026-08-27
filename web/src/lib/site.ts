@@ -10,11 +10,17 @@
 export const SITE_NAME = 'Bazaar Ball';
 export const DOMAIN_NAME = `BazaarBall.com`;
 export const SITE_ORIGIN = 'https://bazaarball.com';
-export const SITE_UPDATED_AT = '2026-08-22';
+export const SITE_UPDATED_AT = '2026-08-27';
 
 /** The site metadata description, for searching and indexing. */
 export const PRIVATE_SITE_DESCRIPTION = 'Predict player, team, and game statistics of upcoming NBA games with AI through machine learning models, completely for free.';
-/** The user facing description, shown on the Hero. */
+/**
+ * The user facing description, shown on the Hero and on every page band's lede.
+ *
+ * On the home page it is also the only `h1`, so it is the one heading a search engine reads as the
+ * subject of the site. It says what the site does rather than naming it, because the wordmark
+ * printed directly above it has already done that.
+ */
 export const PUBLIC_SITE_DESCRIPTION = `Predict statistics of upcoming NBA games.`;
 
 /**

@@ -7,11 +7,14 @@ site can actually answer rather than describing it. This is how both hold at onc
 handful of real predictions once a day and writes them where the service reads them back, so every
 reader of that day sees the same set and the page costs no forward pass at all.
 
-What appears is chosen at random, seeded from the day itself, so the set is different every morning
-and identical for every reader of that morning. That seeding is the whole trick. A rerun on the same
-day picks the same models, games, players and teams, so a job that is run twice, or run again after a
-failure, replaces the file with the same set rather than reshuffling the page under whoever is
-reading it.
+What appears is chosen at random from the models whose answers are worth drawing, seeded from the day
+itself, so the set is different every morning and identical for every reader of that morning. A model
+answering yes or no is left out, because the home page is showing the shape of an answer and two bars
+have no shape. See MINIMUM_OUTCOMES.
+
+That seeding is the whole trick. A rerun on the same day picks the same models, games, players and
+teams, so a job that is run twice, or run again after a failure, replaces the file with the same set
+rather than reshuffling the page under whoever is reading it.
 
 Every number in the set is a real model answering a real upcoming game. None of it is a
 recommendation, and a sample carries no more weight than the same prediction asked for by hand.
@@ -48,6 +51,17 @@ How many earlier games a sample has to rest on before it is worth showing.
 An answer built from three games is a real answer and the site says so wherever one is asked for by
 hand. A sample nobody asked for is different: it is the site showing what it can do, so it should not
 lead with its weakest work. A pick resting on less than this is dropped and another is drawn.
+"""
+
+MINIMUM_OUTCOMES = 8
+"""
+How many outcomes a model has to spread its answer over before it is drawn on the home page.
+
+The home page shows an answer nobody asked for, and what it is really showing is the shape of one. A
+model answering yes or no gives two bars, which is a true answer and a dull drawing, so those are
+left out of the draw and are predicted only where a reader asks for one by hand. This counts
+outcomes rather than naming the shapes, so a model answering in eight named categories is drawn and a
+narrow number line is not.
 """
 
 @dataclass(frozen=True)
@@ -112,11 +126,13 @@ def _rng(day: date) -> random.Random:
 
     return random.Random(day.toordinal())
 
-def _published(family: ModelFamily) -> list[ModelSpecification]:
+def _worth_drawing(family: ModelFamily) -> list[ModelSpecification]:
+    """Every model of a family that can answer and is worth drawing. See MINIMUM_OUTCOMES."""
+
     return [
         specification
         for specification in family.specifications.values()
-        if family.is_published(specification)
+        if family.is_published(specification) and specification.output.length >= MINIMUM_OUTCOMES
     ]
 
 def _named_team(team_id: int, named: dict[int, NamedTeam]) -> NamedTeam:
@@ -228,10 +244,11 @@ def build(count: int = DEFAULT_COUNT, day: date | None = None) -> Showcase:
     """
     Draw the day's set.
 
-    Picks are spread across every family that has something published, so a set shows the range of
-    what the site answers rather than six versions of one model. Where there are fewer families than
-    samples the families repeat, which is what a site with one trained family looks like and is not a
-    failure.
+    Picks are spread across every family that has something worth drawing, so a set shows the range
+    of what the site answers rather than six versions of one model. Where there are fewer families
+    than samples the families repeat, which is what a site with one trained family looks like and is
+    not a failure. A family whose every model answers too narrowly to draw is not in the rotation at
+    all. See MINIMUM_OUTCOMES.
     """
 
     day = day or season.today()
@@ -244,7 +261,7 @@ def build(count: int = DEFAULT_COUNT, day: date | None = None) -> Showcase:
     choosable = [
         (family, specification)
         for family in ALL_FAMILIES
-        for specification in _published(family)
+        for specification in _worth_drawing(family)
     ]
     if not choosable:
         return Showcase(FORMAT_VERSION, season.to_date_string(day), datetime.now(timezone.utc).isoformat(), [])

@@ -38,11 +38,13 @@
 	const infoPath = $derived(modelFamily ? familyInfoPath(modelFamily) : '/');
 </script>
 
+<!-- Not indexed, with the prediction page it describes. See PageMetadata.svelte. -->
 <PageMetadata
 	title={`${title} info`}
 	{description}
 	path={infoPath}
 	article
+	noindex
 	schema={articleSchema({ name: `${title} info`, description, path: infoPath })}
 />
 

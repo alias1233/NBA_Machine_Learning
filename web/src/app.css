@@ -860,11 +860,16 @@ main > .band:first-child {
  * accent filled is the block's own paper. Every rule on it is the block hairline, so nothing drawn
  * here has to know which paper it landed on.
  *
- * It is one of the two containers on paper and nothing else. A band never takes it: a band is the
- * site talking and prints on plate, and block paper run the width of the screen stops reading as a
- * thing set into the page at all.
+ * `.block` is one of the two containers on paper and nothing else. A band never takes it: a band is
+ * the site talking and prints on plate, and block paper run the width of the screen stops reading as
+ * a thing set into the page at all.
+ *
+ * `.block-plane` is the same paper with none of the container: no padding, no radius and no top
+ * edge. A field of a printed composition takes it, which is a shape the page decides rather than an
+ * object. Declared once for both, so the ink family is never written down a second time.
  */
-.block {
+.block,
+.block-plane {
 	background: var(--block);
 	color: var(--block-ink);
 	--plane-accent: var(--accent-block);
@@ -877,7 +882,8 @@ main > .band:first-child {
 	--waiting: var(--hairline-block);
 }
 
-.block .muted {
+.block .muted,
+.block-plane .muted {
 	color: var(--block-muted);
 }
 
