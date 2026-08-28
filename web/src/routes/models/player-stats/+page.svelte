@@ -335,7 +335,7 @@
 	path={PATH}
 	privateDescription="Free machine learning predictions for an NBA player's points, rebounds, assists and other box score totals for an upcoming game."
 	publicDescription="Predictions for the points, rebounds, assists and other box score totals an NBA player scores in a game."
-	standing="Pick an upcoming game, a team playing in it and a player on that team, and a model predicts what that player records in it."
+	standing="Pick an upcoming game, a team playing in the game, and a player on that team."
 	scored={data.scored}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}

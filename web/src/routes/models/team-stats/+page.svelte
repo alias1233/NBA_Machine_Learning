@@ -258,7 +258,7 @@
 	path={PATH}
 	privateDescription="Free machine learning predictions for an NBA team's total points, rebounds, assists and other box score totals for an upcoming game."
 	publicDescription="Predictions for every point, rebound, assist and three-pointer total that an NBA team scores in a game."
-	standing="Pick an upcoming game and one of the two teams in it, and a model predicts what that team records over the whole game."
+	standing="Pick an upcoming game, and one of the two teams playing in that game."
 	scored={data.scored}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
