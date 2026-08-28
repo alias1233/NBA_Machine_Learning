@@ -1,7 +1,5 @@
-import { getFamilyInfoModels } from '$lib/server/api';
+/** The family's models are listed on its own page now. Kept so an indexed link still lands. */
 
-import type { PageServerLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async () => ({
-	models: await getFamilyInfoModels('team_stats').catch(() => [])
-});
+export const load = () => redirect(308, '/models/team-stats');

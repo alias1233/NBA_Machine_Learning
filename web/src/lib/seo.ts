@@ -1,5 +1,5 @@
 import { AUTHOR } from './owner.ts';
-import { datesOf } from './pages.ts';
+import { datesOf, isIndexed } from './pages.ts';
 import { absoluteUrl, PRIVATE_SITE_DESCRIPTION, SITE_NAME, SITE_ORIGIN } from './site.ts';
 
 export type JsonLd = Record<string, unknown>;
@@ -14,6 +14,20 @@ type FaqQuestion = {
 	question: string;
 	answer: string[];
 };
+
+/**
+ * What a page tells a crawler to do with it, read off its entry in pages.ts.
+ *
+ * An indexed page asks for the whole preview: a full-size image, an untrimmed snippet, and an
+ * untrimmed video preview, which is what a search result for a page of writing should be allowed to
+ * show. A page that is not indexed says so here rather than only by being left out of the sitemap,
+ * because a sitemap advertises and this directive decides. `follow` on that page keeps the links it
+ * carries back into the site worth as much as any other link on the site.
+ */
+export const robotsDirective = (path: string): string =>
+	isIndexed(path)
+		? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+		: 'noindex, follow';
 
 export const authorSchema = (): JsonLd => ({
 	'@type': 'Person',

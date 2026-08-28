@@ -3,7 +3,6 @@ import { winner } from './model-evaluation.ts';
 const metric = {
 	key: 'example',
 	label: 'Example',
-	description: 'Example metric.',
 	unit: 'probability' as const,
 	higher_is_better: true
 };

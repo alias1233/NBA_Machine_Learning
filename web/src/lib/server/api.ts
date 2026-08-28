@@ -15,8 +15,9 @@ import { error } from '@sveltejs/kit';
 
 import type {
 	GamePredictionRequest,
-	FamilyInfoModel,
+	ScoredModel,
 	Health,
+	MetricDefinition,
 	Model,
 	Player,
 	PlayerPredictionRequest,
@@ -85,9 +86,12 @@ export const getHealth = () => request<Health>('/health');
 
 export const getModels = () => request<Model[]>('/models');
 
-/** The model cards for one family Info page, each carrying what that model measured. */
-export const getFamilyInfoModels = (family: string) =>
-	request<FamilyInfoModel[]>(`/models/${encodeURIComponent(family)}/info`);
+/** The evaluation figures used across the configured models, each explained once. */
+export const getMetricDefinitions = () => request<MetricDefinition[]>('/models/metrics');
+
+/** Every model in one family, each carrying what it measured, for that family's own listing. */
+export const getScoredModels = (family: string) =>
+	request<ScoredModel[]>(`/models/${encodeURIComponent(family)}/info`);
 
 /**
  * The day's sample predictions, already built by a job.

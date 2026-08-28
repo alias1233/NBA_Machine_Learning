@@ -19,7 +19,13 @@ import { isHttpError } from '@sveltejs/kit';
 
 import { DRAWN_KINDS } from '$lib/odds';
 import { gameRequest, readGameId, readLine, reasonFor } from '$lib/predictions';
-import { getModels, getRosters, getUpcomingGames, predictTeamStat } from '$lib/server/api';
+import {
+	getModels,
+	getRosters,
+	getScoredModels,
+	getUpcomingGames,
+	predictTeamStat
+} from '$lib/server/api';
 import {
 	expectedScenarios,
 	isGameChanged,
@@ -37,6 +43,11 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	let models: Model[] = [];
 	let games: ScheduledGame[] = [];
+
+	// The family's standing listing, asked for alongside everything else. It is not the same set as
+	// the models a prediction can be run with: one that is not trained yet is still worth reading
+	// about, and losing the figures must not take the form down with them.
+	const listing = getScoredModels(FAMILY).catch(() => []);
 
 	try {
 		const [allModels, upcoming] = await Promise.all([getModels(), getUpcomingGames()]);
@@ -93,6 +104,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	return {
 		models,
+		scored: await listing,
 		model: model?.name ?? '',
 		games,
 		selectedGame,

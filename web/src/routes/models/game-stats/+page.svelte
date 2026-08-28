@@ -57,7 +57,7 @@
 	let { data } = $props();
 
 	const TITLE = 'Game stat models';
-	const INFO = '/models/game-stats/info';
+	const PATH = '/models/game-stats';
 
 	/**
 	 * The pending request. It starts as the answered one and is the reader's until the button copies
@@ -151,7 +151,7 @@
 		if (url.search !== location.search) replaceState(url, page.state);
 	}
 
-	const predicting = $derived(navigating.to?.route.id === '/models/game-stats');
+	const predicting = $derived(navigating.to?.route.id === PATH);
 
 	/** Which parameter is still missing, in at most twelve words. Empty once none are. */
 	const missing = $derived(chosen === null ? 'Pick a game first.' : '');
@@ -257,18 +257,11 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
+	path={PATH}
 	privateDescription="Free machine learning predictions for an upcoming NBA game's outcomes. Supports win percentages, point differentials, total box scores, and more."
 	publicDescription="Predictions for the winning team, point differential, and total box score stats of an NBA game."
-	standing={[
-		`Pick an upcoming game and a model predicts the game itself rather than either side of it: who
-		wins, the margin the home team wins or loses by, and the two teams' combined points, rebounds,
-		assists or three-pointers.`,
-		`An answer is a chance for every outcome rather than one number, so it also gives the over,
-		under and push chance for any line drawn across it. Each model reads both teams' recent games
-		and who each side is expected to have available, and the winner is its own model rather than
-		the positive half of the margin, because that is the more accurate answer.`
-	]}
-	infoHref={INFO}
+	standing="Pick an upcoming game and a model predicts the game itself rather than either side of it."
+	scored={data.scored}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
 	prediction={data.prediction}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import PlateBand from '$lib/components/PlateBand.svelte';
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
-	import { PAGE_DATES } from '$lib/pages';
+	import { PAGES } from '$lib/pages';
 	import { longDate, SITE_NAME } from '$lib/site';
     import { CONTACT_EMAIL, STATE, COUNTRY } from '$lib/owner';
     import { ADS_ENABLED } from '$lib/ads';
@@ -23,7 +23,7 @@
 	<article class="terms-copy">
 		<!-- The one date, off the page's own entry, so the sitemap and this line cannot disagree. -->
 		<p id="terms-updated" class="updated">
-			Last updated: {longDate(PAGE_DATES['/terms-and-conditions'].updated)}
+			Last updated: {longDate(PAGES['/terms-and-conditions'].updated)}
 		</p>
 
 		<section>

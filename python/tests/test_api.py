@@ -8,12 +8,14 @@ from nba_ml.api.app import (
     all_models,
     all_teams,
     family_info_models,
-    game_rosters
+    game_rosters,
+    model_metric_definitions
 )
 from nba_ml.api.schemas import GameRequest, GameRostersRequest, ScenarioRequest
 from nba_ml.entities import Game, GameStatus, ScheduledGame
 from nba_ml.machine_learning import evaluation
 from nba_ml.models import metrics
+from nba_ml.models.families import ALL_FAMILIES
 from nba_ml.models.player_stats import specifications as player_stat_specifications
 from nba_ml.stores import player_games, players, rosters, schedule, team_games, teams
 
@@ -58,9 +60,8 @@ def test_every_model_is_named_and_explained_wherever_it_is_listed():
     A caller listing models needs the words as well as the shapes, so the catalogue carries both.
 
     The home page lists every family and the models in each, from the one catalogue request the site
-    already makes. Asking the Info endpoint per family instead would be three more requests for two
-    fields the catalogue could have carried. The Info endpoint stays, narrowed to exactly what a card
-    reads, because that page reads nothing else and draws its figures on the server.
+    already makes. Asking the family endpoint instead would be three more requests for two fields the
+    catalogue could have carried. That endpoint stays narrowed to exactly what the family page reads.
     """
 
     catalogue = [model.model_dump() for model in all_models()]
@@ -79,6 +80,25 @@ def test_unknown_model_family_has_no_info_catalogue():
         family_info_models("unknown")
 
     assert raised.value.status_code == 404
+
+
+def test_used_metric_explanations_are_offered_once_in_model_order():
+    definitions = model_metric_definitions()
+    expected = list(dict.fromkeys(
+        key
+        for family in ALL_FAMILIES
+        for specification in family.specifications.values()
+        for key in specification.reported_metrics
+    ))
+
+    assert [definition.model_dump() for definition in definitions] == [
+        {
+            "key": key,
+            "label": metrics.ALL_METRICS[key].label,
+            "description": metrics.ALL_METRICS[key].description
+        }
+        for key in expected
+    ]
 
 
 def _card(family: str, model: str):
@@ -152,7 +172,8 @@ def test_a_figure_the_run_did_not_score_is_left_out_rather_than_sent_as_a_blank(
     ]
     assert scored.metrics[0].floor == 5.5
     assert scored.metrics[1].floor is None
-    assert scored.metrics[0].label and scored.metrics[0].description
+    assert scored.metrics[0].label
+    assert "description" not in scored.metrics[0].model_dump()
 
 
 def test_interval_calibration_error_is_lower_better():

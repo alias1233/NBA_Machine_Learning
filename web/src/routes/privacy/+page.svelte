@@ -1,7 +1,7 @@
 <script lang="ts">
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
-	import { PAGE_DATES } from '$lib/pages';
+	import { PAGES } from '$lib/pages';
 	import { longDate, SITE_NAME, DOMAIN_NAME } from '$lib/site';
 	import { CONTACT_EMAIL } from '$lib/owner';
 	import { ADS_ENABLED } from '$lib/ads';
@@ -47,7 +47,7 @@
 	<article class="privacy-copy">
 			<!-- The one date, off the page's own entry, so the sitemap and this line cannot disagree. -->
 			<p id="privacy-updated" class="updated">
-				Last updated: {longDate(PAGE_DATES['/privacy'].updated)}
+				Last updated: {longDate(PAGES['/privacy'].updated)}
 			</p>
 
 			<section>

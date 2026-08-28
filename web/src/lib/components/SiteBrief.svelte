@@ -34,9 +34,7 @@
 				{SITE_NAME}
 				is free to use and does not require an account. Predictions 
 				are made on upcoming NBA games for a variety of useful statistics. Evaluation and accuracy metrics 
-				for every model on an unseen test set are publicly displayed in each model category's 
-				<i>Info</i> 
-				page. 
+				for every model on an unseen test set are publicly displayed on each model category's page.
 			</p>
 		</div>
 

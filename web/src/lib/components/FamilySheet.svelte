@@ -2,7 +2,7 @@
      hover or keyboard focus. -->
 <script lang="ts">
 	import ModelRoll from '$lib/components/ModelRoll.svelte';
-	import { familyInfoPath, familyPath } from '$lib/models';
+	import { familyModelsPath, familyPath } from '$lib/models';
 
 	import type { ListedFamily, ListedModel } from '$lib/models';
 
@@ -62,10 +62,12 @@
 			{#if family.published}
 				{#if masked}
 					<span class="button">Run a prediction</span>
-					<span class="small text-link">More info about these models</span>
+					<span class="small text-link">See every model and how it scores</span>
 				{:else}
 					<a class="button" href={familyPath(family)}>Run a prediction</a>
-					<a class="small text-link" href={familyInfoPath(family)}>More info about these models</a>
+					<a class="small text-link" href={familyModelsPath(family)}>
+						See every model and how it scores
+					</a>
 				{/if}
 			{:else}
 				<span class="tag micro">Not published yet</span>

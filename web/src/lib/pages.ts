@@ -1,10 +1,11 @@
 /**
- * Every page the site asks to be indexed, and the dates each one carries.
+ * Every page the site has, the dates each one carries, and whether it asks to be indexed.
  *
- * One entry per page: when it first went up, and when its own words last changed. The sitemap is
- * built from this list, the structured data and the article timestamps read their dates off it, and
- * the two policy pages print their own date from it. A page's date is written once here, so nothing
- * that states it can disagree with anything else that states it.
+ * One entry per page: when it first went up, when its own words last changed, and whether a search
+ * engine is asked to hold it. The sitemap is built from this list, every page's robots directive is
+ * read off it, the structured data and the article timestamps read their dates off it, and the two
+ * policy pages print their own date from it. A page's date is written once here, so nothing that
+ * states it can disagree with anything else that states it.
  *
  * `updated` is edited in the same change as the page it belongs to. It says when the words changed,
  * not when the site was last built, so a deployment that touched nothing on a page leaves its date
@@ -24,28 +25,55 @@ export type PageDates = {
 	updated: string;
 };
 
-export const PAGE_DATES = {
-	'/': { published: '2026-08-06', updated: '2026-08-27' },
-	'/about': { published: '2026-08-06', updated: '2026-08-27' },
-	'/models/player-stats': { published: '2026-08-06', updated: '2026-08-27' },
-	'/models/player-stats/info': { published: '2026-08-21', updated: '2026-08-27' },
-	'/models/team-stats': { published: '2026-08-11', updated: '2026-08-27' },
-	'/models/team-stats/info': { published: '2026-08-21', updated: '2026-08-27' },
-	'/models/game-stats': { published: '2026-08-11', updated: '2026-08-27' },
-	'/models/game-stats/info': { published: '2026-08-21', updated: '2026-08-27' },
-	'/privacy': { published: '2026-08-06', updated: '2026-08-22' },
-	'/terms-and-conditions': { published: '2026-08-21', updated: '2026-08-21' }
-} as const satisfies Record<string, PageDates>;
+export type PageEntry = PageDates & {
+	/**
+	 * Whether a search engine is asked to hold the page.
+	 *
+	 * Both halves of the answer come from here. An indexed page is offered in the sitemap and tells
+	 * a crawler `index`; a page that is not indexed is left out of the sitemap and tells the crawler
+	 * `noindex` on the page itself. The second half is the one that decides it: a sitemap only
+	 * advertises, and a page linked from every footer is found and indexed on the strength of that
+	 * link whether or not anything advertised it.
+	 *
+	 * The policy pages are the pages that say no. They exist for a reader who goes looking for them
+	 * and for the ad and analytics services that require them, not for anyone arriving from a
+	 * search, and neither of them says anything a search engine has a use for. They are still
+	 * followed, so the links they carry back into the site still count.
+	 */
+	indexed: boolean;
+};
 
-/** The same pages as a list, in the order the sitemap offers them. */
-export const INDEXED_PAGES = Object.entries(PAGE_DATES).map(([path, dates]) => ({
-	path,
-	...dates
-}));
+export const PAGES = {
+	'/': { published: '2026-08-06', updated: '2026-08-27', indexed: true },
+	'/about': { published: '2026-08-06', updated: '2026-08-27', indexed: true },
+	'/models/player-stats': { published: '2026-08-06', updated: '2026-08-27', indexed: true },
+	'/models/team-stats': { published: '2026-08-11', updated: '2026-08-27', indexed: true },
+	'/models/game-stats': { published: '2026-08-11', updated: '2026-08-27', indexed: true },
+	'/privacy': { published: '2026-08-06', updated: '2026-08-22', indexed: false },
+	'/terms-and-conditions': { published: '2026-08-21', updated: '2026-08-21', indexed: false }
+} as const satisfies Record<string, PageEntry>;
 
-/** The dates a path carries, or nothing where the site does not offer that path for indexing. */
-export const datesOf = (path: string): PageDates | undefined =>
-	PAGE_DATES[path as keyof typeof PAGE_DATES];
+/** A path the site has a page at. */
+export type PagePath = keyof typeof PAGES;
+
+const entryOf = (path: string): PageEntry | undefined => PAGES[path as PagePath];
+
+/** The pages the sitemap offers, in the order it offers them. */
+export const INDEXED_PAGES = Object.entries(PAGES)
+	.filter(([, { indexed }]) => indexed)
+	.map(([path, { published, updated }]) => ({ path, published, updated }));
+
+/** The dates a path carries, or nothing where the site has no page at that path. */
+export const datesOf = (path: string): PageDates | undefined => entryOf(path);
+
+/**
+ * Whether the page at a path asks to be indexed.
+ *
+ * A path this file does not list is taken to be a page that does, which is what a page added
+ * without an entry here would want. Keeping it out of the index is the answer that has to be
+ * written down, and lib/pages.test.ts holds every rendered page to having an entry either way.
+ */
+export const isIndexed = (path: string): boolean => entryOf(path)?.indexed ?? true;
 
 /**
  * The newest date any indexed page carries, which is when the site itself last changed.
@@ -54,5 +82,5 @@ export const datesOf = (path: string): PageDates | undefined =>
  */
 export const NEWEST_UPDATE = INDEXED_PAGES.reduce<string>(
 	(newest, { updated }) => (updated > newest ? updated : newest),
-	PAGE_DATES['/'].updated
+	PAGES['/'].updated
 );

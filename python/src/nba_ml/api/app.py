@@ -129,15 +129,12 @@ class ModelResponse(BaseModel):
     """Whether a trained file exists, so a caller can offer the model without every request failing."""
 
 class MetricResponse(BaseModel):
-    """One measured figure, with everything a caller needs to write it down and read it."""
+    """One measured figure, with everything a caller needs to compare and write it down."""
 
     key: str
     """The stable name of the figure, so a caller can single one out without matching on wording."""
 
     label: str
-    description: str
-    """One sentence saying what the figure means, for a reader who knows nothing about the model."""
-
     value: float
     floor: float | None
     """
@@ -154,6 +151,13 @@ class MetricResponse(BaseModel):
 
     ideal: float | None
     """The value this figure should reach, where closeness defines the better result."""
+
+class MetricDefinitionResponse(BaseModel):
+    """One evaluation figure in the shared glossary a reader is taught from."""
+
+    key: str
+    label: str
+    description: str
 
 class ModelEvaluationResponse(BaseModel):
     """How one model scored on games it never saw while it was being fitted."""
@@ -172,10 +176,10 @@ class ModelEvaluationResponse(BaseModel):
 
 class InfoModelResponse(BaseModel):
     """
-    The model card a family Info page reads: the words it prints and the figures under them.
+    One model in a family's standing listing: the words it prints and the figures under them.
 
     The same words are on the catalogue, which is what a caller listing several families at once
-    reads. This exists so the Info page is not handed the answer shapes it never looks at.
+    reads. This exists so the family page is not handed the answer shapes it never looks at.
     """
 
     name: str
@@ -452,7 +456,6 @@ def _model_evaluation(specification: ModelSpecification) -> ModelEvaluationRespo
         MetricResponse(
             key=key,
             label=metrics.ALL_METRICS[key].label,
-            description=metrics.ALL_METRICS[key].description,
             value=scored.metrics[key],
             floor=scored.floor.get(key),
             unit=metrics.ALL_METRICS[key].unit,
@@ -484,10 +487,31 @@ def _family(family: str):
 
     return requested
 
+@app.get("/models/metrics")
+def model_metric_definitions() -> list[MetricDefinitionResponse]:
+    """The evaluation figures the configured models publish, each explained once."""
+
+    used = dict.fromkeys(
+        key
+        for family in ALL_FAMILIES
+        for specification in family.specifications.values()
+        for key in specification.reported_metrics
+        if key in metrics.ALL_METRICS
+    )
+
+    return [
+        MetricDefinitionResponse(
+            key=key,
+            label=metrics.ALL_METRICS[key].label,
+            description=metrics.ALL_METRICS[key].description
+        )
+        for key in used
+    ]
+
 @app.get("/models/{family}/info")
 def family_info_models(family: str) -> list[InfoModelResponse]:
     """
-    The model cards for one family Info page, with their explanatory copy and their figures.
+    The models in one family's standing listing, with their card copy and figures.
 
     One request rather than one per model, because the page draws the whole family at once and is
     rendered before it is sent. Each card carries its own scored file, read here, so the page holds

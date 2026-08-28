@@ -75,15 +75,21 @@ export const MODELS_PATH = `/#${MODELS_SECTION}`;
 
 export const familyPath = (family: ModelFamily) => `/models/${family.slug}`;
 
-/** Every model in a family, and the figures each one has earned. */
-export const familyInfoPath = (family: ModelFamily) => `${familyPath(family)}/info`;
+/**
+ * The section of a family's own page that lists every model it holds and the figures each has
+ * earned, and the link that lands a reader on it.
+ */
+export const FAMILY_MODELS_SECTION = 'models';
+
+export const familyModelsPath = (family: ModelFamily) =>
+	`${familyPath(family)}#${FAMILY_MODELS_SECTION}`;
 
 /**
  * Which stock a page is printed on: the family whose pages it is one of, or null for the site's own.
  *
  * Every plate on the site prints in the same two inks and only the ground changes, so this is the
  * whole of what a family colors. The value is the family's slug, which `app.css` names the grounds
- * by, and it covers a family's prediction page and its Info page alike.
+ * by.
  */
 export const plateOf = (pathname: string): string | null =>
 	MODEL_FAMILIES.find((family) => {

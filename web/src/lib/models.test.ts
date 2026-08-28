@@ -10,7 +10,7 @@
 
 import {
 	answerSentence,
-	familyInfoPath,
+	familyModelsPath,
 	figureNote,
 	MODEL_FAMILIES,
 	namedCategories
@@ -31,9 +31,9 @@ function check(what: string, actual: unknown, expected: unknown) {
 const sides: GameSides = { home: 'Toronto Raptors', away: 'Boston Celtics' };
 
 check(
-	'a family Info link uses the info route',
-	familyInfoPath(MODEL_FAMILIES[0]),
-	'/models/player-stats/info'
+	'a family model listing is a section of the family page itself',
+	familyModelsPath(MODEL_FAMILIES[0]),
+	'/models/player-stats#models'
 );
 
 const model = (fields: Partial<Model>): Model => ({

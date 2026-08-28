@@ -96,14 +96,13 @@ export type Model = {
 };
 
 /** How a figure is written down: in the statistic's own units, as a probability, or as a bare score. */
-export type MetricUnit = 'amount' | 'probability' | 'score';
+export type MetricUnit = 'value' | 'probability' | 'score';
 
-/** One measured figure, with everything needed to write it down and read it. */
+/** One measured figure, with everything needed to compare and write it down. */
 export type Metric = {
 	/** The stable name of the figure, so one can be singled out without matching on wording. */
 	key: string;
 	label: string;
-	description: string;
 	value: number;
 	/** What answering with the season's own spread of outcomes scores on the same games, if scorable. */
 	floor: number | null;
@@ -111,6 +110,13 @@ export type Metric = {
 	higher_is_better: boolean;
 	/** The value this figure should reach, where closer is better than higher or lower. */
 	ideal: number | null;
+};
+
+/** One evaluation figure in the shared glossary on the About page. */
+export type MetricDefinition = {
+	key: string;
+	label: string;
+	description: string;
 };
 
 /** How one model scored on games it never saw while it was being fitted. */
@@ -128,13 +134,13 @@ export type ModelEvaluation = {
 };
 
 /**
- * One model card on a family Info page: the words it prints and the figures under them.
+ * One model in a family's listing: the words it prints and the figures under them.
  *
  * The evaluation travels with the card because the page is rendered on the server and read by
  * search engines, and a figure fetched after the page has been sent reaches neither. Null where the
  * model has never been scored.
  */
-export type FamilyInfoModel = {
+export type ScoredModel = {
 	name: string;
 	title: string;
 	description: string;

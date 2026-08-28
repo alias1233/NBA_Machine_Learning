@@ -20,10 +20,10 @@
 -->
 <script lang="ts">
 	import { figure, winner } from '$lib/model-evaluation';
-	import type { FamilyInfoModel } from '$lib/types';
+	import type { ScoredModel } from '$lib/types';
 
 	type Props = {
-		models: FamilyInfoModel[];
+		models: ScoredModel[];
 	};
 
 	let { models }: Props = $props();
@@ -89,13 +89,12 @@
 											{metric.label}
 											<!-- Said in the row's own heading, so the winner is carried by words as well as by
 											     the mark beside the figure. -->
-											{#if better}
-												<span class="visually-hidden">
-													{better === 'model' ? 'The model is better here.' : 'The baseline is better here.'}
-												</span>
-											{/if}
-											<span class="small muted">{metric.description}</span>
-										</th>
+										{#if better}
+											<span class="visually-hidden">
+												{better === 'model' ? 'The model is better here.' : 'The baseline is better here.'}
+											</span>
+										{/if}
+									</th>
 										<td>
 											<span class="read" class:won={better === 'model'}>
 												{figure(metric.value, metric.unit)}
@@ -250,12 +249,6 @@
 		stroke-width: 2.5;
 		stroke-linecap: round;
 		stroke-linejoin: round;
-	}
-
-	/* The label and the sentence saying what it means, stacked, so the row stays two columns wide. */
-	tbody th span {
-		display: block;
-		font-weight: normal;
 	}
 
 	/* The headline figure is the first thing to go where a row has no room for all three. */

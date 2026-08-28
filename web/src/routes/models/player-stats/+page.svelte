@@ -59,7 +59,7 @@
 	let { data } = $props();
 
 	const TITLE = 'Player stat models';
-	const INFO = '/models/player-stats/info';
+	const PATH = '/models/player-stats';
 
 	/**
 	 * The pending request. It starts as the answered one and is the reader's until the button copies
@@ -194,7 +194,7 @@
 		rosters.find((roster) => roster.team.abbreviation === form.team) ?? null
 	);
 
-	const predicting = $derived(navigating.to?.route.id === '/models/player-stats');
+	const predicting = $derived(navigating.to?.route.id === PATH);
 
 	/** Which parameter is still missing, in at most twelve words. Empty once none are. */
 	const missing = $derived(
@@ -332,19 +332,11 @@
 <PredictionPage
 	bind:this={shell}
 	title={TITLE}
+	path={PATH}
 	privateDescription="Free machine learning predictions for an NBA player's points, rebounds, assists and other box score totals for an upcoming game."
 	publicDescription="Predictions for the points, rebounds, assists and other box score totals an NBA player scores in a game."
-	standing={[
-		`Pick an upcoming game, a team playing in it and a player on that team, and a model predicts
-		what that player records: points, rebounds, assists, three-pointers, steals, blocks,
-		turnovers, four combined totals, and whether the night reaches a double-double or a
-		triple-double.`,
-		`An answer is a chance for every outcome the statistic can take rather than one number, so it
-		also gives the over, under and push chance for any line drawn across it. Each model reads the
-		player's run of past games, the game ahead of them, and who is expected to be on the floor for
-		both teams, which the roster controls leave you free to change.`
-	]}
-	infoHref={INFO}
+	standing="Pick an upcoming game, a team playing in it and a player on that team, and a model predicts what that player records in it."
+	scored={data.scored}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}
 	prediction={data.prediction}

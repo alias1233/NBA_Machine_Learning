@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { AUTHOR } from '$lib/owner';
 	import { datesOf } from '$lib/pages';
-	import { jsonLd } from '$lib/seo';
+	import { jsonLd, robotsDirective } from '$lib/seo';
 	import { absoluteUrl, pageTitle, SITE_NAME } from '$lib/site';
 
 	import type { JsonLd } from '$lib/seo';
@@ -28,16 +28,15 @@
 	const structuredData = $derived(schema ? jsonLd(schema) : null);
 	// The page's own dates, which an article states as its timestamps. See lib/pages.ts.
 	const dates = $derived(datesOf(path));
+	// Whether the page asks to be held in an index, which its entry in lib/pages.ts decides.
+	const robots = $derived(robotsDirective(path));
 </script>
 
 <svelte:head>
 	<title>{documentTitle}</title>
 	<meta name="description" content={description} />
 	<meta name="author" content={AUTHOR.name} />
-	<meta
-		name="robots"
-		content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
-	/>
+	<meta name="robots" content={robots} />
 	<link rel="canonical" href={canonical} />
 	<meta property="og:site_name" content={SITE_NAME} />
 	<meta property="og:type" content={article ? 'article' : 'website'} />

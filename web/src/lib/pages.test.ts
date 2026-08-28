@@ -1,5 +1,9 @@
-import { familyInfoPath, familyPath, MODEL_FAMILIES } from './models.ts';
-import { INDEXED_PAGES, NEWEST_UPDATE, datesOf } from './pages.ts';
+// @ts-expect-error The site intentionally carries no Node type package for this Node-only test.
+import { readdirSync } from 'node:fs';
+
+import { familyPath, MODEL_FAMILIES } from './models.ts';
+import { INDEXED_PAGES, NEWEST_UPDATE, PAGES, datesOf, isIndexed } from './pages.ts';
+import { robotsDirective } from './seo.ts';
 
 function check(what: string, actual: unknown, expected: unknown) {
 	if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -37,19 +41,98 @@ check(
 	[]
 );
 
-// A family added without dating its two pages is a family missing from the sitemap, which is the
-// one failure here that nothing else on the site would report.
+// A family added without dating its page is a family missing from the sitemap, which is the one
+// failure here that nothing else on the site would report.
 check(
-	'both pages of every model family are offered',
-	MODEL_FAMILIES.flatMap((family) =>
-		[familyPath(family), familyInfoPath(family)].filter((path) => datesOf(path) === undefined)
-	),
+	'every model family is offered',
+	MODEL_FAMILIES.map(familyPath).filter((path) => datesOf(path) === undefined),
 	[]
 );
 
 check(
 	'the newest date is the newest a page carries',
 	INDEXED_PAGES.filter(({ updated }) => updated > NEWEST_UPDATE),
+	[]
+);
+
+// ----------------------------------------------------------------------------
+// WHAT IS INDEXED AND WHAT IS NOT
+// ----------------------------------------------------------------------------
+
+/**
+ * The two pages the site keeps out of the index, which are the only two it keeps out.
+ *
+ * Written here rather than read off the entries, so that an entry flipped to `indexed: false` by
+ * accident, or a policy page quietly flipped back on, fails here rather than going unnoticed until
+ * a search result appears or disappears months later.
+ */
+const NOT_INDEXED = ['/privacy', '/terms-and-conditions'];
+
+check(
+	'only the policy pages are held out of the index',
+	Object.keys(PAGES).filter((path) => !isIndexed(path)),
+	NOT_INDEXED
+);
+
+check(
+	'the sitemap offers every page that asks to be indexed, and nothing else',
+	INDEXED_PAGES.map(({ path }) => path),
+	Object.keys(PAGES).filter((path) => !NOT_INDEXED.includes(path))
+);
+
+// A page left out of the sitemap is still crawled, and still indexed if anything links to it. Both
+// policy pages are linked from the footer of every page, so the directive is what decides.
+check(
+	'a page held out of the index says so on the page itself',
+	NOT_INDEXED.map((path) => robotsDirective(path)),
+	NOT_INDEXED.map(() => 'noindex, follow')
+);
+
+check(
+	'every page the sitemap offers asks to be indexed',
+	INDEXED_PAGES.filter(({ path }) => !robotsDirective(path).startsWith('index, follow')),
+	[]
+);
+
+// ----------------------------------------------------------------------------
+// EVERY RENDERED PAGE IS ACCOUNTED FOR
+// ----------------------------------------------------------------------------
+
+/**
+ * The path of every route that renders a page, read off the routes themselves.
+ *
+ * A directory holding a `+page.svelte` is a page a reader can open. A directory holding only a
+ * `+page.server.ts` is a redirect or an endpoint and is not one. Reading the tree rather than
+ * listing the routes here is what makes a page added without an entry in pages.ts a failure: that
+ * entry is the only place saying whether the page belongs in the sitemap and what it tells a
+ * crawler.
+ */
+const renderedPaths = (dir: URL, path: string): string[] => {
+	const entries: { name: string; isDirectory: () => boolean }[] = readdirSync(dir, {
+		withFileTypes: true
+	});
+	const here = entries.some(({ name }) => name === '+page.svelte') ? [path || '/'] : [];
+
+	return entries
+		.filter((entry) => entry.isDirectory())
+		.reduce(
+			(paths: string[], { name }) =>
+				paths.concat(renderedPaths(new URL(`${name}/`, dir), `${path}/${name}`)),
+			here
+		);
+};
+
+const RENDERED = renderedPaths(new URL('../routes/', import.meta.url), '');
+
+check(
+	'every page the site renders has an entry',
+	RENDERED.filter((path) => datesOf(path) === undefined),
+	[]
+);
+
+check(
+	'every entry names a page the site renders',
+	Object.keys(PAGES).filter((path) => !RENDERED.includes(path)),
 	[]
 );
 

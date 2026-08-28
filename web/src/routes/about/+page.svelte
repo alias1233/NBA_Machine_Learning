@@ -20,6 +20,8 @@
 
 	const DESCRIPTION = 'How Bazaar Ball makes NBA predictions, measures model quality, and explains uncertainty.';
 
+	let { data } = $props();
+
 	/** Site-wide questions belong here so every prediction page can point to one answer. */
 	const QUESTIONS = [
 		{
@@ -59,6 +61,7 @@
 		['what', 'What it predicts'],
 		['reading', 'Reading a prediction'],
 		['how', 'How it works'],
+		['evaluation-metrics', 'Evaluation metrics'],
 		['questions', 'FAQ'],
 		['disclaimers', 'Disclaimers']
 	];
@@ -100,8 +103,8 @@
 			<p>
 				Head to the
 				<a href={MODELS_PATH}>Models</a>
-				section to choose from the available model categories. Each category’s <em>Info</em> page explains 
-				the models within the category and displays their evaluation metrics.
+				section to choose from the available model categories. Each category’s page lists the models
+				within it and displays their evaluation metrics under the prediction results.
 			</p>
 		</section>
 
@@ -137,14 +140,33 @@
 				with the season's usual spread of outcomes, is also evaluated on the test split as a comparison tool.
 			</p>
 			<p>
-				A model category's 
-				<em>Info</em>
-				page outlines the evaluation metrics of the models within the category, along with the values that the 
-				baseline scored.
+				A model category's page lists each model's evaluation results, along with the values that
+				the baseline scored.
 			</p>
 			<p class="source small">
 				Source: <a href="/#models">each model family’s published evaluation metrics</a>.
 			</p>
+		</section>
+
+		<section id="evaluation-metrics">
+			<h2 class="section-rule">What do the evaluation metrics mean?</h2>
+			<p>
+				These are the evaluation metrics used by the current models. Each model’s page shows the 
+				value that a model scored and its baseline comparison.
+			</p>
+
+			{#if data.metrics.length > 0}
+				<dl class="metric-definitions">
+					{#each data.metrics as metric (metric.key)}
+						<div>
+							<dt><h3>{metric.label}</h3></dt>
+							<dd>{metric.description}</dd>
+						</div>
+					{/each}
+				</dl>
+			{:else}
+				<p class="small muted">The evaluation metric definitions are unavailable right now.</p>
+			{/if}
 		</section>
 
 		<section id="questions">
@@ -208,6 +230,29 @@
 
 	.push {
 		color: var(--push);
+	}
+
+	.metric-definitions {
+		margin: var(--space-2) 0 0;
+	}
+
+	.metric-definitions > div {
+		padding-block: var(--space-4);
+		border-top: var(--rule-panel);
+	}
+
+	.metric-definitions > div:last-child {
+		border-bottom: var(--rule-panel);
+	}
+
+	.metric-definitions dt,
+	.metric-definitions dd {
+		margin: 0;
+	}
+
+	.metric-definitions dd {
+		max-width: var(--measure);
+		margin-block-start: var(--space-2);
 	}
 
 </style>

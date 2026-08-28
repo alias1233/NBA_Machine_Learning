@@ -14,54 +14,63 @@
 	a drawing wants width. The board is given the larger share of that first row: it holds a whole
 	night of cards, and the parameters hold at most a handful of fields.
 
-	The answer is not on the page until one has been asked for. A reader who has not pressed the
-	button is not waiting on anything, and an empty block standing in the room the answer will take is
-	a page of held breath before there is anything to hold it for. The press is what opens the region,
-	so it opens on the reader's own action rather than when the service comes back, and it opens onto
-	the skeleton at the size the answer will land in. From then on it stands, because a region that
-	closed again under a reader reading it would be worse than one that never opened.
+	The answer region stands from the first frame, because a reader should be able to see what the
+	page is for before working out how to ask for it. Until one has been asked for it holds nothing
+	but the words saying what to do, standing on the page rather than on paper of their own, because
+	there is no answer yet for a block to be the container of. The press is what grows the region into
+	the block the answer lands in, and the words sit where that block's own heading will, so it opens
+	around them rather than replacing them. From then on it stays open, because a region that closed
+	again under a reader reading it would be worse than one that never opened.
 
-	Narrow, the three lie on top of each other in the same order, so the page is read down rather than
-	across and nothing is dropped.
+	Under all of it the family lists every model it holds and what each one scored on games it never
+	saw. It is the page's standing content: a reader deciding which stat to ask about reads it before
+	asking, and a reader holding an answer reads it to know what that answer is worth.
 
-	Above all three the page says, in its own standing words, what this family answers and how the
-	answer is reached. It is short, because the reader came here to ask something, and it is above the
-	form rather than under it, because it is what the page is about and a search engine reads a page
-	from the top down.
+	Narrow, the regions lie on top of each other in the same order, so the page is read down rather
+	than across and nothing is dropped.
+
+	Above all of it the page says, in its own standing words, what this family answers. It is one
+	sentence, because the reader came here to ask something, and it is above the form rather than
+	under it, because it is what the page is about and a search engine reads a page from the top down.
 
 	What differs between families is those words, the night's board, the game the parameters are
 	about, what the reader has to choose, and how the answer names itself, so those arrive as the
-	snippets and the one list of paragraphs. Everything here is the shared layout.
+	snippets and the one sentence. Everything here is the shared layout.
 -->
 <script lang="ts">
 	import { tick } from 'svelte';
 
 	import AdSlot from '$lib/components/AdSlot.svelte';
+	import ModelIndex from '$lib/components/ModelIndex.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
-	import { MOTION, MOTION_IMPACT, MOTION_SLOW, settled } from '$lib/motion';
+	import { FAMILY_MODELS_SECTION } from '$lib/models';
+	import { flowingHeight, MOTION, MOTION_IMPACT, MOTION_SLOW, settled } from '$lib/motion';
 	import { phone } from '$lib/screen';
 	import { stopWalking, walkTo } from '$lib/scroll';
 	import { webPageSchema } from '$lib/seo';
 
+	import type { ScoredModel } from '$lib/types';
 	import type { Snippet } from 'svelte';
 
 	type Props = {
 		title: string;
+		/** The family's own path, which is this page. Every request on it names this one address. */
+		path: string;
 		/** One sentence, for a search result and a shared link. */
 		privateDescription: string;
 		/** One sentence, shown as the page lede.*/
 		publicDescription: string;
 		/**
-		 * The page's own standing prose, a paragraph an entry, printed above the form.
+		 * The page's own standing sentence, printed above the form.
 		 *
-		 * It says what the family answers and how, in words that are the same on every visit. Nothing
-		 * else on the page is: the board is tonight's games and the answer is whatever was asked for.
+		 * It says what the family answers, in words that are the same on every visit. Nothing else on
+		 * the page is: the board is tonight's games and the answer is whatever was asked for.
 		 */
-		standing: string[];
-		/** The family's Info page, linked under the title before a reader asks for a number. */
-		infoHref: string;
+		standing: string;
+		/** Every model in the family, each carrying what it measured, drawn on the server. */
+		scored: ScoredModel[];
 		/** False when the service offers nothing this page can draw, which is its empty state. */
 		hasModels: boolean;
 		/** False where the service did not answer at all, which is not the same as nothing published. */
@@ -72,8 +81,8 @@
 		model: string;
 		/**
 		 * True where the address bar already names a request that was answered or refused, which
-		 * stands the answer region up on arrival rather than opening it. A shared link and a reload
-		 * both land that way, and neither is a reveal the reader watched.
+		 * stands the answer open on arrival rather than growing it. A shared link and a reload both
+		 * land that way, and neither is a reveal the reader watched.
 		 */
 		hasAnswer: boolean;
 		/** The night's games, the first region. Omitted by a family that predicts on something else. */
@@ -87,10 +96,11 @@
 
 	let {
 		title,
+		path,
 		privateDescription,
 		publicDescription,
 		standing,
-		infoHref,
+		scored,
 		hasModels,
 		answering,
 		prediction,
@@ -106,14 +116,10 @@
 	let controlsColumn = $state<HTMLElement>();
 	let trackedPrediction = $state.raw<unknown>(null);
 
-	/** Whether the reader has asked for an answer on this page, which is what opens the region. */
-	let asked = $state(false);
+	/** Whether the block has grown into the one an answer lands in, which the first press does. */
 	// svelte-ignore state_referenced_locally
 	let opened = $state(hasAnswer);
 	let opening = $state(false);
-
-	const showingAnswer = $derived(hasAnswer || asked);
-	const path = $derived(infoHref.slice(0, -'/info'.length));
 
 	$effect(() => {
 		if (prediction === null || prediction === trackedPrediction) return;
@@ -127,27 +133,29 @@
 	});
 
 	/**
-	 * Walks to the answer region, then opens its first skeleton.
+	 * Walks to the answer region, then grows it out of the block standing in its place.
 	 *
-	 * The request is already running while the page travels. On the first request, only the target and
-	 * its label enter the page before the walk. The skeleton starts its reveal once the walk is under
-	 * way, then stays until its entrance finishes so a fast response cannot replace it mid-motion.
+	 * The request is already running while the page travels. On the first request the walk starts
+	 * against the small block, which is already on the page, and the skeleton is fed in once the walk
+	 * is under way, then held until its entrance finishes so a fast response cannot replace it
+	 * mid-motion. The walk follows the region for the whole of that entrance, because the block grows
+	 * under it.
 	 *
-	 * The walk waits a tick for the region to be in the page, because until it is there is nothing to
-	 * walk to. Beside the parameters the answer almost always ends up in front of the reader anyway,
-	 * so the walk does nothing there. Under them, which is every narrow screen, it is a page away
-	 * from the button that asked for it.
+	 * Beside the parameters the answer almost always ends up in front of the reader anyway, so the
+	 * walk does nothing there. Under them, which is every narrow screen, it is a page away from the
+	 * button that asked for it.
 	 *
 	 * Later requests keep the existing block in place and follow it while its answer changes size.
 	 */
 	export async function reveal(asking?: Promise<unknown>): Promise<void> {
 		stopWalking();
-		asked = true;
-
-		await tick();
 
 		if (!opened) {
-			const walking = walkTo(answerColumn, { block: 'start', flowing: 0, always: true });
+			const walking = walkTo(answerColumn, {
+				block: 'start',
+				flowing: MOTION_IMPACT,
+				always: true
+			});
 
 			// Let the page cover most of the distance first, so the sheet starts just before it arrives.
 			await Promise.race([walking, settled(MOTION)]);
@@ -190,8 +198,12 @@
 
 <PlateBand {title} lede={publicDescription}>
 	{#snippet action()}
-		<!-- How the number is reached, before a reader asks for one. -->
-		<a class="small text-link" href={infoHref}>More info about these models</a>
+		<!-- Every model this page can ask, and what each one scored, further down the page itself. -->
+		{#if scored.length > 0}
+			<a class="small text-link" href={`#${FAMILY_MODELS_SECTION}`}>
+				See every model and how it scores
+			</a>
+		{/if}
 	{/snippet}
 </PlateBand>
 
@@ -199,9 +211,7 @@
 	<!-- Stands whether or not the service is answering, because it is the page's own words rather
 	     than anything read off a model. -->
 	<section class="standing">
-		{#each standing as paragraph}
-			<p>{paragraph}</p>
-		{/each}
+		<p>{standing}</p>
 	</section>
 
 	{#if !hasModels}
@@ -236,25 +246,55 @@
 				</section>
 			</div>
 
-			<!--
-				Only once one has been asked for. It carries the room it stands off in its own margin
-				rather than taking it from a gap, so the region opens out of nothing and the page under
-				it is carried rather than dropped a gap's worth the moment the button is pressed.
+			<section class="answer" aria-labelledby="answer-column" bind:this={answerColumn}>
+				<h2 class="column-label micro" id="answer-column">Answer</h2>
 
-				A page that arrived already carrying an answer renders it standing, because a transition
-				does not run on the first frame and nothing about a shared link was revealed to anyone.
-			-->
-			{#if showingAnswer}
-				<section class="answer" aria-labelledby="answer-column" bind:this={answerColumn}>
-					<h2 class="column-label micro" id="answer-column">Answer</h2>
-					<!-- Its invisible first scaffold gives the scroll enough page to put this target at the
-					     top. The same scaffold begins its reveal just before the walk finishes. -->
-					<div class="answer-result" class:preparing={!opened} class:opening>
-						{@render result(!opened || opening)}
+				<!--
+					The region holds the height of whatever is in it, so the standing words grow into the
+					block an answer lands in rather than being swapped for it in a frame, and it is
+					clipped only while it grows, because the drawing inside an answer is free to hang over
+					its own edges once it is there.
+
+					A page that arrived already carrying an answer renders it open, because a transition
+					does not run on the first frame and nothing about a shared link was revealed to anyone.
+				-->
+				<div class="answer-result" class:opening use:flowingHeight>
+					<div class="swap">
+						{#if opened}
+							<div>{@render result(opening)}</div>
+						{:else}
+							<p class="prompt type-h2">Make a prediction first.</p>
+						{/if}
 					</div>
-				</section>
-			{/if}
+				</div>
+			</section>
 		</div>
+	{/if}
+
+	<!-- The family's standing content: what it holds, and what each of them is worth. Absent only
+	     where the service could not name them, which the region above has already said. -->
+	{#if scored.length > 0}
+		<section
+			class="listing"
+			class:unanswered={!opened}
+			id={FAMILY_MODELS_SECTION}
+			aria-labelledby="models-section"
+		>
+			<h2 class="column-label micro" id="models-section">All models</h2>
+
+			<p class="small muted">
+				Every model in this category, and what it measured on games it never saw while it was being
+				fitted. Open one to read its figures in full.
+			</p>
+
+			<ModelIndex models={scored} />
+
+			<p>
+				<a class="small text-link" href="/about#evaluation-metrics">
+					Learn what each evaluation metric means
+				</a>
+			</p>
+		</section>
 	{/if}
 
 	<AdSlot place="modelBelowResult" />
@@ -268,14 +308,22 @@
 		padding-block-start: var(--space-7);
 	}
 
-	/* Paragraphs set close together, on the page's own spacing between them and the work below. */
-	.standing {
-		display: grid;
-		gap: var(--space-3);
+	/*
+	 * The page's own opening statement, under the accent rule that marks anything the site says in
+	 * its own words. Set a step above body text and run it across the page, so it names the work below
+	 * rather than only the board beside it.
+	 */
+	.standing::before {
+		content: '';
+		display: block;
+		width: var(--space-6);
+		margin-block-end: var(--space-4);
+		border-top: var(--rule-accent);
 	}
 
 	.standing p {
-		max-width: var(--measure);
+		font-size: var(--type-note);
+		text-wrap: pretty;
 	}
 
 	/* Narrow: board, then parameters, then answer, which is the order the work is done in. */
@@ -284,11 +332,10 @@
 		gap: var(--space-6);
 	}
 
-	/* No gap of its own. The answer carries the room it stands off in its margin, so that room opens
-	   with the region rather than standing empty before it. */
 	.request {
 		display: flex;
 		flex-direction: column;
+		gap: var(--space-6);
 	}
 
 	.board-column,
@@ -311,7 +358,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
-		margin-block-start: var(--space-6);
 		container-type: inline-size;
 		container-name: answer-column;
 	}
@@ -320,14 +366,30 @@
 		min-width: 0;
 	}
 
-	.answer-result.preparing {
-		visibility: hidden;
+	/* One cell, so the small block and the answer trade in the same place rather than one under the
+	   other while the height flows between them. */
+	.swap {
+		display: grid;
 	}
 
-	/* The first skeleton is fed into view like a fresh sheet, just before the page reaches its mark. */
+	.swap > * {
+		grid-area: 1 / 1;
+		min-width: 0;
+	}
+
+	/* No paper of its own: the block arrives with the answer, so until then the words stand on the
+	   page in muted ink. They sit where the answer's own heading will, so the block grows around them
+	   rather than replacing them. */
+	.prompt {
+		padding-block-end: var(--space-3);
+		color: var(--ink-muted);
+	}
+
+	/* The skeleton is fed into view like a fresh sheet, just before the page reaches its mark. */
 	.answer-result.opening {
 		position: relative;
 		isolation: isolate;
+		overflow: clip;
 		animation: open-answer var(--motion-impact) var(--ease-in);
 	}
 
@@ -373,6 +435,20 @@
 		}
 	}
 
+	/* Every model the family holds, printed under the work rather than beside it. */
+	.listing {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-block-start: var(--space-6);
+	}
+
+	/* Before a reader asks for an answer, the supporting evidence stands a further step away from
+	   the task. Once the answer opens, it returns to the page's ordinary section spacing. */
+	.listing.unanswered {
+		margin-block-start: var(--space-7);
+	}
+
 	@media (width < 40rem) {
 		/* The response replaces a reserved drawing. It must not become the browser's scroll anchor. */
 		.answer {
@@ -400,13 +476,6 @@
 	 * their groups set as two columns in it.
 	 */
 	@media (min-width: 64rem) {
-		/* Set as two columns of a printed introduction on the same line the work below is split on,
-		   so the words fill the page rather than leaving half of it empty above the board. */
-		.standing {
-			grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-			column-gap: var(--space-6);
-		}
-
 		.columns {
 			grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
 			align-items: start;
