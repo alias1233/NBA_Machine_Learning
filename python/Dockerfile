@@ -1,10 +1,13 @@
 # The api service and the jobs that feed it, which are the same image run two ways.
 # Built from python/. See deploy/docker-compose.yml.
 
-FROM python:3.11-slim AS build
+# Pinned by digest, so the same commit cannot rebuild on a different runtime and set of operating
+# system packages later. The tag is left beside it to say what the digest is. Move both together.
+FROM python:3.11-slim@sha256:1042b61448fef4ba92d16a8c7eb4996d027568ce64792a7877fd88511e0af7c6 AS build
 
-# Pinned to the version the lock file was written with, so a build is the same next month.
-COPY --from=ghcr.io/astral-sh/uv:0.11.16 /uv /usr/local/bin/uv
+# Pinned to the version the lock file was written with, so a build is the same next month, and to
+# the digest of that version, so the tag cannot be moved under it.
+COPY --from=ghcr.io/astral-sh/uv:0.11.16@sha256:440fd6477af86a2f1b38080c539f1672cd22acb1b1a47e321dba5158ab08864d /uv /usr/local/bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -23,7 +26,7 @@ COPY src ./src
 COPY README.md ./
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:1042b61448fef4ba92d16a8c7eb4996d027568ce64792a7877fd88511e0af7c6
 
 # curl answers the health check in docker-compose.yml.
 RUN apt-get update \

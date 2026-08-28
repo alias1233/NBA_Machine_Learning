@@ -172,7 +172,7 @@ class ModelEvaluationResponse(BaseModel):
 
 class InfoModelResponse(BaseModel):
     """
-    The model card a family Info page reads: exactly the four fields it draws and nothing else.
+    The model card a family Info page reads: the words it prints and the figures under them.
 
     The same words are on the catalogue, which is what a caller listing several families at once
     reads. This exists so the Info page is not handed the answer shapes it never looks at.
@@ -189,6 +189,15 @@ class InfoModelResponse(BaseModel):
 
     published: bool
     """Whether a trained file exists."""
+
+    evaluation: ModelEvaluationResponse | None
+    """
+    What the model measured on games it never saw, or null where it has never been scored.
+
+    It travels with the card because the page it is drawn on is rendered on a server and read by
+    search engines, and a figure fetched after the page has been sent reaches neither. Unscored is
+    normal rather than an error: a model can be specified before it is fitted.
+    """
 
 class HealthResponse(BaseModel):
     models: list[str]
@@ -478,11 +487,12 @@ def _family(family: str):
 @app.get("/models/{family}/info")
 def family_info_models(family: str) -> list[InfoModelResponse]:
     """
-    The model cards for one family Info page, with their explanatory copy and nothing measured.
+    The model cards for one family Info page, with their explanatory copy and their figures.
 
-    One request rather than one per model, because the page draws the whole family at once. The
-    figures are not in it: they are read per model, when a reader opens one, so drawing the page
-    costs no scored file it may never show.
+    One request rather than one per model, because the page draws the whole family at once and is
+    rendered before it is sent. Each card carries its own scored file, read here, so the page holds
+    every figure it prints. A family is a dozen or so small JSON files, which is cheaper than the
+    round trips a browser would otherwise make one at a time.
     """
 
     requested = _family(family)
@@ -492,25 +502,8 @@ def family_info_models(family: str) -> list[InfoModelResponse]:
             name=specification.name,
             title=specification.title,
             description=specification.description,
-            published=requested.is_published(specification)
+            published=requested.is_published(specification),
+            evaluation=_model_evaluation(specification)
         )
         for specification in requested.specifications.values()
     ]
-
-@app.get("/models/{family}/info/{model}/evaluation")
-def model_evaluation(family: str, model: str) -> ModelEvaluationResponse | None:
-    """
-    What one model measured on its held-out games, asked for only when a reader opens that model.
-
-    Null where it has never been scored, which is normal rather than an error: a model can be
-    specified before it is fitted, and a run can be told to skip scoring. A caller shows the card
-    without figures rather than hiding the model.
-    """
-
-    requested = _family(family)
-
-    specification = requested.specifications.get(model)
-    if specification is None:
-        raise HTTPException(404, f"No model named {model} is in the {family} family.")
-
-    return _model_evaluation(specification)

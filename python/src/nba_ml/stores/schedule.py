@@ -11,11 +11,12 @@ exactly like one, and it carries a flag so every mock game can be removed in a s
 """
 
 from datetime import date, datetime
+from typing import Collection
 
 import pandas as pd
 
 from nba_ml import paths, season
-from nba_ml.database import Categories, Database, DataConflictHandler, DataType
+from nba_ml.database import Categories, Database, DataConflictHandler, DataType, held_in
 from nba_ml.entities import Game, GameStatus, ScheduledGame
 
 # Categories
@@ -39,7 +40,14 @@ PRIMARY_KEYS = [
 ]
 DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 
-DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS)
+# Every read here is ordered by the date and the tipoff, and the ones that are not a single game are
+# narrowed by the date as well. The primary key covers neither, so without this each of them reads
+# the whole season and then sorts it.
+INDEXES = [[GAME_DATE, TIPOFF]]
+
+DATABASE = Database(
+    FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS, INDEXES
+)
 
 # A mock game's id keeps the shape of a real one, phase digit first, with a season of 99 that no real
 # season produces. That is only so the two cannot collide. IS_MOCK is what removal reads.
@@ -68,6 +76,12 @@ READ_CATEGORIES = [
     IS_MOCK
 ]
 """The order _from_row reads a row in, named outright so a column added later cannot shift it."""
+
+TEAM_DATE_CATEGORIES = [GAME_ID, GAME_DATE, HOME_TEAM_ID, AWAY_TEAM_ID]
+"""What team_game_dates hands back, in that order. See nba_ml/upcoming.py for what reads them."""
+
+TeamGameDate = tuple[int, str, int, int]
+"""One team_game_dates row: the game's id, its date as stored, then the home and away team."""
 
 def _from_row(row: tuple) -> ScheduledGame:
     game_id, game_date, tipoff, home_team_id, away_team_id, season_type, status, is_mock = row
@@ -120,6 +134,33 @@ def _games(
 
 def all_games() -> list[ScheduledGame]:
     return _games()
+
+def team_game_dates() -> list[TeamGameDate]:
+    """
+    Every scheduled game as its id, its date and its two teams.
+
+    Four columns as they are stored rather than whole ScheduledGame objects, because the collection
+    rule reads nothing else and building the season into objects on every render is what
+    /games/upcoming used to cost. Dates stay as text: they are written in one sortable form, so
+    comparing two of them needs no parsing. Pair it with games_with_ids.
+    """
+
+    with DATABASE:
+        return DATABASE.query(categories=TEAM_DATE_CATEGORIES)
+
+def games_with_ids(game_ids: Collection[int]) -> list[ScheduledGame]:
+    """
+    The named games, whole, ordered like every other read here.
+
+    The pair to team_game_dates: pick from the cheap columns, then read only what was picked. An id
+    the table no longer holds is simply absent, so a caller reading twice never has to allow for the
+    table having moved between the two. See nba_ml/upcoming.py.
+    """
+
+    if not game_ids:
+        return []
+
+    return _games(held_in(GAME_ID, game_ids))
 
 def all_mock_games() -> list[ScheduledGame]:
     return _games(f"{IS_MOCK.category_name} = 1")

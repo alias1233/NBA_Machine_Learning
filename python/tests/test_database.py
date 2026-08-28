@@ -6,7 +6,29 @@ import threading
 import pandas as pd
 import pytest
 
-from nba_ml.database import Categories, DataConflictHandler, DataType, Database
+from nba_ml.database import Categories, DataConflictHandler, DataType, Database, held_in
+
+
+def test_a_list_of_numbers_becomes_a_filter_nothing_else_can_reach(tmp_path):
+    """The values go into the SQL rather than into a bound parameter, so each is read as one."""
+
+    categories = Categories()
+    identifier = categories.add_category("IDENTIFIER", DataType.INTEGER)
+    database = Database(
+        tmp_path / "rows.db",
+        "rows",
+        categories.get_categories(),
+        DataConflictHandler.IGNORE,
+        [identifier]
+    )
+
+    with database:
+        database.add_dataframe(pd.DataFrame({"IDENTIFIER": [1, 2, 3]}))
+        assert database.query(held_in(identifier, [3, 1])) == [(1,), (3,)]
+        assert database.query(held_in(identifier, [])) == []
+
+    with pytest.raises(ValueError):
+        held_in(identifier, ["1); DROP TABLE rows; --"])
 
 
 def test_a_failed_batch_is_rolled_back(tmp_path):

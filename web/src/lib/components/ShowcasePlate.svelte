@@ -354,14 +354,13 @@
 				{#if answering}
 					<p class="micro muted">No samples today</p>
 					<p>
-						Samples are drawn once a day, from games the models can already answer. There are none
-						today, which is what an off day looks like.
+						There are no sampled predictions today.
 					</p>
 				{:else}
 					<p class="micro muted">Nothing to show</p>
 					<p>
-						The prediction service is not answering, so there are no samples to draw and no model to
-						ask. Nothing is lost. It is worth coming back in a few minutes.
+						The prediction service is not answering. There are no samples to draw and no model to
+						ask. Come back later.
 					</p>
 				{/if}
 			</div>
@@ -391,8 +390,7 @@
 					<div class="titles">
 						<h2 class="type-h2">{card.heading}</h2>
 						<p class="small note">
-							{card.matchup}, {dayOf(card.sample.game.date)}. The {card.sample.title.toLowerCase()}
-							model.
+							{card.matchup}, {dayOf(card.sample.game.date)}
 						</p>
 					</div>
 

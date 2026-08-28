@@ -174,7 +174,7 @@
 			</p>
 		</section>
 
-		<EditorialMeta />
+		<EditorialMeta path="/about" />
 	</div>
 </div>
 

@@ -257,6 +257,14 @@
 	title={TITLE}
 	privateDescription="Free machine learning predictions for an NBA team's total points, rebounds, assists and other box score totals for an upcoming game."
 	publicDescription="Predictions for every point, rebound, assist and three-pointer total that an NBA team scores in a game."
+	standing={[
+		`Pick an upcoming game and one of the two teams in it, and a model predicts what that team
+		records over the whole game: its points, its rebounds, its assists or its three-pointers.`,
+		`An answer is a chance for every total the team could reach rather than one number, so it also
+		gives the over, under and push chance for any line drawn across it. Each model reads both
+		teams' recent games and who each side is expected to have available, so a team missing a
+		starter is not read as the team that played last week.`
+	]}
 	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}

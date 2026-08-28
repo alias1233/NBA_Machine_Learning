@@ -17,11 +17,20 @@ that has not caught up reads a played game as a layoff.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from nba_ml import season
 from nba_ml.entities import GameStatus, ScheduledGame
 from nba_ml.stores import schedule, team_games, teams
+
+CANDIDATE_LOOKBACK = timedelta(days=1)
+"""
+How far back a game still to be played can be dated.
+
+A game's date is a United States eastern date and its tipoff is stored in UTC, so the two can name
+different days and a game dated yesterday can still be ahead. A day of slack covers that. See
+_candidate_ids.
+"""
 
 @dataclass(frozen=True)
 class UpcomingGame():
@@ -36,22 +45,53 @@ class UpcomingGame():
         return self.waiting_on is None
 
 def _oldest_missing_game_dates(
-    games: list[ScheduledGame],
+    games: list[schedule.TeamGameDate],
     stored_game_ids: set[int]
-    ) -> dict[int, date]:
-    """Per team, the date of the earliest scheduled game that has no box score stored."""
+    ) -> dict[int, str]:
+    """
+    Per team, the date of the earliest scheduled game that has no box score stored.
 
-    oldest: dict[int, date] = {}
+    Dates stay as the text they are stored as, which sorts the same way the days do, so a season of
+    games is compared without a date being parsed. See stores/schedule.py.
+    """
 
-    for scheduled in games:
-        if scheduled.id in stored_game_ids:
+    oldest: dict[int, str] = {}
+
+    for game_id, game_date, home_team_id, away_team_id in games:
+        if game_id in stored_game_ids:
             continue
 
-        for team_id in scheduled.team_ids:
-            if scheduled.game.date < oldest.get(team_id, date.max):
-                oldest[team_id] = scheduled.game.date
+        for team_id in (home_team_id, away_team_id):
+            held = oldest.get(team_id)
+            if held is None or game_date < held:
+                oldest[team_id] = game_date
 
     return oldest
+
+def _candidate_ids(
+    games: list[schedule.TeamGameDate],
+    stored_game_ids: set[int],
+    today: date,
+    until: date | None
+    ) -> list[int]:
+    """
+    Which games could still be ahead, decided on the stored columns alone.
+
+    Narrowing here rather than after the games are built is what keeps the whole archive from being
+    turned into objects, and naming the answer by id is what stops a second read seeing a game the
+    rule above was never told about. Dates are compared as the text they are stored as.
+    """
+
+    earliest = season.to_date_string(today - CANDIDATE_LOOKBACK)
+    latest = None if until is None else season.to_date_string(until)
+
+    return [
+        game_id
+        for game_id, game_date, _, _ in games
+        if game_id not in stored_game_ids
+        and game_date >= earliest
+        and (latest is None or game_date <= latest)
+    ]
 
 def _still_to_play(scheduled: ScheduledGame, now: datetime, today: date) -> bool:
     """
@@ -74,39 +114,50 @@ def upcoming_games(until: date | None = None) -> list[UpcomingGame]:
     """
     Every game still to be played from today onwards, each marked ready or held back.
 
+    Two reads rather than one, and the second asks for exactly what the first picked. The rule needs
+    every game the season holds, so that is read as four stored columns and nothing else. Only the
+    candidates are read whole, which keeps the archive from being built into objects and keeps both
+    reads describing the same set of games however the table moves between them.
+
     Args:
-        until keeps the answer to games on or before a date. Leave it unset for all of them, which
-        costs nothing extra since the whole schedule is read either way.
+        until keeps the answer to games on or before a date. Leave it unset for all of them.
     """
 
-    games = schedule.all_games()
-    if not games:
+    scheduled_dates = schedule.team_game_dates()
+    if not scheduled_dates:
         return []
 
-    stored_game_ids = team_games.stored_game_ids(min(scheduled.game.date for scheduled in games))
-    oldest_missing = _oldest_missing_game_dates(games, stored_game_ids)
+    earliest = min(game_date for _, game_date, _, _ in scheduled_dates)
+    stored_game_ids = team_games.stored_game_ids(season.from_date_string(earliest).date())
+    oldest_missing = _oldest_missing_game_dates(scheduled_dates, stored_game_ids)
     now = datetime.now(timezone.utc)
     today = season.today()
+    candidates = _candidate_ids(scheduled_dates, stored_game_ids, today, until)
 
     still_to_play = []
-    for scheduled in games:
-        if scheduled.status is not GameStatus.SCHEDULED or scheduled.id in stored_game_ids:
+    for scheduled in schedule.games_with_ids(candidates):
+        if scheduled.status is not GameStatus.SCHEDULED:
             continue
 
         if not _still_to_play(scheduled, now, today):
             continue
 
-        if until is not None and scheduled.game.date > until:
-            continue
+        game_date = season.to_date_string(scheduled.game.date)
 
-        # Both teams are in oldest_missing, since this game itself has no box score.
+        # Both teams are in oldest_missing, since this game has no box score and the read that
+        # picked it is the read that built them.
         holding_back = [
             oldest_missing[team_id]
             for team_id in scheduled.team_ids
-            if oldest_missing[team_id] < scheduled.game.date
+            if oldest_missing[team_id] < game_date
         ]
 
-        still_to_play.append(UpcomingGame(scheduled, min(holding_back) if holding_back else None))
+        still_to_play.append(
+            UpcomingGame(
+                scheduled,
+                season.from_date_string(min(holding_back)).date() if holding_back else None
+            )
+        )
 
     return still_to_play
 

@@ -11,7 +11,7 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"test": "node src/lib/odds.test.ts && node src/lib/models.test.ts && node src/lib/model-evaluation.test.ts && node src/lib/showcase.test.ts && node src/lib/touch.test.ts && node src/lib/seo.test.ts && node src/lib/robots.test.ts && node src/lib/health.test.ts"
+		"test": "node src/lib/odds.test.ts && node src/lib/models.test.ts && node src/lib/model-evaluation.test.ts && node src/lib/showcase.test.ts && node src/lib/touch.test.ts && node src/lib/seo.test.ts && node src/lib/pages.test.ts && node src/lib/robots.test.ts && node src/lib/health.test.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-node": "^5.5.7",

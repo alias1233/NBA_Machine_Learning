@@ -1,5 +1,6 @@
 import { AUTHOR } from './owner.ts';
-import { absoluteUrl, PRIVATE_SITE_DESCRIPTION, SITE_NAME, SITE_ORIGIN, SITE_UPDATED_AT } from './site.ts';
+import { datesOf } from './pages.ts';
+import { absoluteUrl, PRIVATE_SITE_DESCRIPTION, SITE_NAME, SITE_ORIGIN } from './site.ts';
 
 export type JsonLd = Record<string, unknown>;
 
@@ -51,17 +52,21 @@ export const webPageSchema = ({ name, description, path }: Page): JsonLd => ({
 	isPartOf: { '@id': absoluteUrl('/#website') }
 });
 
-export const articleSchema = ({ name, description, path }: Page): JsonLd => ({
-	'@type': 'Article',
-	headline: name,
-	description,
-	url: absoluteUrl(path),
-	datePublished: SITE_UPDATED_AT,
-	dateModified: SITE_UPDATED_AT,
-	author: authorSchema(),
-	publisher: authorSchema(),
-	isPartOf: { '@id': absoluteUrl('/#website') }
-});
+/** Dated from the page's own entry in pages.ts, so the schema cannot outlive what it describes. */
+export const articleSchema = ({ name, description, path }: Page): JsonLd => {
+	const dates = datesOf(path);
+
+	return {
+		'@type': 'Article',
+		headline: name,
+		description,
+		url: absoluteUrl(path),
+		...(dates && { datePublished: dates.published, dateModified: dates.updated }),
+		author: authorSchema(),
+		publisher: authorSchema(),
+		isPartOf: { '@id': absoluteUrl('/#website') }
+	};
+};
 
 export const faqSchema = (questions: FaqQuestion[]): JsonLd => ({
 	'@type': 'FAQPage',

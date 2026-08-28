@@ -16,6 +16,17 @@
 		reverse_proxy web:3000
 	}
 
+	# The site's own long cache reaches only its hashed bundles, so everything else is revalidated on
+	# every visit. Weight is a product constraint, and these are the files a returning reader would
+	# otherwise ask about again each time.
+	@faces path /fonts/*
+	header @faces Cache-Control "public, max-age=31536000, immutable"
+
+	# The favicon and the two policy files change without changing name, so they are cached for long
+	# enough to save the round trip and short enough that an edit is picked up the same day.
+	@named_files path /favicon.png /robots.txt /sitemap.xml
+	header @named_files Cache-Control "public, max-age=3600"
+
 	header {
 		Content-Security-Policy "frame-ancestors 'none'"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"

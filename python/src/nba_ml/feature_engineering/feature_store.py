@@ -208,7 +208,8 @@ def publish(name: str, build: FeatureBuild) -> Path:
     Writes a build and makes it the one every reader resolves.
 
     The version is written under a working name and moved into place whole, so a reader never meets a
-    half written one, and the pointer is rewritten last. Older versions past KEPT_VERSIONS then go.
+    half written one, and the pointer is rewritten last. Older versions past KEPT_VERSIONS then go,
+    along with anything a run that died before its move left behind.
 
     Returns:
         The directory the build was written to.
@@ -218,7 +219,7 @@ def publish(name: str, build: FeatureBuild) -> Path:
     working = directory / (WORKING_PREFIX + build.version)
     version = directory / build.version
 
-    shutil.rmtree(working, ignore_errors=True)
+    _remove_working_versions(name)
     _write(working, build)
 
     shutil.rmtree(version, ignore_errors=True)
@@ -236,6 +237,22 @@ def publish(name: str, build: FeatureBuild) -> Path:
 def _remove_old_versions(name: str):
     for version in _complete_versions(name)[:-KEPT_VERSIONS]:
         shutil.rmtree(version, ignore_errors=True)
+
+def _remove_working_versions(name: str):
+    """
+    Clears out every directory still under a working name, which is what a run that died before its
+    move left behind. Nothing else prunes them, so repeated failures would otherwise fill the disk.
+
+    Safe because the jobs are serialised by a lock on the host, so no other run holds one of these.
+    """
+
+    directory = paths.feature_build_directory(name)
+
+    if not directory.is_dir():
+        return
+
+    for working in directory.glob(WORKING_PREFIX + "*"):
+        shutil.rmtree(working, ignore_errors=True)
 
 # READING: #
 def _complete_versions(name: str) -> list[Path]:
@@ -313,6 +330,17 @@ def _read(version: Path) -> FeatureBuild:
 
 _held: dict[str, FeatureBuild] = {}
 _reading = threading.Lock()
+
+def is_published(name: str) -> bool:
+    """
+    Whether there is a build to read, answered without reading one.
+
+    current() loads the whole build and holds a lock across the read, so a caller that only needs
+    this answer must not ask for it that way. This is a directory listing and a small file read.
+    See api/limits.py, which asks on every request and from the event loop.
+    """
+
+    return _newest_version(name) is not None
 
 def current(name: str) -> FeatureBuild | None:
     """

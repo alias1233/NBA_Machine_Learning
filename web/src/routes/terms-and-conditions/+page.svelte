@@ -1,7 +1,8 @@
 <script lang="ts">
 	import PlateBand from '$lib/components/PlateBand.svelte';
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
-	import { SITE_NAME } from '$lib/site';
+	import { PAGE_DATES } from '$lib/pages';
+	import { longDate, SITE_NAME } from '$lib/site';
     import { CONTACT_EMAIL, STATE, COUNTRY } from '$lib/owner';
     import { ADS_ENABLED } from '$lib/ads';
 	import { webPageSchema } from '$lib/seo';
@@ -18,9 +19,12 @@
 
 <PlateBand title="Terms and conditions" />
 
-<main class="page terms">
+<div class="page terms">
 	<article class="terms-copy">
-		<p id="terms-updated" class="updated">Last updated: August 21, 2026</p>
+		<!-- The one date, off the page's own entry, so the sitemap and this line cannot disagree. -->
+		<p id="terms-updated" class="updated">
+			Last updated: {longDate(PAGE_DATES['/terms-and-conditions'].updated)}
+		</p>
 
 		<section>
         <p>
@@ -155,7 +159,12 @@
             </p>
         {:else}
             <p>
-                No ads or analytics are currently used on this site.
+                The Site does not currently display third-party advertising.
+            </p>
+            <p>
+                The Site does use Google Analytics, which may set cookies and collect technical 
+                information about your visit. We do not control how Google handles that data. Our 
+                Privacy Policy describes what is collected and the choices you have.
             </p>
         {/if}
 		</section>
@@ -166,7 +175,8 @@
             The Site does not require registration and does not knowingly collect information that 
             directly identifies you in order to provide the Service. Technical information 
             (such as IP address or cookie identifiers) may still be collected automatically by us 
-            or by advertising partners, as described in Section 7 and in our Privacy Policy.
+            or by our analytics and advertising providers, as described in Section 7 and in our Privacy
+            Policy.
         </p>
 
 		</section>
@@ -271,7 +281,7 @@
         </p>
 		</section>
 	</article>
-</main>
+</div>
 
 <style>
 	.page {

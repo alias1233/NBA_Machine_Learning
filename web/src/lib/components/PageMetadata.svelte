@@ -1,44 +1,43 @@
 <script lang="ts">
 	import { AUTHOR } from '$lib/owner';
+	import { datesOf } from '$lib/pages';
 	import { jsonLd } from '$lib/seo';
-	import { absoluteUrl, pageTitle, SITE_NAME, SITE_UPDATED_AT } from '$lib/site';
+	import { absoluteUrl, pageTitle, SITE_NAME } from '$lib/site';
 
 	import type { JsonLd } from '$lib/seo';
 
 	type Props = {
 		title?: string;
 		description: string;
+		/**
+		 * The page's own path, which is its canonical URL.
+		 *
+		 * A prediction page passes the bare path rather than the request it is answering, so every
+		 * combination of parameters names one page instead of asking to be indexed as a page of its
+		 * own. See lib/pages.ts.
+		 */
 		path: string;
 		schema?: JsonLd | JsonLd[];
 		article?: boolean;
-		/**
-		 * Kept out of a search index, while its links are still followed.
-		 *
-		 * The prediction pages and their Info pages take it. They are a form a reader works in rather
-		 * than something to read, Google has crawled them and declined to index them, and a set of
-		 * URLs a crawler keeps being offered and keeps refusing weakens every other URL offered with
-		 * them. They are left out of the sitemap for the same reason. See sitemap.xml/+server.ts.
-		 */
-		noindex?: boolean;
 	};
 
-	let { title, description, path, schema, article = false, noindex = false }: Props = $props();
+	let { title, description, path, schema, article = false }: Props = $props();
 
 	const canonical = $derived(absoluteUrl(path));
 	const documentTitle = $derived(pageTitle(title));
 	const structuredData = $derived(schema ? jsonLd(schema) : null);
-	const robots = $derived(
-		noindex
-			? 'noindex, follow'
-			: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
-	);
+	// The page's own dates, which an article states as its timestamps. See lib/pages.ts.
+	const dates = $derived(datesOf(path));
 </script>
 
 <svelte:head>
 	<title>{documentTitle}</title>
 	<meta name="description" content={description} />
 	<meta name="author" content={AUTHOR.name} />
-	<meta name="robots" content={robots} />
+	<meta
+		name="robots"
+		content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+	/>
 	<link rel="canonical" href={canonical} />
 	<meta property="og:site_name" content={SITE_NAME} />
 	<meta property="og:type" content={article ? 'article' : 'website'} />
@@ -50,8 +49,10 @@
 	<meta name="twitter:description" content={description} />
 
 	{#if article}
-		<meta property="article:published_time" content={SITE_UPDATED_AT} />
-		<meta property="article:modified_time" content={SITE_UPDATED_AT} />
+		{#if dates}
+			<meta property="article:published_time" content={dates.published} />
+			<meta property="article:modified_time" content={dates.updated} />
+		{/if}
 		<meta property="article:author" content={AUTHOR.name} />
 	{/if}
 

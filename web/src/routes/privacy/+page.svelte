@@ -1,12 +1,37 @@
 <script lang="ts">
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import PlateBand from '$lib/components/PlateBand.svelte';
-	import { SITE_NAME, DOMAIN_NAME } from '$lib/site';
+	import { PAGE_DATES } from '$lib/pages';
+	import { longDate, SITE_NAME, DOMAIN_NAME } from '$lib/site';
 	import { CONTACT_EMAIL } from '$lib/owner';
 	import { ADS_ENABLED } from '$lib/ads';
 	import { webPageSchema } from '$lib/seo';
 
 	const DESCRIPTION = 'What Bazaar Ball collects and what it sets on your device.';
+
+	/**
+	 * The numbered sections, in the order they are printed.
+	 *
+	 * The advertising section is only printed while ads run, so everything under it moves up a
+	 * number when it is not. Held here rather than typed into each heading, because a section that
+	 * does not render must not leave a hole in the numbering a reader can see.
+	 */
+	const SECTIONS = [
+		'collect',
+		...(ADS_ENABLED ? ['advertising'] : []),
+		'analytics',
+		'use',
+		'providers',
+		'do-not-track',
+		'children',
+		'choices',
+		'security',
+		'links',
+		'changes',
+		'contact'
+	];
+
+	const sectionNumber = (section: string) => SECTIONS.indexOf(section) + 1;
 </script>
 
 <PageMetadata
@@ -18,9 +43,12 @@
 
 <PlateBand title="Privacy" />
 
-<main class="page privacy">
+<div class="page privacy">
 	<article class="privacy-copy">
-			<p id="privacy-updated" class="updated">Last updated: August 22, 2026</p>
+			<!-- The one date, off the page's own entry, so the sitemap and this line cannot disagree. -->
+			<p id="privacy-updated" class="updated">
+				Last updated: {longDate(PAGE_DATES['/privacy'].updated)}
+			</p>
 
 			<section>
 				<p>
@@ -33,7 +61,7 @@
 			</section>
 
 			<section>
-				<h2>1. Information We Collect</h2>
+				<h2>{sectionNumber('collect')}. Information We Collect</h2>
 				<h3>Information You Provide Directly</h3>
 				<p>
 					The Site does not require registration or an account. The only time we receive information
@@ -70,7 +98,7 @@
 
 			{#if ADS_ENABLED}
 			<section>
-				<h2>2. Advertising (Google AdSense)</h2>
+				<h2>{sectionNumber('advertising')}. Advertising (Google AdSense)</h2>
 				<p>
 					The Site displays ads through Google AdSense. Google and its partners may use cookies
 					(including the DoubleClick cookie) to serve ads based on your prior visits to this and other
@@ -84,7 +112,7 @@
 			{/if}
 
 			<section>
-				<h2>3. Analytics (Google Analytics)</h2>
+				<h2>{sectionNumber('analytics')}. Analytics (Google Analytics)</h2>
 				<p>
 					We use Google Analytics to understand how visitors use the Site — for example, which pages
 					are popular and how people navigate the Site. Google Analytics collects information such as
@@ -97,7 +125,7 @@
 			</section>
 
 			<section>
-				<h2>4. How We Use Information</h2>
+				<h2>{sectionNumber('use')}. How We Use Information</h2>
 				<p>We use the information described above to:</p>
 				<ul>
 					<li>Operate and maintain the Site</li>
@@ -111,8 +139,8 @@
 			</section>
 
 			<section>
-				<h2>5. Third-Party Service Providers</h2>
-				<p>We share limited data (primarily automatically-collected data described in Section 1) with the following third-party service providers, each of which has its own privacy policy governing its use of that data:</p>
+				<h2>{sectionNumber('providers')}. Third-Party Service Providers</h2>
+				<p>We share limited data (primarily automatically-collected data described in Section {sectionNumber('collect')}) with the following third-party service providers, each of which has its own privacy policy governing its use of that data:</p>
 				<ul>
 					{#if ADS_ENABLED}
 						<li>Google AdSense — advertising</li>
@@ -123,17 +151,17 @@
 			</section>
 
 			<section>
-				<h2>6. Do Not Track</h2>
+				<h2>{sectionNumber('do-not-track')}. Do Not Track</h2>
 				<p>Some browsers offer a "Do Not Track" (DNT) signal. There is currently no industry-standard way to respond to DNT signals, so the Site does not currently alter its data collection in response to them.</p>
 			</section>
 
 			<section>
-				<h2>7. Children's Privacy</h2>
+				<h2>{sectionNumber('children')}. Children's Privacy</h2>
 				<p>The Site is not directed at children under the age of 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information (for example, by email), please contact us so we can delete it.</p>
 			</section>
 
 			<section>
-				<h2>8. Your Choices</h2>
+				<h2>{sectionNumber('choices')}. Your Choices</h2>
 				<p>Because the Site doesn't have accounts, there's very little personal data tied to you individually. Your main choices are:</p>
 				<ul>
 					<li>Cookies: Adjust or block cookies through your browser settings.</li>
@@ -147,27 +175,27 @@
 			</section>
 
 			<section>
-				<h2>9. Data Security</h2>
+				<h2>{sectionNumber('security')}. Data Security</h2>
 				<p>We take reasonable measures to protect the limited information we handle, but no method of transmission or storage over the internet is completely secure. We cannot guarantee absolute security.</p>
 			</section>
 
 			<section>
-				<h2>10. Third-Party Links</h2>
+				<h2>{sectionNumber('links')}. Third-Party Links</h2>
 				<p>The Site may link to third-party websites (for example, NBA stats or news sources). We are not responsible for the privacy practices or content of those sites. We encourage you to review the privacy policy of any site you visit.</p>
 			</section>
 
 			<section>
-				<h2>11. Changes to This Privacy Policy</h2>
-				<p>We may update this Privacy Policy from time to time. Changes will be posted on this page with a revised "Effective Date." Your continued use of the Site after changes are posted constitutes acceptance of the updated policy.</p>
+				<h2>{sectionNumber('changes')}. Changes to This Privacy Policy</h2>
+				<p>We may update this Privacy Policy from time to time. Changes will be posted on this page with a revised "Last updated" date. Your continued use of the Site after changes are posted constitutes acceptance of the updated policy.</p>
 			</section>
 
 			<section>
-				<h2>12. Contact Us</h2>
+				<h2>{sectionNumber('contact')}. Contact Us</h2>
 				<p>If you have questions about this Privacy Policy or how your information is handled, contact us at:</p>
 				<p>{CONTACT_EMAIL}</p>
 			</section>
 	</article>
-</main>
+</div>
 
 <style>
 	.page {

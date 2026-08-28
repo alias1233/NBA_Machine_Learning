@@ -1,13 +1,24 @@
+<!-- When a page went up and when its words last changed, printed at the foot of what they are about. -->
 <script lang="ts">
-	import { longDate, SITE_UPDATED_AT } from '$lib/site';
+	import { datesOf } from '$lib/pages';
+	import { longDate } from '$lib/site';
 
-	const date = longDate(SITE_UPDATED_AT);
+	type Props = {
+		/** The page these dates belong to. Its entry in lib/pages.ts holds them. */
+		path: string;
+	};
+
+	let { path }: Props = $props();
+
+	const dates = $derived(datesOf(path));
 </script>
 
-<p class="editorial-meta small">
-	<span><time datetime={SITE_UPDATED_AT}>Published {date}</time></span>
-	<span><time datetime={SITE_UPDATED_AT}>Updated {date}</time></span>
-</p>
+{#if dates}
+	<p class="editorial-meta small">
+		<span><time datetime={dates.published}>Published {longDate(dates.published)}</time></span>
+		<span><time datetime={dates.updated}>Updated {longDate(dates.updated)}</time></span>
+	</p>
+{/if}
 
 <style>
 	.editorial-meta {

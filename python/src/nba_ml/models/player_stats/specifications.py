@@ -175,21 +175,21 @@ what it says.
 
 DOUBLE_DOUBLE_MODEL = PlayerStatModelSpecification(
     name="double_double",
-    title="Double double",
+    title="Double-double",
     description="Whether a player records double figures in two statistics.",
     output=MILESTONE_OUTPUT,
     target_stats=MILESTONE_STATS,
-    combination=DoubleFigureMilestone(stats_needed=2, predicted="double double chances"),
+    combination=DoubleFigureMilestone(stats_needed=2, predicted="double-double chances"),
     published_metrics=MILESTONE_METRICS
     )
 
 TRIPLE_DOUBLE_MODEL = PlayerStatModelSpecification(
     name="triple_double",
-    title="Triple double",
+    title="Triple-double",
     description="Whether a player records double figures in three statistics.",
     output=MILESTONE_OUTPUT,
     target_stats=MILESTONE_STATS,
-    combination=DoubleFigureMilestone(stats_needed=3, predicted="triple double chances"),
+    combination=DoubleFigureMilestone(stats_needed=3, predicted="triple-double chances"),
     published_metrics=MILESTONE_METRICS
     )
 

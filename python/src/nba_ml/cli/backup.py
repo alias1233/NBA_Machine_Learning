@@ -82,12 +82,21 @@ def _write_archive(archive: Path) -> tuple[int, int]:
     return (copied, len(models))
 
 def _remove_old_archives(keep: int) -> int:
-    """Leaves the newest archives and removes the rest. Returns how many went."""
+    """
+    Leaves the newest archives and removes the rest, along with anything a run that died before its
+    move left behind. Nothing else prunes either, so repeated failures would fill the server disk.
+
+    Returns:
+        How many finished archives went. A half written one is not one of them.
+    """
 
     archives = sorted(paths.BACKUP_DIRECTORY.glob(f"{ARCHIVE_PREFIX}*{ARCHIVE_SUFFIX}"))
 
     for archive in archives[:-keep]:
         archive.unlink()
+
+    for half_written in paths.BACKUP_DIRECTORY.glob(f"{ARCHIVE_PREFIX}*{ARCHIVE_SUFFIX}{WORKING_SUFFIX}"):
+        half_written.unlink()
 
     return max(len(archives) - keep, 0)
 
@@ -96,7 +105,8 @@ def back_up(keep: int = KEPT_BACKUPS) -> Path:
     Writes one archive of everything that cannot be rebuilt, then removes all but the newest keep.
 
     The archive is written under a working name and moved into place whole, so a run that dies part
-    way through leaves nothing that reads like a finished backup.
+    way through leaves nothing that reads like a finished backup. What it does leave is removed by
+    the next run.
 
     Args:
         keep counts the archive this run writes, so it is at least one.

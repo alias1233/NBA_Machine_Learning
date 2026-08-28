@@ -32,7 +32,7 @@
 	import PageMetadata from '$lib/components/PageMetadata.svelte';
 	import ShowcasePlate from '$lib/components/ShowcasePlate.svelte';
 	import SiteBrief from '$lib/components/SiteBrief.svelte';
-	import { MODELS_PATH, MODELS_SECTION } from '$lib/models';
+	import { listedFamilies, MODELS_PATH, MODELS_SECTION } from '$lib/models';
 	import { webApplicationSchema } from '$lib/seo';
 	import { PRIVATE_SITE_DESCRIPTION } from '$lib/site';
 	import { isTap } from '$lib/touch';

@@ -22,8 +22,11 @@ x-python: &python
   environment: &python-environment
     NBA_ML_DATA_DIR: /data
     NBA_ML_BACKUP_DIR: /backups
-    # Per process, and this image runs one worker. See nba_ml/api/limits.py.
+    # Per process, and this image runs one worker. The unbuilt cap is what runs together while no
+    # whole-league build is published, when each request builds the league itself and holds more
+    # than this container is allowed. See nba_ml/api/limits.py.
     NBA_ML_MAX_RUNNING_PREDICTIONS: ${NBA_ML_MAX_RUNNING_PREDICTIONS:-4}
+    NBA_ML_MAX_RUNNING_UNBUILT_PREDICTIONS: ${NBA_ML_MAX_RUNNING_UNBUILT_PREDICTIONS:-1}
     NBA_ML_MAX_WAITING_PREDICTIONS: ${NBA_ML_MAX_WAITING_PREDICTIONS:-8}
     NBA_ML_PREDICTION_WAIT_SECONDS: ${NBA_ML_PREDICTION_WAIT_SECONDS:-10}
   volumes:
@@ -32,7 +35,9 @@ x-python: &python
 
 services:
   caddy:
-    image: caddy:2-alpine
+    # Pinned by digest, so the same commit cannot rebuild on a different runtime later. The tag is
+    # left beside it to say what the digest is. Move both together.
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: unless-stopped
     mem_limit: 256m
     logging: *logging
@@ -52,7 +57,12 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - web
+      web:
+        # Waited for, so a deployment does not answer while the site behind it is still starting.
+        # Not required, so a site that never comes up cannot keep the edge down with it: without
+        # this, one bad build stops TLS, /health and every error page too.
+        condition: service_healthy
+        required: false
 
   web:
     build:
@@ -68,6 +78,18 @@ services:
       ORIGIN: https://${DOMAIN:?set DOMAIN in deploy/.env}
     expose:
       - "3000"
+    healthcheck:
+      # The site's own path, which reaches no further than this process, so a wedged Node server is
+      # told apart from a service that cannot answer. Node rather than curl, which this image has no
+      # reason to carry.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      # Probes every second until the first one passes. Without it the first probe waits a whole
+      # interval, and since caddy waits on this the domain would be down for that long on a deploy.
+      start_interval: 1s
+      retries: 3
     depends_on:
       api:
         condition: service_healthy
@@ -84,6 +106,8 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 30s
+      # See the web service. This one is first in the chain, so every service waits on it.
+      start_interval: 1s
       retries: 3
 
   jobs:

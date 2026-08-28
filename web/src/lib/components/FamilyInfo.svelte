@@ -15,7 +15,7 @@
 		families: ListedFamily[];
 		/** False where the service did not answer at all, which is not the same as nothing being listed. */
 		answering: boolean;
-		/** The model names and descriptions this page asks the service for, without any figures. */
+		/** Every model in the family, each carrying what it measured, drawn on the server. */
 		models: FamilyInfoModel[];
 		/** This family's `name`, as the service gives it. */
 		family: string;
@@ -38,13 +38,11 @@
 	const infoPath = $derived(modelFamily ? familyInfoPath(modelFamily) : '/');
 </script>
 
-<!-- Not indexed, with the prediction page it describes. See PageMetadata.svelte. -->
 <PageMetadata
 	title={`${title} info`}
 	{description}
 	path={infoPath}
 	article
-	noindex
 	schema={articleSchema({ name: `${title} info`, description, path: infoPath })}
 />
 
@@ -73,12 +71,15 @@
 	{:else}
 		<section id="models">
 			<h2 class="section-rule">All models</h2>
-			<p class="small muted">Select a model to view its evaluation metrics.</p>
+			<p class="small muted">
+				Every model in this category, and what it measured on games it never saw while it was being
+				fitted. Open one to read its figures in full.
+			</p>
 
 			{#if models.length === 0}
 				<Notice>Model details could not be read right now. Try again in a few minutes.</Notice>
 			{:else}
-				<ModelIndex {models} {family} />
+				<ModelIndex {models} />
 			{/if}
 
 			<p class="small source"><a href="/about#how">Read the data and evaluation method.</a></p>

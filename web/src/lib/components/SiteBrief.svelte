@@ -28,53 +28,58 @@
 <section class="band brief" id="how-to-predict">
 	<div class="page inside">
 		<div class="head">
-			<h2 class="page-title type-h1">Free NBA predictions, in four steps</h2>
+			<h2 class="page-title type-h1">NBA predictions, in four steps</h2>
 
 			<p class="statement measure">
 				{SITE_NAME}
-				is free to use and asks nobody to sign in. Every answer on it is about a game that has not
-				been played yet, and the games behind that answer are collected every hour of a game day, so
-				a prediction is made on the season as it stands right now.
+				is free to use and does not require an account. Predictions 
+				are made on upcoming NBA games for a variety of useful statistics. Evaluation and accuracy metrics 
+				for every model on an unseen test set are publicly displayed in each model category's 
+				<i>Info</i> 
+				page. 
 			</p>
 		</div>
 
 		<ol class="flight">
 			<li class="tread">
 				<span class="number figure-lead" aria-hidden="true"></span>
-				<h3 class="type-h2">Choose a category</h3>
+				<h3 class="type-h2">Choose a model category</h3>
 				<p class="muted">
-					One player's own line, one team's line, or the game itself. A category is the thing a
-					request has to name, and the
-					<a href={MODELS_PATH}>three frames above</a>
-					are all of them.
+					Select one of the three model categories
+					<a href={MODELS_PATH}> above </a>
+					to predict on the stats of the category type. Each category lists
+					the supported statistics for prediction within it.
 				</p>
 			</li>
 			<li class="tread">
 				<span class="number figure-lead" aria-hidden="true"></span>
 				<h3 class="type-h2">Pick the game</h3>
 				<p class="muted">
-					Every upcoming game the models can already read is dealt onto the board at the top of the
-					page. Pick one, and the rest of the page is about that game.
+					Every upcoming game is displayed in the 
+					<i>Upcoming Games</i> 
+					section of each model category's prediction page. Choose one of the game cards to select it as
+					the target game. 
 				</p>
 			</li>
 			<li class="tread">
 				<span class="number figure-lead" aria-hidden="true"></span>
-				<h3 class="type-h2">Say what to predict</h3>
+				<h3 class="type-h2">Specify what to predict</h3>
 				<p class="muted">
-					Name the statistic, and the player or team the category asks for. Who is expected to play
-					is filled in for you, injuries and trades included, and you are free to take somebody out,
-					put somebody in, and ask again.
+					Name the desired predicted statistic, and the target player or team the category asks for. Then, other
+					parameters, such as the injured or new players in the game, can be changed to affect the prediction
+					outcomes.
 				</p>
 			</li>
 			<!-- The one tread that changes paper, so it names its plane here rather than in the ladder
 			     below. The three above it are tints of the page and need nothing but a tone. -->
 			<li class="tread block-plane">
 				<span class="number figure-lead" aria-hidden="true"></span>
-				<h3 class="type-h2">Read the whole answer</h3>
+				<h3 class="type-h2">Predict!</h3>
 				<p class="muted">
-					The answer is drawn as a chart, and the line across it is yours to move. Every figure
-					beside it follows the line, so the number you read is the one you asked about rather than
-					the one the page opened on.
+					Press the 
+					<i>Predict</i>
+					button, and wait a few seconds for the model to make the prediction. 
+					The answer is drawn as a chart, and the line across it is yours to move freely.
 				</p>
 			</li>
 		</ol>

@@ -8,8 +8,7 @@ from nba_ml.api.app import (
     all_models,
     all_teams,
     family_info_models,
-    game_rosters,
-    model_evaluation
+    game_rosters
 )
 from nba_ml.api.schemas import GameRequest, GameRostersRequest, ScenarioRequest
 from nba_ml.entities import Game, GameStatus, ScheduledGame
@@ -61,7 +60,7 @@ def test_every_model_is_named_and_explained_wherever_it_is_listed():
     The home page lists every family and the models in each, from the one catalogue request the site
     already makes. Asking the Info endpoint per family instead would be three more requests for two
     fields the catalogue could have carried. The Info endpoint stays, narrowed to exactly what a card
-    reads, because that page reads nothing else.
+    reads, because that page reads nothing else and draws its figures on the server.
     """
 
     catalogue = [model.model_dump() for model in all_models()]
@@ -69,7 +68,8 @@ def test_every_model_is_named_and_explained_wherever_it_is_listed():
 
     assert all(model["title"] and model["description"] for model in catalogue)
     assert all(
-        {"name", "title", "description", "published"} == model.keys() for model in info_models
+        {"name", "title", "description", "published", "evaluation"} == model.keys()
+        for model in info_models
     )
     assert len(info_models) == 14
 
@@ -79,6 +79,12 @@ def test_unknown_model_family_has_no_info_catalogue():
         family_info_models("unknown")
 
     assert raised.value.status_code == 404
+
+
+def _card(family: str, model: str):
+    """One model's Info card, which is where the site reads what it measured."""
+
+    return next(card for card in family_info_models(family) if card.name == model)
 
 
 def _score(specification, **scored: float):
@@ -100,13 +106,7 @@ def _score(specification, **scored: float):
 
 
 def test_a_model_with_no_score_is_still_offered_without_figures():
-    assert any(card.name == "assists" for card in family_info_models("player_stats"))
-    assert model_evaluation("player_stats", "assists") is None
-
-
-def test_an_unknown_model_has_no_evaluation_to_read():
-    with pytest.raises(HTTPException, match="No model named nothing is in the player_stats family"):
-        model_evaluation("player_stats", "nothing")
+    assert _card("player_stats", "assists").evaluation is None
 
 
 def test_a_scored_model_returns_only_the_figures_it_chose_in_its_own_order():
@@ -125,7 +125,7 @@ def test_a_scored_model_returns_only_the_figures_it_chose_in_its_own_order():
         }
     )
 
-    scored = model_evaluation("player_stats", "triple_double")
+    scored = _card("player_stats", "triple_double").evaluation
 
     assert scored is not None
     assert [metric.key for metric in scored.metrics] == list(
@@ -143,7 +143,7 @@ def test_a_figure_the_run_did_not_score_is_left_out_rather_than_sent_as_a_blank(
         **{evaluation.EXPECTED_VALUE_MAE: 4.33, evaluation.ACCURACY: 0.147}
     )
 
-    scored = model_evaluation("player_stats", "points")
+    scored = _card("player_stats", "points").evaluation
 
     assert scored is not None
     assert [metric.key for metric in scored.metrics] == [
@@ -163,7 +163,7 @@ def test_interval_calibration_error_is_lower_better():
         }
     )
 
-    scored = model_evaluation("player_stats", "points")
+    scored = _card("player_stats", "points").evaluation
 
     assert scored is not None
     error = next(
@@ -179,7 +179,7 @@ def test_an_unreadable_score_reads_as_no_score_rather_than_failing_the_page():
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text("{ not json", encoding="utf-8")
 
-    assert model_evaluation("player_stats", "rebounds") is None
+    assert _card("player_stats", "rebounds").evaluation is None
 
 
 def test_a_game_roster_change_is_keyed_to_the_side_it_belongs_to():

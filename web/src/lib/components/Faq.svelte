@@ -1,15 +1,18 @@
 <!--
 	The questions a reader arrives with, one panel each.
 
-	A closed panel is its question and nothing else. Pressing one opens its answer and closes whichever
-	was open, because two open answers are harder to read past than one. It opens with the same flow
-	every region on the site opens with, so the page under it is carried rather than thrown.
+	Every answer is in the document whether its panel is folded open or not. The page publishes the
+	same questions and answers as structured data, so an answer the document did not contain would be
+	describing content that is not there, and a search engine reads that as a claim rather than as an
+	answer.
+
+	A closed panel shows its question and nothing else. Pressing one opens its answer and closes
+	whichever was open, because two open answers are harder to read past than one, which the panels
+	do between themselves by sharing a name.
 
 	The question is the control's label, so the mark beside it says only which way the panel is going.
 -->
 <script lang="ts">
-	import { flow } from '$lib/motion';
-
 	type Question = {
 		question: string;
 		answer: string[];
@@ -17,46 +20,31 @@
 
 	type Props = {
 		questions: Question[];
-		/** Names the answers, so two of these on one page cannot share an id. */
+		/** Names the group, so two of these on one page fold independently. */
 		name: string;
 	};
 
 	let { questions, name }: Props = $props();
-
-	/** The question standing open, if one is. */
-	let open = $state<string | null>(null);
-
-	const answerId = (index: number) => `${name}-answer-${index}`;
 </script>
 
 <ul class="questions">
-	{#each questions as { question, answer }, index (question)}
-		{@const shown = open === question}
-
+	{#each questions as { question, answer } (question)}
 		<li class="panel">
-			<h3>
-				<button
-					type="button"
-					class="ask"
-					aria-expanded={shown}
-					aria-controls={shown ? answerId(index) : undefined}
-					onclick={() => (open = shown ? null : question)}
-				>
-					<span>{question}</span>
+			<details name="{name}-question">
+				<summary>
+					<h3>{question}</h3>
 
-					<svg class="mark" class:shown viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+					<svg class="mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
 						<path d="M5 9 L12 16 L19 9" />
 					</svg>
-				</button>
-			</h3>
+				</summary>
 
-			{#if shown}
-				<div id={answerId(index)} class="container">
+				<div class="answers">
 					{#each answer as paragraph}
-						<p class="small answer" transition:flow>{paragraph}</p>
+						<p class="small answer">{paragraph}</p>
 					{/each}
 				</div>
-			{/if}
+			</details>
 		</li>
 	{/each}
 </ul>
@@ -78,32 +66,28 @@
 		transition: border-top-color var(--motion-fast) var(--ease-in);
 	}
 
-	.questions > li:has(.ask:hover),
-	.questions > li:has(.ask:focus-visible) {
+	.questions > li:has(summary:hover),
+	.questions > li:has(summary:focus-visible) {
 		border-top-color: var(--plane-accent);
 	}
 
-	/* The whole panel is the control. */
-	.ask {
+	/* The whole question is the control. */
+	summary {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-4);
-		width: 100%;
 		min-height: var(--tap-target);
 		padding: var(--space-5);
-		background: none;
-		border: none;
-		text-align: start;
 		cursor: pointer;
+	}
+
+	.answers {
+		padding-block-end: var(--space-4);
 	}
 
 	.answer {
 		padding: 0 var(--space-5) var(--space-3);
-	}
-
-	.container {
-		padding-bottom: var(--space-4);
 	}
 
 	.mark {
@@ -118,7 +102,7 @@
 		transition: rotate var(--motion) var(--ease-in);
 	}
 
-	.mark.shown {
+	details[open] .mark {
 		rotate: 180deg;
 	}
 </style>

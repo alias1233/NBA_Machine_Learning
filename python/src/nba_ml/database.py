@@ -14,7 +14,7 @@ import threading
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Collection
 import pandas as pd
 
 BUSY_TIMEOUT_SECONDS = 30
@@ -76,6 +76,17 @@ class Categories():
 class DataConflictHandler(Enum):
         IGNORE = "IGNORE"
         REPLACE = "REPLACE"
+
+def held_in(category: Category, values: Collection[int]) -> str:
+    """
+    A filter matching any of the given whole numbers, for [Database.query] and [Database.delete].
+
+    They are written into the condition rather than bound, because one bound parameter is one value
+    and this is a list of them. Each is read as an integer first, so nothing else can reach the SQL.
+    An empty list matches nothing, which is what a caller asking about no rows means.
+    """
+
+    return f"{category.category_name} IN ({','.join(str(int(value)) for value in values)})"
 
 class Database():
     """One SQLite table, holding the columns it has and the commands that read and write it."""

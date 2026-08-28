@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 
 from nba_ml import season
-from nba_ml.api.app import family_info_models, model_evaluation
+from nba_ml.api.app import family_info_models
 from nba_ml.cli import train
 from nba_ml.feature_engineering.samples import EvaluationSplit, SplitKey
 from nba_ml.machine_learning import evaluation, serialization, trainer
@@ -250,11 +250,14 @@ def test_a_finished_run_writes_a_held_out_score_the_service_reads_back():
     assert set(written.floor) <= set(written.metrics)
     assert evaluation.EXPECTED_VALUE_MAE in written.floor
 
-    assert any(card.name == "team_points" for card in family_info_models("team_stats"))
+    # And the Info page is served those figures with the model's card, which is where a reader reads
+    # them.
+    card = next(card for card in family_info_models("team_stats") if card.name == "team_points")
 
-    served = model_evaluation("team_stats", "team_points")
-    assert served is not None
-    assert [metric.key for metric in served.metrics] == list(model_specification.reported_metrics)
+    assert card.evaluation is not None
+    assert [metric.key for metric in card.evaluation.metrics] == list(
+        model_specification.reported_metrics
+    )
 
 
 def test_rescoring_uses_the_recorded_split_and_scalers_without_changing_the_model(monkeypatch):

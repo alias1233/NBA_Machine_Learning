@@ -34,7 +34,9 @@ deploy/ : the Docker Compose stack, the Caddyfile, and the cron entries.
 
 One rented Linux server. Before starting, it needs:
 
-- **Docker Engine and the Compose v2 plugin.** Everything below is `docker compose`.
+- **Docker Engine 25.0 or newer, and the Compose v2 plugin, v2.24 or newer.** Everything below is
+  `docker compose`. The stack uses `start_interval` on its health checks, which needs that engine,
+  and an optional service dependency, which needs that Compose.
 - **DNS.** An `A` record for the domain and one for `www.` in front of it, both pointing at this
   server. Caddy asks for a certificate for each, and it will retry a name that does not resolve for
   as long as it runs.
@@ -96,7 +98,7 @@ curl -fsS https://<domain>/health
 df -h
 ```
 
-`api` should be healthy. The Docker logs cover the three long-running services. The cron log records
+`api` and `web` should both be healthy. The Docker logs cover the three long-running services. The cron log records
 the short-lived scheduled jobs, including a line for any run that stood down because another job
 still held the lock.
 

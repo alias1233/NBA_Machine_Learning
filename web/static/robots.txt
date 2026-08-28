@@ -1,100 +1,182 @@
 # ============================================================================
 # robots.txt
 #
-# Sourced from the ai-robots-txt/ai.robots.txt project as of August 2026
+# The crawler lists are sourced from the ai-robots-txt/ai.robots.txt project as of August 2026.
+#
+# Written so that no parser has to guess: every value is a crawler's bare name, every comment is
+# on a line of its own, and every group is separated by an empty line. RFC 9309 permits looser
+# than this and Google's parser accepts looser than this. A stricter one need not.
+#
+# Every allowed group refuses the same four things, in the same order:
+#
+#   /models/*?   a model page carrying a query string, which is a prediction rather than a page.
+#                Every one of them names the bare model page as its canonical URL.
+#   /api/        the browser's proxy to the prediction service. Nothing links to it, and a crawler
+#                reaching one only costs the service a call.
+#   /health      the prediction service's own readiness, which answers 200 to anyone.
+#   /healthz     the site process's readiness. Plain text with no title.
+#
+# web/src/lib/robots.test.ts holds every allowed group to that list.
 # ============================================================================
- 
- 
+
+
 # ============================================================================
 # SECTION 1 -- AI SEARCH & ANSWER ENGINES (ALLOWED)
 # ============================================================================
-User-agent: OAI-SearchBot  # ChatGPT Search
-User-agent: Claude-SearchBot  # Claude's web search
-User-agent: PerplexityBot  # Perplexity
-User-agent: meta-webindexer  # Meta AI
-User-agent: Applebot  # Siri / Spotlight / Safari
-User-agent: Amazonbot  # Alexa answers
-User-agent: DuckAssistBot  # DuckDuckGo AI
-User-agent: GoogleOther  # Google, misc. 
-User-agent: GoogleOther-Image  # same as GoogleOther, image variant
-User-agent: GoogleOther-Video  # same as GoogleOther, video variant
-User-agent: Bravebot  # Brave Search
-User-agent: YouBot  # You.com
-User-agent: Andibot  # Andi Search
-User-agent: PhindBot  # Phind
-User-agent: PetalBot  # Huawei Petal Search / assistant
-User-agent: LinerBot  # Liner
-User-agent: ExaSearchBot  # Exa search
-User-agent: iaskspider/2.0  # iAsk answer engine
+
+# ChatGPT Search
+User-agent: OAI-SearchBot
+# Claude's web search
+User-agent: Claude-SearchBot
+# Perplexity
+User-agent: PerplexityBot
+# Meta AI
+User-agent: meta-webindexer
+# Siri / Spotlight / Safari
+User-agent: Applebot
+# Alexa answers
+User-agent: Amazonbot
+# DuckDuckGo AI
+User-agent: DuckAssistBot
+# Google, misc.
+User-agent: GoogleOther
+# same as GoogleOther, image variant
+User-agent: GoogleOther-Image
+# same as GoogleOther, video variant
+User-agent: GoogleOther-Video
+# Brave Search
+User-agent: Bravebot
+# You.com
+User-agent: YouBot
+# Andi Search
+User-agent: Andibot
+# Phind
+User-agent: PhindBot
+# Huawei Petal Search / assistant
+User-agent: PetalBot
+# Liner
+User-agent: LinerBot
+# Exa search
+User-agent: ExaSearchBot
+# iAsk answer engine, which publishes itself as iaskspider/2.0
+User-agent: iaskspider
 Allow: /
 Disallow: /models/*?
- 
+Disallow: /api/
+Disallow: /health
+Disallow: /healthz
+
 # ----------------------------------------------------------------------------
 # GOOGLE / GEMINI
 # ----------------------------------------------------------------------------
+
 User-agent: Google-Extended
 Allow: /
 Disallow: /models/*?
- 
- 
+Disallow: /api/
+Disallow: /health
+Disallow: /healthz
+
+
 # ============================================================================
 # SECTION 2 -- REAL-TIME, USER-TRIGGERED FETCHES (ALLOWED)
 # ============================================================================
-User-agent: ChatGPT-User  # ChatGPT
-User-agent: Claude-User  # Claude
+
+# ChatGPT
+User-agent: ChatGPT-User
+# Claude
+User-agent: Claude-User
 User-agent: Perplexity-User
-User-agent: Amzn-User  # Alexa / Amazon AI
-User-agent: Kimi-User  # Moonshot AI's Kimi assistant
-User-agent: MistralAI-User  # Le Chat
-User-agent: MistralAI-User/1.0  # Le Chat
-User-agent: Shap-User  # Parallel's assistant surface
-User-agent: TongyiBot  # Alibaba Qwen/Tongyi assistant
-User-agent: YiyanBot  # Baidu ERNIE/Yiyan assistant
-User-agent: kagi-fetcher  # Kagi Assistant
-User-agent: GoogleAgent-URLContext  # Gemini API "URL context" tool
-User-agent: Google-NotebookLM  # user adds your URL as a NotebookLM source
-User-agent: NotebookLM  # same, alternate UA string
-User-agent: meta-externalfetcher  # Meta 
-User-agent: Meta-ExternalFetcher  # Meta
+# Alexa / Amazon AI
+User-agent: Amzn-User
+# Moonshot AI's Kimi assistant
+User-agent: Kimi-User
+# Le Chat
+User-agent: MistralAI-User
+# Parallel's assistant surface
+User-agent: Shap-User
+# Alibaba Qwen/Tongyi assistant
+User-agent: TongyiBot
+# Baidu ERNIE/Yiyan assistant
+User-agent: YiyanBot
+# Kagi Assistant
+User-agent: kagi-fetcher
+# Gemini API "URL context" tool
+User-agent: GoogleAgent-URLContext
+# a reader adds a page as a NotebookLM source
+User-agent: Google-NotebookLM
+# same, alternate UA string
+User-agent: NotebookLM
+# Meta
+User-agent: meta-externalfetcher
+# Meta
+User-agent: Meta-ExternalFetcher
 Allow: /
 Disallow: /models/*?
- 
- 
+Disallow: /api/
+Disallow: /health
+Disallow: /healthz
+
+
 # ============================================================================
 # SECTION 3 -- AGENTIC / CODING TOOLS (ALLOWED)
 # ============================================================================
-User-agent: ChatGPT Agent  # OpenAI's agentic browser
-User-agent: Operator  # OpenAI's agentic browser
-User-agent: Claude-Code  # a developer's Claude Code session fetching docs/context
-User-agent: Google-Gemini-CLI  # a developer's Gemini CLI session
-User-agent: Gemini-Deep-Research  # Gemini's Deep Research feature
-User-agent: Google-Agent  # Google-hosted agents acting on a user's request
-User-agent: GoogleAgent-Mariner  # Google's agentic browser
-User-agent: AmazonBuyForMe  # Amazon's shopping agent
-User-agent: NovaAct  # Amazon's agentic browser
-User-agent: Devin  # Cognition's coding agent
-User-agent: Cursor  # Cursor coding agent
-User-agent: opencode  # open-source coding agent
-User-agent: Trae  # ByteDance's coding agent
-User-agent: Manus-User  # Manus agent platform
-User-agent: TwinAgent  # Twin agent platform
-User-agent: UseAI  # Use AI workspace/agent platform
-User-agent: Code  # generic coding-agent UA
+
+# OpenAI's agentic browser
+User-agent: Operator
+# a developer's Claude Code session fetching docs/context
+User-agent: Claude-Code
+# a developer's Gemini CLI session
+User-agent: Google-Gemini-CLI
+# Gemini's Deep Research feature
+User-agent: Gemini-Deep-Research
+# Google-hosted agents acting on a reader's request
+User-agent: Google-Agent
+# Google's agentic browser
+User-agent: GoogleAgent-Mariner
+# Amazon's shopping agent
+User-agent: AmazonBuyForMe
+# Amazon's agentic browser
+User-agent: NovaAct
+# Cognition's coding agent
+User-agent: Devin
+# Cursor coding agent
+User-agent: Cursor
+# open-source coding agent
+User-agent: opencode
+# ByteDance's coding agent
+User-agent: Trae
+# Manus agent platform
+User-agent: Manus-User
+# Twin agent platform
+User-agent: TwinAgent
+# Use AI workspace/agent platform
+User-agent: UseAI
+# generic coding-agent UA
+User-agent: Code
 Allow: /
 Disallow: /models/*?
- 
- 
+Disallow: /api/
+Disallow: /health
+Disallow: /healthz
+
+
 # ============================================================================
 # SECTION 4 -- SOCIAL LINK PREVIEWS (ALLOWED)
 # ============================================================================
+
 User-agent: facebookexternalhit
 Allow: /
 Disallow: /models/*?
- 
- 
+Disallow: /api/
+Disallow: /health
+Disallow: /healthz
+
+
 # ============================================================================
 # SECTION 5 -- AI TRAINING-DATA SCRAPERS (BLOCKED)
 # ============================================================================
+
 # OpenAI - training only
 User-agent: GPTBot
 User-agent: OpenAI
@@ -131,27 +213,26 @@ User-agent: LAIONDownloader
 User-agent: laion-huggingface-processor
 User-agent: img2dataset
 User-agent: ImagesiftBot
-# Other AI training / data-scraping crawlers
+# Other AI training / data-scraping crawlers. A name published with a space or a version after it
+# is written here as the token a parser reads, which still matches the crawler.
 User-agent: aiHitBot
-User-agent: Brightbot 1.0
 User-agent: Cotoyogi
 User-agent: Crawlspace
 User-agent: Diffbot
-User-agent: Echobot Bot
+User-agent: Echobot
 User-agent: EchoboxBot
 User-agent: Factset_spyderbot
 User-agent: FirecrawlAgent
 User-agent: ICC-Crawler
 User-agent: ISSCyberRiskCrawler
-User-agent: Kangaroo Bot
-User-agent: Linguee Bot
+User-agent: Kangaroo
+User-agent: Linguee
 User-agent: MyCentralAIScraperBot
 User-agent: NagetBot
 User-agent: newsai
 User-agent: omgili
 User-agent: omgilibot
 User-agent: QuillBot
-User-agent: quillbot.com
 User-agent: Scrapy
 User-agent: TerraCotta
 User-agent: Timpibot
@@ -159,28 +240,30 @@ User-agent: VelenPublicWebCrawler
 User-agent: Webzio-Extended
 User-agent: webzio-extended
 Disallow: /
- 
- 
+
+
 # ============================================================================
 # SECTION 6 -- SEO / MARKETING / SALES-INTELLIGENCE TOOLS (BLOCKED)
 # ============================================================================
+
 User-agent: AgentTimes
 User-agent: Awario
 User-agent: KlaviyoAIBot
-User-agent: netEstate Imprint Crawler
+User-agent: netEstate
 User-agent: QualifiedBot
 User-agent: SemrushBot-OCOB
 User-agent: SemrushBot-SWA
-User-agent: Sidetrade indexer bot
+User-agent: Sidetrade
 User-agent: Thinkbot
 User-agent: wpbot
 User-agent: YaK
 Disallow: /
- 
- 
+
+
 # ============================================================================
 # SECTION 7 -- THIRD-PARTY AI APP / RAG INFRASTRUCTURE (BLOCKED)
 # ============================================================================
+
 User-agent: AddSearchBot
 User-agent: amazon-kendra
 User-agent: amazon-QBusiness
@@ -190,7 +273,7 @@ User-agent: ApifyWebsiteContentCrawler
 User-agent: atlassian-bot
 User-agent: AzureAI-SearchBot
 User-agent: bedrockbot
-User-agent: bigsur.ai
+User-agent: bigsur
 User-agent: BuddyBot
 User-agent: Channel3Bot
 User-agent: Cloudflare-AutoRAG
@@ -203,15 +286,15 @@ User-agent: KunatoCrawler
 User-agent: LinkupBot
 User-agent: Mozilla-Tabstack
 User-agent: Panscient
-User-agent: panscient.com
 User-agent: ShapBot
 User-agent: TavilyBot
 Disallow: /
- 
- 
+
+
 # ============================================================================
 # SECTION 8 -- UNDOCUMENTED / UNVERIFIED  (BLOCKED)
 # ============================================================================
+
 User-agent: AI2Bot-DeepResearchEval
 User-agent: AIWebIndex
 User-agent: Amzn-SearchBot
@@ -220,30 +303,47 @@ User-agent: Brightbot
 User-agent: ChatGLM-Spider
 User-agent: CragCrawler
 User-agent: Crawl4AI
-User-agent: Datenbank Crawler
+User-agent: Datenbank
 User-agent: GeistHaus-PageFetcher
 User-agent: HenkBot
+# iAsk's documented spider is allowed in section 1. This is a name it has never published under.
 User-agent: iAskBot
-User-agent: iaskspider
 User-agent: imageSpider
 User-agent: LCC
 User-agent: Lightpanda
 User-agent: Poggio-Citations
-User-agent: Poseidon Research Crawler
+User-agent: Poseidon
 User-agent: Querit-SearchBot
 User-agent: QueritBot
 User-agent: Spider
-User-agent: Terra Cotta
 User-agent: WARDBot
 User-agent: WRTNBot
 User-agent: ZanistaBot
 Disallow: /
 
+
 # ============================================================================
 # SECTION 9 -- STANDARD WEB SEARCH ENGINES (ALLOWED)
 # ============================================================================
+
+# Named rather than left to the group below, which allows it on the same terms. Naming it is what
+# lets Bing Webmaster Tools' robots tester confirm these rules against the name Bing crawls under.
+User-agent: bingbot
+Allow: /
+Disallow: /models/*?
+Disallow: /api/
+Disallow: /health
+Disallow: /healthz
+
+# ----------------------------------------------------------------------------
+# EVERY OTHER CRAWLER
+# ----------------------------------------------------------------------------
+
 User-agent: *
 Allow: /
 Disallow: /models/*?
+Disallow: /api/
+Disallow: /health
+Disallow: /healthz
 
 Sitemap: https://bazaarball.com/sitemap.xml

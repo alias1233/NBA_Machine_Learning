@@ -178,3 +178,27 @@ def test_only_ready_games_of_known_teams_can_be_predicted():
 def test_nothing_is_upcoming_when_no_schedule_has_been_collected():
     assert upcoming.upcoming_games() == []
     assert upcoming.predictable_games() == []
+
+def test_a_game_the_collection_rule_never_saw_is_left_for_the_next_call(monkeypatch):
+    """
+    The answer is drawn from two reads, and a collection job can write between them.
+
+    A game only the second read knows about was never counted by the rule, so its teams have no
+    entry to measure it against. It is skipped and picked up next call, rather than being read
+    against a rule that never saw it.
+    """
+
+    written_late = ScheduledGame(
+        id=fake_data.game_id(21),
+        game=Game(TOMORROW, 3, 4),
+        status=GameStatus.SCHEDULED
+    )
+
+    _store(scheduled=[_upcoming(20, TOMORROW), written_late])
+
+    seen_by_the_first_read = [
+        row for row in schedule.team_game_dates() if row[0] != written_late.id
+    ]
+    monkeypatch.setattr(schedule, "team_game_dates", lambda: seen_by_the_first_read)
+
+    assert [game.game.id for game in upcoming.upcoming_games()] == [fake_data.game_id(20)]

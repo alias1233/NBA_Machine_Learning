@@ -24,9 +24,14 @@
 	Narrow, the three lie on top of each other in the same order, so the page is read down rather than
 	across and nothing is dropped.
 
-	What differs between families is the night's board, the game the parameters are about, what the
-	reader has to choose, and how the answer names itself, so those arrive as the four snippets.
-	Everything here is the shared layout.
+	Above all three the page says, in its own standing words, what this family answers and how the
+	answer is reached. It is short, because the reader came here to ask something, and it is above the
+	form rather than under it, because it is what the page is about and a search engine reads a page
+	from the top down.
+
+	What differs between families is those words, the night's board, the game the parameters are
+	about, what the reader has to choose, and how the answer names itself, so those arrive as the
+	snippets and the one list of paragraphs. Everything here is the shared layout.
 -->
 <script lang="ts">
 	import { tick } from 'svelte';
@@ -48,6 +53,13 @@
 		privateDescription: string;
 		/** One sentence, shown as the page lede.*/
 		publicDescription: string;
+		/**
+		 * The page's own standing prose, a paragraph an entry, printed above the form.
+		 *
+		 * It says what the family answers and how, in words that are the same on every visit. Nothing
+		 * else on the page is: the board is tonight's games and the answer is whatever was asked for.
+		 */
+		standing: string[];
 		/** The family's Info page, linked under the title before a reader asks for a number. */
 		infoHref: string;
 		/** False when the service offers nothing this page can draw, which is its empty state. */
@@ -77,6 +89,7 @@
 		title,
 		privateDescription,
 		publicDescription,
+		standing,
 		infoHref,
 		hasModels,
 		answering,
@@ -166,13 +179,12 @@
 	}
 </script>
 
-<!-- Not indexed: a prediction page is a form to work in rather than a page to read, and it is left
-     out of the sitemap to match. See PageMetadata.svelte. -->
+<!-- The bare path, never the request in the address bar, so every combination of parameters names
+     this one page. See lib/pages.ts. -->
 <PageMetadata
 	{title}
 	description={privateDescription}
 	{path}
-	noindex
 	schema={webPageSchema({ name: title, description: privateDescription, path })}
 />
 
@@ -184,6 +196,14 @@
 </PlateBand>
 
 <div class="page work">
+	<!-- Stands whether or not the service is answering, because it is the page's own words rather
+	     than anything read off a model. -->
+	<section class="standing">
+		{#each standing as paragraph}
+			<p>{paragraph}</p>
+		{/each}
+	</section>
+
 	{#if !hasModels}
 		<!-- With nothing to ask there is nothing to offer, so the page is this and no more. A service
 		     that never answered is not an empty family, and only one of the two is worth waiting for. -->
@@ -246,6 +266,16 @@
 		flex-direction: column;
 		gap: var(--space-7);
 		padding-block-start: var(--space-7);
+	}
+
+	/* Paragraphs set close together, on the page's own spacing between them and the work below. */
+	.standing {
+		display: grid;
+		gap: var(--space-3);
+	}
+
+	.standing p {
+		max-width: var(--measure);
 	}
 
 	/* Narrow: board, then parameters, then answer, which is the order the work is done in. */
@@ -370,6 +400,13 @@
 	 * their groups set as two columns in it.
 	 */
 	@media (min-width: 64rem) {
+		/* Set as two columns of a printed introduction on the same line the work below is split on,
+		   so the words fill the page rather than leaving half of it empty above the board. */
+		.standing {
+			grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+			column-gap: var(--space-6);
+		}
+
 		.columns {
 			grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
 			align-items: start;

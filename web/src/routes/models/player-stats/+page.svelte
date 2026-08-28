@@ -334,6 +334,16 @@
 	title={TITLE}
 	privateDescription="Free machine learning predictions for an NBA player's points, rebounds, assists and other box score totals for an upcoming game."
 	publicDescription="Predictions for the points, rebounds, assists and other box score totals an NBA player scores in a game."
+	standing={[
+		`Pick an upcoming game, a team playing in it and a player on that team, and a model predicts
+		what that player records: points, rebounds, assists, three-pointers, steals, blocks,
+		turnovers, four combined totals, and whether the night reaches a double-double or a
+		triple-double.`,
+		`An answer is a chance for every outcome the statistic can take rather than one number, so it
+		also gives the over, under and push chance for any line drawn across it. Each model reads the
+		player's run of past games, the game ahead of them, and who is expected to be on the floor for
+		both teams, which the roster controls leave you free to change.`
+	]}
 	infoHref={INFO}
 	hasModels={data.models.length > 0}
 	answering={data.health !== null}

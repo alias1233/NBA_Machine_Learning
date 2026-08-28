@@ -6,7 +6,7 @@ from typing import Collection
 import pandas as pd
 
 from nba_ml import paths, season
-from nba_ml.database import Categories, Category, Database, DataConflictHandler, DataType
+from nba_ml.database import Categories, Database, DataConflictHandler, DataType, held_in
 
 # Categories
 ALL_CATEGORIES = Categories()
@@ -85,16 +85,6 @@ def get_specific_player_game_data(
 
     return data
 
-def _held_in(category: Category, values: Collection[int]) -> str:
-    """
-    A filter matching any of the given whole numbers.
-
-    They are written into the condition rather than bound, because one bound parameter is one value
-    and this is a list of them. Each is read as an integer first, so nothing else can reach the SQL.
-    """
-
-    return f"{category.category_name} IN ({','.join(str(int(value)) for value in values)})"
-
 def get_players_game_data(
         player_ids: Collection[int],
         date_start: date | None = None
@@ -107,7 +97,7 @@ def get_players_game_data(
     if not player_ids:
         return pd.DataFrame(columns=DATABASE.category_names)
 
-    SQL_condition = _held_in(PLAYER_ID, player_ids)
+    SQL_condition = held_in(PLAYER_ID, player_ids)
     condition_params: dict = {}
 
     if date_start is not None:
@@ -131,7 +121,7 @@ def player_ids_in_games(team_id: int, game_ids: Collection[int]) -> set[int]:
     with DATABASE:
         rows = DATABASE.query(
             SQL_condition=(
-                f"{TEAM_ID.category_name} = :{TEAM_ID.category_name} AND {_held_in(GAME_ID, game_ids)}"
+                f"{TEAM_ID.category_name} = :{TEAM_ID.category_name} AND {held_in(GAME_ID, game_ids)}"
             ),
             condition_params={TEAM_ID : team_id},
             categories=[PLAYER_ID],
@@ -164,7 +154,7 @@ def recent_mean_minutes(
             f"SELECT {PLAYER_ID.category_name}, {MINUTES_PLAYED.category_name}, ROW_NUMBER() OVER ("
             f"PARTITION BY {PLAYER_ID.category_name} ORDER BY {GAME_DATE.category_name} DESC"
             f") AS PLAYED_AGO FROM {NAME} "
-            f"WHERE {_held_in(PLAYER_ID, player_ids)} "
+            f"WHERE {held_in(PLAYER_ID, player_ids)} "
             f"AND {GAME_DATE.category_name} < :{GAME_DATE.category_name}"
             f") WHERE PLAYED_AGO <= :GAMES GROUP BY {PLAYER_ID.category_name}",
             {GAME_DATE.category_name : season.to_date_string(before), "GAMES" : int(games)}

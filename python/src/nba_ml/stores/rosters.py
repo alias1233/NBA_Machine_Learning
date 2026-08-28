@@ -17,7 +17,7 @@ from typing import Collection
 import pandas as pd
 
 from nba_ml import paths
-from nba_ml.database import Categories, Database, DataConflictHandler, DataType
+from nba_ml.database import Categories, Database, DataConflictHandler, DataType, held_in
 from nba_ml.entities import RosterEntry
 
 # Categories
@@ -115,8 +115,7 @@ def entries_for(player_ids: Collection[int]) -> dict[int, RosterEntry]:
     if not player_ids:
         return {}
 
-    held = ",".join(str(int(player_id)) for player_id in player_ids)
-    found = _entries(f"{PLAYER_ID.category_name} IN ({held})")
+    found = _entries(held_in(PLAYER_ID, player_ids))
 
     return {entry.player_id: entry for entry in found}
 

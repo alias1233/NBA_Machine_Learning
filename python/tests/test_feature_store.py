@@ -79,6 +79,35 @@ def test_a_build_left_half_written_by_a_failed_job_is_ignored():
     assert read is not None
     assert read.version == "20260812-090000"
 
+def test_whether_a_build_is_published_is_answered_without_reading_one():
+    """The prediction cap asks this on the event loop, so it must not load anything."""
+
+    assert not feature_store.is_published(BUILD)
+
+    feature_store.publish(BUILD, _build())
+
+    assert feature_store.is_published(BUILD)
+    assert feature_store._held == {}
+
+def test_a_half_written_build_does_not_count_as_published():
+    working = paths.feature_build_directory(BUILD) / (feature_store.WORKING_PREFIX + "20260812-110000")
+    working.mkdir(parents=True)
+    (working / feature_store.SEQUENCES_FILE).write_bytes(b"")
+    (working / feature_store.DESCRIPTION_FILE).write_text("{}")
+
+    assert not feature_store.is_published(BUILD)
+
+def test_a_build_left_half_written_by_a_failed_job_is_removed_by_the_next_publish():
+    """Nothing else prunes them, so repeated failures would otherwise fill the server disk."""
+
+    working = paths.feature_build_directory(BUILD) / (feature_store.WORKING_PREFIX + "20260812-110000")
+    working.mkdir(parents=True)
+    (working / feature_store.SEQUENCES_FILE).write_bytes(b"")
+
+    feature_store.publish(BUILD, _build("2026-08-12T12:00:00"))
+
+    assert not working.exists()
+
 def test_only_the_newest_builds_are_kept():
     """The one being served has to survive the next job, whether it succeeds or fails."""
 

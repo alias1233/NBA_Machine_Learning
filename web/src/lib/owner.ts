@@ -13,4 +13,4 @@ export const AUTHOR = {
 
 /** Jurisdiction */
 export const STATE = `New York`;
-export const COUNTRY = `The United States of America`;
+export const COUNTRY = `the United States of America`;

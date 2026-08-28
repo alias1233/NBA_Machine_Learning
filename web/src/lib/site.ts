@@ -10,7 +10,6 @@
 export const SITE_NAME = 'Bazaar Ball';
 export const DOMAIN_NAME = `BazaarBall.com`;
 export const SITE_ORIGIN = 'https://bazaarball.com';
-export const SITE_UPDATED_AT = '2026-08-27';
 
 /** The site metadata description, for searching and indexing. */
 export const PRIVATE_SITE_DESCRIPTION = 'Predict player, team, and game statistics of upcoming NBA games with AI through machine learning models, completely for free.';

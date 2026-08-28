@@ -78,6 +78,19 @@ def test_only_the_newest_archives_are_left():
 
     assert left == {f"{backup.ARCHIVE_PREFIX}{older[-1]}{backup.ARCHIVE_SUFFIX}", written.name}
 
+def test_an_archive_left_half_written_by_a_failed_run_is_removed():
+    """Nothing else prunes them, so repeated failures would otherwise fill the server disk."""
+
+    paths.BACKUP_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    half_written = paths.BACKUP_DIRECTORY / (
+        f"{backup.ARCHIVE_PREFIX}20200101-000000{backup.ARCHIVE_SUFFIX}{backup.WORKING_SUFFIX}"
+    )
+    half_written.write_bytes(b"partial")
+
+    backup.back_up()
+
+    assert not half_written.exists()
+
 def test_a_run_that_leaves_nothing_is_refused():
     with pytest.raises(ValueError):
         backup.back_up(keep=0)

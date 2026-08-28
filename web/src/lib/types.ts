@@ -128,15 +128,18 @@ export type ModelEvaluation = {
 };
 
 /**
- * The model card copy returned only for one family Info page.
+ * One model card on a family Info page: the words it prints and the figures under them.
  *
- * It carries no figures. What a model measured is read on its own, when a reader opens that model.
+ * The evaluation travels with the card because the page is rendered on the server and read by
+ * search engines, and a figure fetched after the page has been sent reaches neither. Null where the
+ * model has never been scored.
  */
 export type FamilyInfoModel = {
 	name: string;
 	title: string;
 	description: string;
 	published: boolean;
+	evaluation: ModelEvaluation | null;
 };
 
 /** A game that has not been played and that every model input for it is already held for. */

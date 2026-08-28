@@ -1008,6 +1008,46 @@ a.block:focus-visible {
 	border-top-color: var(--plane-accent);
 }
 
+/*
+ * A panel that folds open in place: the About page's answers and a model's figures.
+ *
+ * Both are written into the document whether they are open or not, which is what a search engine
+ * and a reader with no scripting are given, and the summary is the control that folds them away.
+ * The platform's own disclosure triangle is dropped, because each of these draws its own mark.
+ *
+ * The content flows open where the browser can interpolate a height to `auto`, and simply appears
+ * where it cannot. Reduced motion is handled for the whole site at the foot of this file.
+ */
+summary {
+	display: block;
+	list-style: none;
+}
+
+summary::-webkit-details-marker {
+	display: none;
+}
+
+@supports (interpolate-size: allow-keywords) {
+	details {
+		interpolate-size: allow-keywords;
+	}
+
+	details::details-content {
+		block-size: 0;
+		overflow: clip;
+		opacity: 0;
+		transition:
+			block-size var(--motion) var(--ease-in),
+			opacity var(--motion) var(--ease-in),
+			content-visibility var(--motion) allow-discrete;
+	}
+
+	details[open]::details-content {
+		block-size: auto;
+		opacity: 1;
+	}
+}
+
 /* A tag takes its color from what it sits on, so one shape serves a block, an accent card and a
    page. */
 .tag {

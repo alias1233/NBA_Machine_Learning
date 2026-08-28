@@ -74,7 +74,7 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.EXPECTED_VALUE_RMSE,
             "Root mean squared error",
-            "The average error, except it weighs large misses far more heavily than a minor one.",
+            "The average error, except it weighs a large miss far more heavily than a minor one.",
             MetricUnit.VALUE,
             higher_is_better=False
         ),
@@ -104,7 +104,7 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.ACCURACY,
             "Exact answers",
-            "How often the outcome that the model gave the highest probability of occuring was the actual outcome.",
+            "How often the outcome that the model gave the highest probability of occurring was the actual outcome.",
             MetricUnit.PROBABILITY,
             higher_is_better=True
         ),
@@ -136,8 +136,9 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.CLASSWISE_CALIBRATION_ERROR,
             "Calibration error across every outcome",
-            "A measure of how calibrated the model is, calculated by averaging how closely a model's "
-            "predictions were with how often that outcome actually occured over every possible outcome.",
+            "A measure of how calibrated the model is, calculated by averaging, over every possible "
+            "outcome, how closely the chance the model gave that outcome matched how often it actually "
+            "occurred.",
             MetricUnit.SCORE,
             higher_is_better=False
         ),
@@ -169,7 +170,7 @@ ALL_METRICS: dict[str, Metric] = {
         Metric(
             evaluation.LOSS,
             "Loss function on the scored games",
-            "The exact quantity this run minimised. It equals the log loss wherever a model is "
+            "The exact quantity this run minimized. It equals the log loss wherever a model is "
             "fitted with the plain one, and differs only where a model brought its own.",
             MetricUnit.SCORE,
             higher_is_better=False
