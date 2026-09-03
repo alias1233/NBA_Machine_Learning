@@ -28,7 +28,6 @@
 
 	import { longGameDay } from '$lib/games';
 	import { MODELS_PATH, MODELS_SECTION, familyPath, plateOf } from '$lib/models';
-	import { jsonLd, webSiteSchema } from '$lib/seo';
 	import { SITE_NAME } from '$lib/site';
 
 	let { children, data } = $props();
@@ -271,10 +270,6 @@
 		arrivingAtModels = false;
 	});
 </script>
-
-<svelte:head>
-	{@html `<script type="application/ld+json">${jsonLd(webSiteSchema())}</script>`}
-</svelte:head>
 
 <svelte:window
 	bind:scrollY

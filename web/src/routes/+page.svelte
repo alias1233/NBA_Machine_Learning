@@ -33,7 +33,7 @@
 	import ShowcasePlate from '$lib/components/ShowcasePlate.svelte';
 	import SiteBrief from '$lib/components/SiteBrief.svelte';
 	import { listedFamilies, MODELS_PATH, MODELS_SECTION } from '$lib/models';
-	import { webApplicationSchema } from '$lib/seo';
+	import { webApplicationSchema, webSiteSchema } from '$lib/seo';
 	import { PRIVATE_SITE_DESCRIPTION } from '$lib/site';
 	import { isTap } from '$lib/touch';
 
@@ -69,7 +69,14 @@
 	}
 </script>
 
-<PageMetadata description={PRIVATE_SITE_DESCRIPTION} path="/" schema={webApplicationSchema()} />
+<!-- The site and the thing it is, stated here and nowhere else. Every other page refers to the site
+     by its `@id` rather than describing it again, and Google reads a site's name off its home page
+     alone, so this is the one page that says it. See lib/seo.ts. -->
+<PageMetadata
+	description={PRIVATE_SITE_DESCRIPTION}
+	path="/"
+	schema={[webSiteSchema(), webApplicationSchema()]}
+/>
 
 <ShowcasePlate samples={data.samples} heldOver={data.heldOver} answering={data.answering} />
 

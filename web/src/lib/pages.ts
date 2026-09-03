@@ -35,22 +35,29 @@ export type PageEntry = PageDates & {
 	 * advertises, and a page linked from every footer is found and indexed on the strength of that
 	 * link whether or not anything advertised it.
 	 *
-	 * The policy pages are the pages that say no. They exist for a reader who goes looking for them
-	 * and for the ad and analytics services that require them, not for anyone arriving from a
-	 * search, and neither of them says anything a search engine has a use for. They are still
-	 * followed, so the links they carry back into the site still count.
+	 * Every page the site has says yes, the two policy pages included. They were held out until
+	 * 2026-09-01 on the reasoning that nobody searches for them. That reasoning was wrong twice
+	 * over: somebody looking for this site's terms is exactly who searches for them, and a crawler
+	 * reads a `noindex` page in full before dropping it, so nothing was saved by refusing. Google
+	 * says plainly that blocking a policy page makes no sense and that it causes no duplicate
+	 * content problem. Leave them indexed.
+	 *
+	 * The switch stays because the question is a real one and the next page to answer no needs an
+	 * answer written down rather than reinvented.
 	 */
 	indexed: boolean;
 };
 
 export const PAGES = {
-	'/': { published: '2026-08-06', updated: '2026-08-27', indexed: true },
-	'/about': { published: '2026-08-06', updated: '2026-08-27', indexed: true },
-	'/models/player-stats': { published: '2026-08-06', updated: '2026-08-27', indexed: true },
-	'/models/team-stats': { published: '2026-08-11', updated: '2026-08-27', indexed: true },
-	'/models/game-stats': { published: '2026-08-11', updated: '2026-08-27', indexed: true },
-	'/privacy': { published: '2026-08-06', updated: '2026-08-22', indexed: false },
-	'/terms-and-conditions': { published: '2026-08-21', updated: '2026-08-21', indexed: false }
+	'/': { published: '2026-08-06', updated: '2026-09-01', indexed: true },
+	'/about': { published: '2026-08-06', updated: '2026-09-01', indexed: true },
+	'/models/player-stats': { published: '2026-08-06', updated: '2026-09-01', indexed: true },
+	'/models/team-stats': { published: '2026-08-11', updated: '2026-09-01', indexed: true },
+	'/models/game-stats': { published: '2026-08-11', updated: '2026-09-01', indexed: true },
+	// Their own words have not changed since these dates. Being offered in the sitemap for the first
+	// time is not the page changing, and dating them today would be the site claiming otherwise.
+	'/privacy': { published: '2026-08-06', updated: '2026-08-22', indexed: true },
+	'/terms-and-conditions': { published: '2026-08-21', updated: '2026-08-21', indexed: true }
 } as const satisfies Record<string, PageEntry>;
 
 /** A path the site has a page at. */

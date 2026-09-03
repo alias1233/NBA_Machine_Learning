@@ -259,7 +259,7 @@
 	title={TITLE}
 	path={PATH}
 	privateDescription="Free machine learning predictions for an upcoming NBA game's outcomes. Supports win percentages, point differentials, total box scores, and more."
-	publicDescription="Predictions for the winning team, point differential, and total box score stats of an NBA game."
+	publicDescription="Free predictions for the winning team, point differential, and total box score stats of an NBA game."
 	standing="Pick an upcoming game."
 	scored={data.scored}
 	hasModels={data.models.length > 0}

@@ -103,3 +103,76 @@ export const appear = (node: Element, { duration = MOTION } = {}): TransitionCon
 /** Waits for a flow to land, so whatever measures the page next measures where it settles. */
 export const settled = (duration = MOTION) =>
 	new Promise<void>((resolve) => setTimeout(resolve, timed(duration)));
+
+/** How far from a control a hand starts to count as reaching for it. */
+const REACH = 220;
+
+/**
+ * How near the reader's hand is to a control, written on it for the stylesheet to draw with.
+ *
+ * `--hand` is 0 with the pointer a reach away and 1 with it on the control, and nothing says which
+ * side the hand is on, because a control that moved toward the pointer would be answering it rather
+ * than waiting for it. It is registered in `app.css`, which is what lets it transition rather than
+ * jump between the values written here.
+ *
+ * A mouse only. Nothing follows a finger, and reduced motion leaves the control at rest, where
+ * hover, focus and press still say everything they said before.
+ */
+export function nearHand(node: HTMLElement, reach = REACH) {
+	let frame = 0;
+	let pointer: { x: number; y: number } | null = null;
+
+	/** Back to what the stylesheet alone says, with the hand still where it was last seen. */
+	function clear() {
+		node.style.removeProperty('--hand');
+	}
+
+	function rest() {
+		pointer = null;
+		clear();
+	}
+
+	function measure() {
+		frame = 0;
+
+		if (!pointer) return;
+
+		const box = node.getBoundingClientRect();
+		// To the nearest edge rather than to the centre, so a wide block is reached for across all of
+		// itself instead of from one point in the middle of it.
+		const away = Math.hypot(
+			Math.max(box.left - pointer.x, 0, pointer.x - box.right),
+			Math.max(box.top - pointer.y, 0, pointer.y - box.bottom)
+		);
+
+		if (away >= reach) return clear();
+
+		node.style.setProperty('--hand', String(1 - away / reach));
+	}
+
+	function draw() {
+		frame ||= requestAnimationFrame(measure);
+	}
+
+	function follow(event: PointerEvent) {
+		if (event.pointerType !== 'mouse' || prefersReducedMotion.current) return rest();
+
+		pointer = { x: event.clientX, y: event.clientY };
+		draw();
+	}
+
+	// A still hand over a page that is scrolling is a hand the control is moving away from, so the
+	// reach is measured again rather than left holding the last frame's answer.
+	addEventListener('pointermove', follow, { passive: true });
+	addEventListener('scroll', draw, { passive: true });
+	addEventListener('blur', rest);
+
+	return {
+		destroy: () => {
+			cancelAnimationFrame(frame);
+			removeEventListener('pointermove', follow);
+			removeEventListener('scroll', draw);
+			removeEventListener('blur', rest);
+		}
+	};
+}

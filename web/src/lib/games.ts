@@ -54,10 +54,6 @@ export const longGameDay = (date: string) => LONG_DAY.format(new Date(`${date}T0
 export const tipoffTime = (game: ScheduledGame) =>
 	game.tipoff ? TIME.format(utcMoment(game.tipoff)) : null;
 
-/** The day and the tip-off on one line, which is the top row of a game card. */
-export const gameWhen = (game: ScheduledGame) =>
-	[gameDay(game.date), tipoffTime(game)].filter(Boolean).join(', ');
-
 /** The day written out with its weekday, which is how the game a form is about names itself. */
 export const fullGameDay = (date: string) => FULL_DAY.format(new Date(`${date}T00:00:00`));
 
@@ -65,16 +61,66 @@ export const fullGameDay = (date: string) => FULL_DAY.format(new Date(`${date}T0
 export const gameWhenFull = (game: ScheduledGame) =>
 	[fullGameDay(game.date), tipoffTime(game)].filter(Boolean).join(', ');
 
+/** The calendar day after this one, counted on the calendar rather than on anybody's clock. */
+function dayAfter(date: string): string {
+	const at = new Date(`${date}T00:00:00Z`);
+
+	at.setUTCDate(at.getUTCDate() + 1);
+
+	return at.toISOString().slice(0, 10);
+}
+
 /**
- * The days a board is dealing, which is what its head names beside the count.
+ * What a day of the board calls itself.
  *
- * A slate almost always covers one day. Where it covers more, the first and the last are what say
- * how far ahead the board reaches, and the days between them are on the cards themselves.
+ * The two days a reader already has a word for are given that word, because a reader looking for
+ * tonight's game is looking for tonight and not for the twenty-fourth. Every other day is written
+ * out in full, which is the only thing that tells one Saturday from the next.
  */
-export function slateDays(games: ScheduledGame[]): string {
-	const days = [...new Set(games.map(({ date }) => date))].sort();
+export function gameDayLabel(date: string, at: number | Date = Date.now()): string {
+	const today = gameDayNow(at);
 
-	if (days.length === 0) return '';
+	if (date === today) return 'Today';
+	if (date === dayAfter(today)) return 'Tomorrow';
 
-	return days.length === 1 ? gameDay(days[0]) : `${gameDay(days[0])} to ${gameDay(days[days.length - 1])}`;
+	return fullGameDay(date);
+}
+
+/** The games of one day of the board, earliest tip-off first. */
+export type SlateDay = { date: string; games: ScheduledGame[] };
+
+/** When a game tips off, and after everything that has a time where the schedule names none. */
+const tipoffAt = ({ tipoff }: ScheduledGame): number => {
+	const at = tipoff ? utcMoment(tipoff) : NaN;
+
+	return Number.isNaN(at) ? Infinity : at;
+};
+
+/**
+ * The board's games filed under the day each is played on, earliest day first.
+ *
+ * A reader hunting for a game knows its day before they know anything else about it, so the day is
+ * what the board is divided by and what each division is labelled with. Within a day the games are
+ * in the order they are played, which is the order a night is read in.
+ */
+export function slateDays(games: ScheduledGame[]): SlateDay[] {
+	const days = new Map<string, ScheduledGame[]>();
+
+	for (const game of games) {
+		const dealt = days.get(game.date);
+
+		if (dealt) dealt.push(game);
+		else days.set(game.date, [game]);
+	}
+
+	return [...days]
+		.sort(([one], [two]) => one.localeCompare(two))
+		.map(([date, dealt]) => ({
+			date,
+			games: dealt.sort((one, two) => {
+				const [first, second] = [tipoffAt(one), tipoffAt(two)];
+
+				return first === second ? 0 : first - second;
+			})
+		}));
 }

@@ -1,6 +1,6 @@
 import { AUTHOR } from './owner.ts';
 import { datesOf, isIndexed } from './pages.ts';
-import { absoluteUrl, PRIVATE_SITE_DESCRIPTION, SITE_NAME, SITE_ORIGIN } from './site.ts';
+import { absoluteUrl, PRIVATE_SITE_DESCRIPTION, SITE_ALTERNATE_NAMES, SITE_NAME } from './site.ts';
 
 export type JsonLd = Record<string, unknown>;
 
@@ -38,11 +38,19 @@ export const authorSchema = (): JsonLd => ({
 	url: absoluteUrl('/about#author')
 });
 
+/**
+ * The site itself, which is the entity every page names as the thing it is part of.
+ *
+ * This is where the name printed beside a search result comes from, and Google reads it from the
+ * home page alone, so the home page is the only page that states it. `url` is the home page's own
+ * canonical link rather than the bare origin, so the two agree character for character.
+ */
 export const webSiteSchema = (): JsonLd => ({
 	'@type': 'WebSite',
 	'@id': absoluteUrl('/#website'),
-	url: SITE_ORIGIN,
+	url: absoluteUrl('/'),
 	name: SITE_NAME,
+	alternateName: SITE_ALTERNATE_NAMES,
 	description: PRIVATE_SITE_DESCRIPTION,
 	publisher: authorSchema()
 });
@@ -51,7 +59,7 @@ export const webApplicationSchema = (): JsonLd => ({
 	'@type': 'WebApplication',
 	'@id': absoluteUrl('/#application'),
 	name: SITE_NAME,
-	url: SITE_ORIGIN,
+	url: absoluteUrl('/'),
 	description: PRIVATE_SITE_DESCRIPTION,
 	applicationCategory: 'SportsApplication',
 	isAccessibleForFree: true,

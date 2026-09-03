@@ -38,6 +38,7 @@
 	import OddsReadout from '$lib/components/OddsReadout.svelte';
 	import PencilMark from '$lib/components/PencilMark.svelte';
 	import { MODELS_PATH, predictsPhrase, sentenceCase } from '$lib/models';
+	import { nearHand } from '$lib/motion';
 	import {
 		calculateOdds,
 		chartRange,
@@ -329,10 +330,13 @@
 
 	<!-- The one action of the screen, and the most important thing on it. Written once, because a day
 	     with no samples leads to exactly the same place as a day with them. The arrow points down
-	     because that is where the listing is: the next thing on this page rather than another one. -->
+	     because that is where the listing is: the next thing on this page rather than another one.
+
+	     It answers a hand coming toward it, which is the whole of what marks it as the thing to
+	     press. The stylesheet draws that from --hand. See .button--lead in app.css. -->
 	{#snippet intoModels()}
 		<div class="act plate">
-			<a class="button button--lead" href={MODELS_PATH}>
+			<a class="button button--lead" href={MODELS_PATH} use:nearHand>
 				See the models
 				<svg class="arrow" viewBox="0 0 24 24" aria-hidden="true">
 					<path d="M12 4.5v14M5.5 12.5 12 19l6.5-6.5" />
@@ -564,23 +568,26 @@
 	}
 
 	/*
-	 * The page's heading, and the first thing printed on the plate. It is stamped in the plate's own
-	 * face at its heavier cut, like every other word printed on a plate here, because it is what the
-	 * site says for itself before a sample says anything.
+	 * The page's heading, and the first thing said on the plate under the wordmark.
 	 *
-	 * Sized to hold one line wherever the column has room for one, which is every landscape screen.
-	 * It stays under the stamp a page band takes, since this one is a sentence rather than a page's
-	 * name, and under the floor it wraps, balanced, rather than shrinking to stay in a row.
+	 * Set in the interface face rather than stamped in the plate's own, because it is a sentence and
+	 * not a name. Every plate band on the site already reads that way: the stamp says what the page
+	 * is and the line under it, set in this face, says what the page answers. This one is that line,
+	 * given the heading level because the home page has no other. Stamped, it was the same condensed
+	 * face at the same weight as the wordmark directly above it, and the two read as one long mark.
 	 *
-	 * Printed a tint down from the full plate ink, so it is told apart from the wordmark stamped
-	 * directly above it without giving up any of its weight. The wordmark names the site and this
-	 * says what the site does, and one ink for both read as one long stamp.
+	 * Set a step under the wordmark at every width, and on the same ramp as it, so the name stays
+	 * the larger of the two down to the narrowest screen. The wordmark is what is being said loudly
+	 * and this is the sentence under it, which is the order a poster puts them in. It takes the full
+	 * plate ink, since the face tells it apart from the wordmark without giving up any weight.
 	 */
 	.heading {
-		color: color-mix(in oklab, var(--plate-ink) 64%, var(--plate-ink-muted));
-		font-size: clamp(1.5rem, 3.2vw, 2.5rem);
-		font-weight: 800;
-		line-height: 1.05;
+		color: var(--plate-ink);
+		font-family: var(--font-ui);
+		font-size: clamp(1rem, 0.85rem + 0.75vw, 1.5rem);
+		font-weight: 400;
+		letter-spacing: -0.02em;
+		line-height: 1.15;
 		text-wrap: balance;
 	}
 
@@ -734,10 +741,13 @@
 		background: none;
 	}
 
+	/* Drawn in the spot ink the block is stamped in, so the two rules belong to the action rather than
+	   separating the screen. The plate's own strong rule is a box a figure is printed inside, and on
+	   the home page's stock it is a hairline nobody can see. */
 	.act::before,
 	.act::after {
 		content: '';
-		border-top: var(--rule-plate-strong);
+		border-top: 1px solid color-mix(in oklab, var(--plane-accent) 45%, transparent);
 	}
 
 	/* Narrow, there is no room either side of the block for a rule to run, so the block takes the whole
@@ -779,8 +789,8 @@
 		}
 	}
 
-	/* Down the page, which is where the listing is. It travels on the way in, so the control says
-	   what it does before it is read. */
+	/* Down the page, which is where the listing is. It sets off as the block is reached for, so the
+	   control says what it does before it is read. */
 	.arrow {
 		width: var(--icon);
 		height: var(--icon);
@@ -789,11 +799,7 @@
 		stroke-width: 2.5;
 		stroke-linecap: round;
 		stroke-linejoin: round;
-		transition: translate var(--motion) var(--ease-in);
-	}
-
-	.button--lead:hover .arrow {
-		translate: 0 4px;
+		translate: 0 calc(var(--registered) * 4px);
 	}
 
 	/*

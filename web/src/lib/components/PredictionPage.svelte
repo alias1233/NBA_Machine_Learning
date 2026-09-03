@@ -24,7 +24,9 @@
 
 	Under all of it the family lists every model it holds and what each one scored on games it never
 	saw. It is the page's standing content: a reader deciding which stat to ask about reads it before
-	asking, and a reader holding an answer reads it to know what that answer is worth.
+	asking, and a reader holding an answer reads it to know what that answer is worth. It is not a
+	fourth region of the request, so it opens as a chapter of the page rather than taking the head the
+	three regions share, and it stands further down the page while the answer region is still empty.
 
 	Narrow, the regions lie on top of each other in the same order, so the page is read down rather
 	than across and nothing is dropped.
@@ -208,68 +210,70 @@
 </PlateBand>
 
 <div class="page work">
-	<!-- Stands whether or not the service is answering, because it is the page's own words rather
-	     than anything read off a model. -->
-	<section class="standing">
-		<p>{standing}</p>
-	</section>
+	<div class="lead">
+		<!-- Stands whether or not the service is answering, because it is the page's own words rather
+		     than anything read off a model. -->
+		<section class="standing">
+			<p>{standing}</p>
+		</section>
 
-	{#if !hasModels}
-		<!-- With nothing to ask there is nothing to offer, so the page is this and no more. A service
-		     that never answered is not an empty family, and only one of the two is worth waiting for. -->
-		{#if answering}
-			<Notice>No model here can answer yet.</Notice>
+		{#if !hasModels}
+			<!-- With nothing to ask there is nothing to offer, so the page is this and no more. A service
+			     that never answered is not an empty family, and only one of the two is worth waiting for. -->
+			{#if answering}
+				<Notice>No model here can answer yet.</Notice>
+			{:else}
+				<Notice>
+					The prediction service is not answering, so nothing can be predicted right now. Try again in a
+					few minutes.
+				</Notice>
+			{/if}
 		{:else}
-			<Notice>
-				The prediction service is not answering, so nothing can be predicted right now. Try again in a
-				few minutes.
-			</Notice>
-		{/if}
-	{:else}
-		<div class="request">
-			<div class="columns" class:boardless={!board}>
-				{#if board}
-					<div class="board-column">{@render board()}</div>
-				{/if}
+			<div class="request">
+				<div class="columns" class:boardless={!board}>
+					{#if board}
+						<div class="board-column">{@render board()}</div>
+					{/if}
 
-				<!--
-					The head, the game it is about, then the fields. This region is what the form's groups
-					are measured against, so how many columns they set as follows the width it has rather
-					than the width of the screen.
-				-->
-				<section class="controls" aria-labelledby="controls-column" bind:this={controlsColumn}>
-					<h2 class="column-label micro" id="controls-column">What to predict</h2>
-					{@render matchup?.()}
-					<div class="panel">
-						{@render controls()}
+					<!--
+						The head, the game it is about, then the fields. This region is what the form's groups
+						are measured against, so how many columns they set as follows the width it has rather
+						than the width of the screen.
+					-->
+					<section class="controls" aria-labelledby="controls-column" bind:this={controlsColumn}>
+						<h2 class="column-label micro" id="controls-column">What to predict</h2>
+						{@render matchup?.()}
+						<div class="panel">
+							{@render controls()}
+						</div>
+					</section>
+				</div>
+
+				<section class="answer" aria-labelledby="answer-column" bind:this={answerColumn}>
+					<h2 class="column-label micro" id="answer-column">Answer</h2>
+
+					<!--
+						The region holds the height of whatever is in it, so the standing words grow into the
+						block an answer lands in rather than being swapped for it in a frame, and it is
+						clipped only while it grows, because the drawing inside an answer is free to hang over
+						its own edges once it is there.
+
+						A page that arrived already carrying an answer renders it open, because a transition
+						does not run on the first frame and nothing about a shared link was revealed to anyone.
+					-->
+					<div class="answer-result" class:opening use:flowingHeight>
+						<div class="swap">
+							{#if opened}
+								<div>{@render result(opening)}</div>
+							{:else}
+								<p class="prompt type-h2">Make a prediction first.</p>
+							{/if}
+						</div>
 					</div>
 				</section>
 			</div>
-
-			<section class="answer" aria-labelledby="answer-column" bind:this={answerColumn}>
-				<h2 class="column-label micro" id="answer-column">Answer</h2>
-
-				<!--
-					The region holds the height of whatever is in it, so the standing words grow into the
-					block an answer lands in rather than being swapped for it in a frame, and it is
-					clipped only while it grows, because the drawing inside an answer is free to hang over
-					its own edges once it is there.
-
-					A page that arrived already carrying an answer renders it open, because a transition
-					does not run on the first frame and nothing about a shared link was revealed to anyone.
-				-->
-				<div class="answer-result" class:opening use:flowingHeight>
-					<div class="swap">
-						{#if opened}
-							<div>{@render result(opening)}</div>
-						{:else}
-							<p class="prompt type-h2">Make a prediction first.</p>
-						{/if}
-					</div>
-				</div>
-			</section>
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	<!-- The family's standing content: what it holds, and what each of them is worth. Absent only
 	     where the service could not name them, which the region above has already said. -->
@@ -280,12 +284,19 @@
 			id={FAMILY_MODELS_SECTION}
 			aria-labelledby="models-section"
 		>
-			<h2 class="column-label micro" id="models-section">All models</h2>
+			<!-- Opened as a chapter of the page rather than as a fourth region of the request: the accent
+			     rule and the serif the site marks a section with, where the three regions above open on a
+			     hairline and a printed label. -->
+			<div class="head">
+				<h2 class="page-title type-h1" id="models-section">All models</h2>
 
-			<p class="small muted">
-				Every model in this category, and what it measured on games it never saw while it was being
-				fitted. Open one to read its figures in full.
-			</p>
+				<p class="said">
+					Click on a model tab to reveal the evaluation scores of the model. Each value is 
+					calculated on games the model never saw during training. The baseline scores are from 
+					answering with the season's usual spread of outcomes, and calculating the evaluation
+					metrics from those predictions.
+				</p>
+			</div>
 
 			<ModelIndex models={scored} />
 
@@ -305,24 +316,26 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-7);
-		padding-block-start: var(--space-7);
+		padding-block-start: var(--space-5);
 	}
 
 	/*
-	 * The page's own opening statement, under the accent rule that marks anything the site says in
-	 * its own words. Set a step above body text and run it across the page, so it names the work below
-	 * rather than only the board beside it.
+	 * What to do on this page, and nothing else.
+	 *
+	 * It is an instruction rather than a statement, so it is set in the register every other
+	 * instruction on the site is set in: quiet, and standing directly on the work it names instead of
+	 * opening the page over it. The page's wide rhythm falls under that work rather than
+	 * between the two, which is the whole of what the group around them is for.
 	 */
-	.standing::before {
-		content: '';
-		display: block;
-		width: var(--space-6);
-		margin-block-end: var(--space-4);
-		border-top: var(--rule-accent);
+	.lead {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
 	}
 
 	.standing p {
-		font-size: var(--type-note);
+		color: var(--ink-muted);
+		font-size: var(--type-body);
 		text-wrap: pretty;
 	}
 
@@ -439,14 +452,37 @@
 	.listing {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-4);
+		gap: var(--space-5);
 		margin-block-start: var(--space-6);
 	}
 
-	/* Before a reader asks for an answer, the supporting evidence stands a further step away from
-	   the task. Once the answer opens, it returns to the page's ordinary section spacing. */
+	/*
+	 * Before a reader asks for an answer, the supporting evidence stands a further step away from the
+	 * task. The answer region is at its shortest then, holding nothing but the line saying what to do,
+	 * so without this the chapter head crowds those words. Once an answer opens the region is tall
+	 * enough to separate the two on its own and this returns to the page's ordinary section spacing.
+	 */
 	.listing.unanswered {
-		margin-block-start: var(--space-7);
+		margin-block-start: var(--space-8);
+	}
+
+	/* What the chapter is, then what a reader is about to read, under it. */
+	.head {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.head h2 {
+		text-wrap: balance;
+	}
+
+	/* Uncapped, so it runs the width of the index it introduces rather than breaking at a measure the
+	   rows beneath it do not share. */
+	.said {
+		color: var(--ink-muted);
+		font-size: var(--type-note);
+		text-wrap: pretty;
 	}
 
 	@media (width < 40rem) {

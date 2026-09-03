@@ -773,6 +773,7 @@ main > .band:first-child {
    here reads as something typeset elsewhere and pasted on. */
 .plate h1,
 .plate h2,
+.plate h3,
 .plate .type-h1,
 .plate .type-h2 {
 	font-family: var(--font-plate);
@@ -1245,11 +1246,45 @@ select:disabled {
 	border-radius: 0;
 }
 
-/* The loudest control on the site, once, in the hero. Taller and wider than the standard target,
-   and stamped in the plate's own lettering rather than set in the interface face at button weight,
-   because being the one thing on a screen worth pressing is a size and a register, not only a
-   color. */
+/*
+ * How near the reader's hand is to the leading control, and whether that control is being held.
+ *
+ * Registered rather than left as plain properties, because only a registered one can be
+ * transitioned, and that is what lets the block leave and return to rest smoothly from the single
+ * value a script writes each frame. `--hand` is written by `nearHand` in `src/lib/motion.ts` and
+ * `--held` by the stylesheet, so a control has its whole story with no script at all. Only how near
+ * the hand is, never which side it is on: a block that chased the pointer would be answering the
+ * hand rather than waiting for it.
+ */
+@property --hand {
+	syntax: '<number>';
+	inherits: true;
+	initial-value: 0;
+}
+
+@property --held {
+	syntax: '<number>';
+	inherits: true;
+	initial-value: 0;
+}
+
+/*
+ * The loudest control on the site, once, in the hero. Taller and wider than the standard target,
+ * and stamped in the plate's own lettering rather than set in the interface face at button weight,
+ * because being the one thing on a screen worth pressing is a size and a register, not only a
+ * color.
+ *
+ * It is the one block on the plate that is not printed flat. At rest it stands inside its own corner
+ * register marks, the way a press marks where a plate is to land, which says the block is a target
+ * without moving anything. They close onto it as it is reached for, and again under a press or a
+ * keyboard focus, so every way of arriving at the control resolves it the same way.
+ *
+ * A hand near it also lifts the block off the sheet, square to it and in place. That part is
+ * movement rather than state, so it belongs to the pointer alone: a reader who asked for reduced
+ * motion, or whose script never ran, still gets the marks, the ink and the arrow.
+ */
 .button--lead {
+	position: relative;
 	min-height: calc(var(--tap-target) + var(--space-5));
 	padding-inline: var(--space-7);
 	font-family: var(--font-plate);
@@ -1257,6 +1292,59 @@ select:disabled {
 	font-weight: 800;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
+	/* Reached for, pressed or focused all settle the block, and the nearest of the three wins. */
+	--registered: max(var(--hand), var(--held));
+	translate: 0 calc(var(--hand) * -3px);
+	/* Printed larger as it comes forward, which is how an impression lands on this site. Nothing on a
+	   plate casts a shadow, so the size is the whole of what says the block left the sheet, and it
+	   has to be read at a glance rather than measured. */
+	scale: calc(1 + var(--hand) * 0.06);
+	/* The two values are what is smoothed, and everything drawn from them follows. Transitioning
+	   the drawing as well would put a second lag on top of this one. */
+	transition:
+		background var(--motion-fast) var(--ease-in),
+		color var(--motion-fast) var(--ease-in),
+		--hand var(--motion) var(--ease-in),
+		--held var(--motion) var(--ease-in);
+}
+
+/*
+ * The corner marks the block is registered by: cut to the length of the plate's own crosses, one at
+ * each corner, standing off the block until it is settled. They close onto its edge and are spent by
+ * the time they reach it, which is the whole of the register: the block has landed.
+ *
+ * Eight straight runs rather than one masked box, because a mask that cuts the middle out of a
+ * border needs compositing that is not the same keyword in every browser, and a corner mark is two
+ * lines however it is drawn.
+ */
+.button--lead::after {
+	content: '';
+	position: absolute;
+	inset: calc((var(--registered) - 1) * 8px);
+	background:
+		var(--mark) left top / var(--registration) 1px,
+		var(--mark) left top / 1px var(--registration),
+		var(--mark) right top / var(--registration) 1px,
+		var(--mark) right top / 1px var(--registration),
+		var(--mark) left bottom / var(--registration) 1px,
+		var(--mark) left bottom / 1px var(--registration),
+		var(--mark) right bottom / var(--registration) 1px,
+		var(--mark) right bottom / 1px var(--registration);
+	background-repeat: no-repeat;
+	opacity: calc(1 - var(--registered));
+	pointer-events: none;
+	--mark: linear-gradient(var(--plane-accent) 0 0);
+}
+
+.button--lead:hover:not(:disabled),
+.button--lead:focus-visible,
+.button--lead:active:not(:disabled) {
+	--held: 1;
+}
+
+/* Restates the press so a block being pushed in keeps the lift it was reached for with. */
+.button--lead:active:not(:disabled) {
+	translate: 0 calc(var(--hand) * -3px + 1px);
 }
 
 /* The accent in outline rather than filled, for a control that acts on the page but is not what the

@@ -1,4 +1,4 @@
-import { articleSchema, faqSchema, jsonLd } from './seo.ts';
+import { articleSchema, faqSchema, jsonLd, webSiteSchema } from './seo.ts';
 
 function check(what: string, actual: unknown, expected: unknown) {
 	if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -7,6 +7,15 @@ function check(what: string, actual: unknown, expected: unknown) {
 
 	console.log(`ok   ${what}`);
 }
+
+// Google reads the name it prints beside a search result off this node, and prints the bare host
+// instead where it is not confident. Claiming the host as a name is what its own troubleshooting
+// asks for, so one of these is an address written as a name. None of them may be an address.
+check(
+	'every alternate site name is a name rather than an address',
+	(webSiteSchema().alternateName as string[]).filter((name) => /[\s:/]/.test(name)),
+	[]
+);
 
 const article = articleSchema({
 	name: 'About Bazaar Ball',

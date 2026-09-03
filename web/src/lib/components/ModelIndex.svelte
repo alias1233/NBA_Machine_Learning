@@ -68,9 +68,7 @@
 						<!-- Held out is spelled out rather than named, because it is the whole reason the
 						     figures below mean anything and the reader is meeting the idea for the first time. -->
 						<p class="small muted">
-							Scored on {scored.samples.toLocaleString()} held-out games the model never saw during
-							training, from {day(scored.first_game)} to {day(scored.last_game)}. Baseline is what
-							answering with the season's usual spread of outcomes scores on those same games.
+							Scored on {scored.samples.toLocaleString()} games from {day(scored.first_game)} to {day(scored.last_game)}.
 						</p>
 
 						<table class="small numeric">

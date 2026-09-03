@@ -174,7 +174,6 @@
 					<span class="face">
 						<svg class="watermark" viewBox="0 0 24 24" aria-hidden="true"><path d={pip} /></svg>
 						<span class="time numeric">{tipoffTime(game) ?? 'Time to come'}</span>
-						<span class="day micro">{gameDay(game.date)}</span>
 					</span>
 
 					<span class="index end">
@@ -223,8 +222,8 @@
 	 * own small angle so the deal reads as dealt rather than as ruled.
 	 *
 	 * As many across a row as the column has room for, measured against that column rather than
-	 * against the screen, so one rule deals three across a narrow column and eight across the whole
-	 * page. The row gap is what a lifted and ringed card needs above it.
+	 * against the screen, so one rule deals three across a phone and eight across the whole page. The
+	 * row gap is what a lifted and ringed card needs above it.
 	 */
 	.hand {
 		display: grid;
@@ -372,7 +371,9 @@
 	.front {
 		display: grid;
 		grid-template-rows: auto 1fr auto;
-		padding: clamp(var(--space-2), 7cqi, var(--space-3));
+		/* The bone margin the printing is held inside. A card dealt small gives some of it back,
+		   because at that size the margin is room the two names need more. */
+		padding: clamp(0.375rem, 7cqi, var(--space-3));
 		background: var(--plate-ink);
 		color: var(--plate-spot-on);
 		transition: background var(--motion) var(--ease-in);
@@ -588,22 +589,23 @@
 	}
 
 	/*
-	 * The side written out, under the tricode that stands for it. A card printed small has no room
-	 * for it and drops it, the same way a real index carries a rank and nothing else, so it appears
-	 * only once the board is dealing cards large enough to read one on.
+	 * The side written out, under the tricode that stands for it.
+	 *
+	 * A tricode is what a card indexes itself by, and a reader who does not already know that DEN is
+	 * Denver cannot find their game by one, so the name is printed on every card at every width.
+	 *
+	 * It is set in the card's own ink at full strength rather than in a tint of it, and measured
+	 * against the card a step larger than the rest of the small printing, because it is the one thing
+	 * on a card a reader is scanning for. What keeps it under the tricode is weight and size, which
+	 * is how an index is ranked on a real card, not how faintly it was printed.
 	 */
 	.name {
-		display: none;
-		font-size: clamp(0.625rem, 8cqi, var(--type-micro));
+		font-size: clamp(0.625rem, 10cqi, 0.875rem);
 		font-weight: 500;
-		line-height: 1.15;
-		opacity: 0.7;
-	}
-
-	@container (min-width: 8rem) {
-		.name {
-			display: block;
-		}
+		/* Set tight, because a name is two lines on a card dealt small and both of them have to stand
+		   inside the room the index has. */
+		line-height: 1.1;
+		text-wrap: balance;
 	}
 
 	/* Held off the corner the mark is drawn in, so a side with a long name wraps rather than running
@@ -636,10 +638,8 @@
 	.face {
 		position: relative;
 		display: flex;
-		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: clamp(1px, 1cqi, var(--space-1));
 		text-align: center;
 	}
 
@@ -659,12 +659,6 @@
 		font-weight: 500;
 		letter-spacing: -0.02em;
 		white-space: nowrap;
-	}
-
-	.day {
-		position: relative;
-		font-size: clamp(0.5625rem, 8.5cqi, var(--type-micro));
-		opacity: 0.75;
 	}
 
 	/* The room the printing leaves: the corner opposite neither index. It is measured against the

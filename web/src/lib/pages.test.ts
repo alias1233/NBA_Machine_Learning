@@ -60,16 +60,17 @@ check(
 // ----------------------------------------------------------------------------
 
 /**
- * The two pages the site keeps out of the index, which are the only two it keeps out.
+ * The pages the site keeps out of the index. Today there are none.
  *
  * Written here rather than read off the entries, so that an entry flipped to `indexed: false` by
- * accident, or a policy page quietly flipped back on, fails here rather than going unnoticed until
- * a search result appears or disappears months later.
+ * accident fails here rather than going unnoticed until a search result quietly disappears months
+ * later. A page that genuinely should be held out is added to this list in the same change that
+ * sets its flag.
  */
-const NOT_INDEXED = ['/privacy', '/terms-and-conditions'];
+const NOT_INDEXED: string[] = [];
 
 check(
-	'only the policy pages are held out of the index',
+	'exactly the declared pages are held out of the index',
 	Object.keys(PAGES).filter((path) => !isIndexed(path)),
 	NOT_INDEXED
 );
@@ -80,18 +81,13 @@ check(
 	Object.keys(PAGES).filter((path) => !NOT_INDEXED.includes(path))
 );
 
-// A page left out of the sitemap is still crawled, and still indexed if anything links to it. Both
-// policy pages are linked from the footer of every page, so the directive is what decides.
+// A sitemap only advertises. A page left out of one is still crawled, and still indexed if anything
+// links to it, so the directive printed on the page is the half that decides. This holds it to the
+// same entry the sitemap was built from, in both directions.
 check(
-	'a page held out of the index says so on the page itself',
-	NOT_INDEXED.map((path) => robotsDirective(path)),
-	NOT_INDEXED.map(() => 'noindex, follow')
-);
-
-check(
-	'every page the sitemap offers asks to be indexed',
-	INDEXED_PAGES.filter(({ path }) => !robotsDirective(path).startsWith('index, follow')),
-	[]
+	'every page tells a crawler what its entry says',
+	Object.keys(PAGES).map((path) => robotsDirective(path).startsWith('index, follow')),
+	Object.keys(PAGES).map((path) => isIndexed(path))
 );
 
 // ----------------------------------------------------------------------------
