@@ -124,3 +124,35 @@ export function slateDays(games: ScheduledGame[]): SlateDay[] {
 			})
 		}));
 }
+
+/**
+ * The games whose two sides answer to what the reader typed.
+ *
+ * A word may be a team's written name or the tricode a card indexes it by, because a card prints
+ * both and a reader narrowing the board is reading off the cards. Every word has to be found
+ * somewhere in the pair, so "lakers nuggets" is the one game between them rather than every game
+ * either of them plays.
+ *
+ * Nothing but the two sides is searched. A reader narrowing the board is looking for a matchup, and
+ * the day stamped over a run of cards already says which night it is.
+ *
+ * Searching for nothing is not a filter, so the whole board comes back untouched.
+ */
+export function gamesMatching(games: ScheduledGame[], search: string): ScheduledGame[] {
+	const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+
+	if (words.length === 0) return games;
+
+	return games.filter((game) => {
+		const sides = [
+			game.away_team.name,
+			game.away_team.abbreviation,
+			game.home_team.name,
+			game.home_team.abbreviation
+		]
+			.join(' ')
+			.toLowerCase();
+
+		return words.every((word) => sides.includes(word));
+	});
+}

@@ -117,34 +117,17 @@
 		<section id="how">
 			<h2 class="section-rule">How does Bazaar Ball make a prediction?</h2>
 
-			<h3><em>What does the model use?</em></h3>
 			<p>
 				The models compare recent game results, team context, schedule context, and who is expected to
 				play. A sequence model reads the run of past games, then combines it with the facts about the
 				upcoming game to estimate the likelihood of each outcome.
 			</p>
-
-			<h3><em>Where does the data come from?</em></h3>
 			<p>
 				Historical schedules, player game statistics, and player availability data are collected from
 				the BALLDONTLIE NBA API.
 			</p>
 			<p class="source small">
 				Source: <a href="https://docs.balldontlie.io/" target="_blank" rel="noreferrer">BALLDONTLIE NBA API documentation</a>.
-			</p>
-
-			<h3><em>How are the models tested?</em></h3>
-			<p>
-				Evaluation metrics are calculated based on a final pass of the trained model on a test split
-				that was unseen by the model during training. A simple baseline algorithm, which naively answers 
-				with the season's usual spread of outcomes, is also evaluated on the test split as a comparison tool.
-			</p>
-			<p>
-				A model category's page lists each model's evaluation results, along with the values that
-				the baseline scored.
-			</p>
-			<p class="source small">
-				Source: <a href="/#models">each model family’s published evaluation metrics</a>.
 			</p>
 		</section>
 
@@ -153,6 +136,14 @@
 			<p>
 				These are the evaluation metrics used by the current models. Each model’s page shows the 
 				value that a model scored and its baseline comparison.
+			</p>
+			<p>
+				Evaluation metrics are calculated based on a final pass of the trained model on a test split
+				that was unseen by the model during training. A simple baseline algorithm, which naively answers 
+				with the season's usual spread of outcomes, is also evaluated on the test split as a comparison tool.
+			</p>
+			<p class="source small">
+				Source: <a href="/#models">each model family’s published evaluation metrics</a>.
 			</p>
 
 			{#if data.metrics.length > 0}

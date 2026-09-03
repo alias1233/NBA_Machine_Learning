@@ -26,6 +26,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 
+	import FieldClear from '$lib/components/FieldClear.svelte';
 	import { appear, flowingHeight } from '$lib/motion';
 	import { isTap } from '$lib/touch';
 
@@ -302,12 +303,7 @@
 
 	<!-- Inside the box it empties, and only while there is something to empty. -->
 	{#if text !== ''}
-		<button type="button" class="clear small" bind:clientWidth={clearWidth} onclick={clearAndFocus}>
-			<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-				<path d="M4 4 12 12M12 4 4 12" />
-			</svg>
-			<span>Clear</span>
-		</button>
+		<FieldClear empties="player search" bind:width={clearWidth} onclear={clearAndFocus} />
 	{/if}
 
 	{#if open}
@@ -378,31 +374,6 @@
 <style>
 	.search {
 		position: relative;
-	}
-
-	/* Inside the box, against its right edge and the full height of it, so it is a finger wide in
-	   both directions without taking a row of its own. It reads as part of the field rather than as
-	   something to act on, so it takes the muted ink and none of the platform's own chrome. */
-	.clear {
-		position: absolute;
-		right: var(--space-2);
-		bottom: 0;
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		height: var(--tap-target);
-		padding-block: 0;
-		padding-inline: var(--space-2);
-		background: none;
-		border: none;
-		color: var(--ink-muted);
-		cursor: pointer;
-	}
-
-	/* Current color, a stroke and no fill, at the size of the word beside it. */
-	.clear svg {
-		width: 1em;
-		height: 1em;
 	}
 
 	/* Floats above the page, so it is the one other thing besides the models menu that is raised. */

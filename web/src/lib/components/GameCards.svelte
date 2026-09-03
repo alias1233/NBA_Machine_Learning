@@ -15,11 +15,21 @@
 	and the URL is rewritten by replacing rather than pushing. The href is what the card falls back to
 	where scripting is off.
 
+	Every card casts a short, hard shadow on the board, which is the one thing that says the hand is
+	lying on the well rather than printed into it. It is short because the cards are resting on the
+	board rather than floating over it, and it lengthens with every way a card comes off it: under a
+	hand, taken, and at the top of its own turn.
+
 	Choosing one is a hand taking it off the board: it comes up out of the page, turns over on the
 	upright axis so the reader sees its printed back at the top of the lift, and falls back square and
 	clear of the deal, in warmed stock under the spot ink, ringed and marked with the reader's own
 	grease-pencil X. Because it genuinely turns over, every card carries a back, and the back is the
 	one printed thing on the site that belongs to the deck rather than to a game.
+
+	A hand narrowed by a search is dealt again rather than redrawn. A card the search no longer
+	answers for fades where it lies, and the cards that stay travel to the places it left, so the
+	board reads as the same hand with fewer cards in it. A hand that arrived with the page was not
+	dealt in front of anybody, so it is simply lying there.
 
 	The X is drawn once the card has landed, in the corner the two indices leave free, because a hand
 	marks a card it is holding and not one still in the air, and because the printing on a card is what
@@ -36,9 +46,12 @@
 	being put back.
 -->
 <script lang="ts">
+	import { flip } from 'svelte/animate';
+
 	import PencilMark from '$lib/components/PencilMark.svelte';
 	import { SUIT_PATH, deal, isRed } from '$lib/cards';
 	import { gameDay, tipoffTime } from '$lib/games';
+	import { MOTION, dealing, timed } from '$lib/motion';
 
 	import type { ScheduledGame } from '$lib/types';
 
@@ -53,21 +66,6 @@
 	};
 
 	let { games, selected, hrefOf, onchoose, onpreview }: Props = $props();
-
-	/**
-	 * The crest printed on every back: the four suits set on the two axes around a center pip.
-	 *
-	 * The same four paths the corner indices are drawn from, laid out here rather than in the markup
-	 * so the placement is read as one figure. Each is a 24 box dropped into a 14 cell of the 48 the
-	 * crest is drawn on, and the two reds sit across from each other so the emblem is balanced in both
-	 * inks whichever way it is turned.
-	 */
-	const CREST = [
-		{ suit: 'spade', at: 'translate(17 5.5) scale(0.5833)' },
-		{ suit: 'heart', at: 'translate(28.5 17) scale(0.5833)' },
-		{ suit: 'diamond', at: 'translate(17 28.5) scale(0.5833)' },
-		{ suit: 'club', at: 'translate(5.5 17) scale(0.5833)' }
-	] as const;
 
 	/**
 	 * The cards a turn is running on, which is normally one and never more than a handful.
@@ -87,6 +85,20 @@
 	 * already chosen then lies still, and every choice after it is turned over.
 	 */
 	let settled: number | null | undefined;
+
+	/**
+	 * Whether the board has been drawn once, which is what tells a card the reader dealt from a card
+	 * that was already on the table when they arrived.
+	 *
+	 * Svelte plays an entrance for anything created after the very first render, and on a soft
+	 * navigation that is the whole page. A hand a reader has only just opened was not narrowed in
+	 * front of them, so nothing on it arrives in motion.
+	 */
+	let drawn = $state(false);
+
+	$effect(() => {
+		drawn = true;
+	});
 
 	$effect(() => {
 		const chosen = selected?.id ?? null;
@@ -146,7 +158,16 @@
 		{@const { suit, tilt } = deal(game.id)}
 		{@const pip = SUIT_PATH[suit]}
 
-		<li style:--tilt="{tilt}deg" style:--order={index}>
+		<!-- The card leaves where it lies and the rest of the hand closes over it, which is one hand
+		     dealt again rather than a list redrawn. Nothing enters in motion until the reader has
+		     changed the hand themselves. -->
+		<li
+			style:--tilt="{tilt}deg"
+			style:--order={index}
+			animate:flip={{ duration: timed(MOTION) }}
+			in:dealing={{ duration: drawn ? MOTION : 0 }}
+			out:dealing
+		>
 			<a
 				class="card"
 				class:chosen
@@ -191,18 +212,11 @@
 				</span>
 
 				<!-- The back of the deck, and the same back on every card, because a back that told you
-				     which card it was would not be one. Bone margin, a field of the dark ink under a
-				     printed lattice in the spot ink, and the four suits set as a crest, which is the one
-				     figure on the site that stands for the deck rather than for a game. -->
+				     which card it was would not be one. Bone margin and a field of printed lattice, and
+				     nothing else: a back is a pattern, and a figure standing in the middle of one is a
+				     thing to read on a side of the card that has nothing to say. -->
 				<span class="back" aria-hidden="true">
 					<span class="weave"></span>
-					<svg class="crest" viewBox="0 0 48 48">
-						<circle class="disc" cx="24" cy="24" r="22.2" />
-						{#each CREST as { suit: figure, at } (figure)}
-							<path class:red={isRed(figure)} transform={at} d={SUIT_PATH[figure]} />
-						{/each}
-						<circle class="center" cx="24" cy="24" r="2.3" />
-					</svg>
 				</span>
 			</a>
 
@@ -343,7 +357,7 @@
 		aspect-ratio: var(--play-card-ratio);
 		border-radius: var(--radius);
 		text-decoration: none;
-		box-shadow: 0 2px 6px var(--acetate-shadow);
+		box-shadow: var(--play-card-shadow);
 		rotate: var(--tilt);
 		transform-style: preserve-3d;
 		transition:
@@ -384,7 +398,7 @@
 	.card:focus-visible {
 		rotate: 0deg;
 		translate: 0 calc(var(--play-card-lift) * -0.5);
-		box-shadow: 0 7px 14px var(--acetate-shadow);
+		box-shadow: var(--play-card-shadow-near);
 	}
 
 	/*
@@ -397,7 +411,7 @@
 		translate: 0 calc(var(--play-card-lift) * -1);
 		box-shadow:
 			0 0 0 1px var(--plate-spot),
-			0 12px 22px var(--acetate-shadow),
+			var(--play-card-shadow-taken),
 			0 0 24px -4px color-mix(in oklab, var(--plate-spot) 60%, transparent);
 	}
 
@@ -408,17 +422,15 @@
 	/*
 	 * The back of the deck.
 	 *
-	 * A real back is a margin of bare stock, a field of one ink, and a figure printed on it, and it is
-	 * the same on every card in the pack. This one is exactly that, in the plate's own inks and in the
-	 * plate's own manner: flat, registered, and nothing about it hand-made.
+	 * A real back is a margin of bare stock and a field of pattern ruled on it, the same on every card
+	 * in the pack. This one is exactly that, in the plate's own inks and in the plate's own manner:
+	 * flat, registered, and nothing about it hand-made.
 	 *
 	 * It is drawn once for a card that has never been turned over, which costs the board nothing, and
 	 * it is never in the accessible tree, because a reader hearing the card is being told the game and
 	 * a back is not one.
 	 */
 	.back {
-		display: grid;
-		place-items: center;
 		background: var(--plate-ink);
 		transform: rotateY(180deg);
 	}
@@ -446,32 +458,6 @@
 				color-mix(in oklab, var(--plate-ink) 26%, transparent) 7cqi calc(7cqi + 1px)
 			);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--plate-spot) 70%, transparent);
-	}
-
-	/*
-	 * The crest: the four suits on the two axes around a center pip, printed on a disc of bare stock
-	 * so the figure reads out of the lattice rather than over it. The two reds carry the spot ink and
-	 * the two blacks the dark, which is the same rule the corner pips are printed by.
-	 */
-	.crest {
-		position: relative;
-		width: 52cqi;
-		height: 52cqi;
-	}
-
-	.disc {
-		fill: var(--plate-ink);
-		stroke: var(--plate-spot);
-		stroke-width: 1.1;
-	}
-
-	.crest path {
-		fill: var(--plate-spot-on);
-	}
-
-	.crest path.red,
-	.center {
-		fill: var(--plate-spot);
 	}
 
 	/*
@@ -521,7 +507,7 @@
 			rotate: var(--tilt);
 			translate: 0 0;
 			scale: 1;
-			box-shadow: 0 2px 6px var(--acetate-shadow);
+			box-shadow: var(--play-card-shadow);
 			animation-timing-function: cubic-bezier(0.18, 0.72, 0.36, 1);
 		}
 
@@ -529,7 +515,7 @@
 			rotate: 0deg;
 			translate: 0 calc(var(--play-card-lift) * -2.3);
 			scale: var(--play-card-rise);
-			box-shadow: 0 26px 38px -8px var(--acetate-shadow);
+			box-shadow: var(--play-card-shadow-air);
 			animation-timing-function: cubic-bezier(0.5, 0, 0.22, 1);
 		}
 	}

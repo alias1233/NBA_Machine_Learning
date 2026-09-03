@@ -24,7 +24,13 @@ export const MOTION_IMPACT = 680;
 /** `--ease-in` as a curve a script can run. Both cover half the distance in the first fifth of it. */
 const EASE = cubicOut;
 
-const timed = (duration: number) => (prefersReducedMotion.current ? 0 : duration);
+/**
+ * A duration, or none at all where the reader has asked for stillness.
+ *
+ * Exported because a Svelte animation is given a plain number rather than a transition of its own,
+ * so a list rearranging under the reader has to ask this the same way every transition here does.
+ */
+export const timed = (duration: number) => (prefersReducedMotion.current ? 0 : duration);
 
 export const rolling = (value: () => number) => Tween.of(value, { duration: () => timed(MOTION) });
 
@@ -99,6 +105,20 @@ export function flowingHeight(node: HTMLElement) {
  */
 export const appear = (node: Element, { duration = MOTION } = {}): TransitionConfig =>
 	fade(node, { duration: timed(duration) });
+
+/**
+ * A card joining or leaving a hand the reader is narrowing.
+ *
+ * It fades and gives up a little of its size where it lies, so a card the search no longer answers
+ * for is put back on the deck rather than deleted. It travels nowhere on its way out, because the
+ * cards that stay are what moves: they close the gap it left, and that is what says the hand was
+ * dealt again rather than redrawn.
+ */
+export const dealing = (_node: Element, { duration = MOTION } = {}): TransitionConfig => ({
+	duration: timed(duration),
+	easing: EASE,
+	css: (t) => `opacity: ${t}; scale: ${0.94 + t * 0.06};`
+});
 
 /** Waits for a flow to land, so whatever measures the page next measures where it settles. */
 export const settled = (duration = MOTION) =>

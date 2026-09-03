@@ -5,9 +5,14 @@
 	front of a choice that already fits on the page. Both sides are printed side by side, away first,
 	which is the order the board deals them and the order an answer names them.
 
+	Each tile reads as a line of printing rather than as a caption: the words start at the tile's own
+	edge, where a reader's eye already is, and run from there. Nothing stands in front of them.
+
 	The side the reader settles on is marked with the same wet-erase X the card they picked took,
-	because both are the reader's own question rather than something the model measured. Every tile
-	holds the box that mark lands in, so choosing one moves nothing.
+	because both are the reader's own question rather than something the model measured. It lands in
+	the room the words leave at the far edge, the way the X on a card lands in the corner the printing
+	leaves free, and every tile holds that box whether or not it is the marked one, so choosing a side
+	moves nothing.
 
 	It is a radio group rather than two buttons, so the arrow keys move between the two sides, one of
 	two is what a screen reader is told, and a form submits the answer without a hidden field.
@@ -60,17 +65,18 @@
 					onchange={() => onchoose(side)}
 				/>
 
-				<!-- The box the reader marks. It is held whether or not this side is the one, so the two
-				     tiles are the same size and neither moves when the choice is made. -->
+				<span class="said">
+					<span class="micro role">{index === 0 ? 'Away' : 'Home'}</span>
+					<span class="type-h3 name">{side.name}</span>
+				</span>
+
+				<!-- The box the reader marks, at the edge the printing leaves free. It is held whether or
+				     not this side is the one, so the two tiles are the same size and neither moves when
+				     the choice is made. -->
 				<span class="marking">
 					{#if chosen}
 						<PencilMark bleed="0px" />
 					{/if}
-				</span>
-
-				<span class="said">
-					<span class="micro role">{index === 0 ? 'Away' : 'Home'}</span>
-					<span class="type-h3 name">{side.name}</span>
 				</span>
 			</label>
 		{/each}
@@ -92,7 +98,9 @@
 	.side {
 		position: relative;
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
+		/* The words first and the mark after them, so a tile opens on its own printing rather than on
+		   an empty box the eye has to step over to reach it. */
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--space-3);
 		min-height: var(--tap-target);
@@ -124,11 +132,13 @@
 		height: 1.5rem;
 	}
 
+	/* Both lines start on the tile's own edge and run from there, which is how printing is read. */
 	.said {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
 		min-width: 0;
+		text-align: start;
 	}
 
 	/* The control itself is what the keyboard and the assistive tree work with, so it is present and

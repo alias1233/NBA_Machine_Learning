@@ -194,6 +194,21 @@
 	/* The whole turn: up, over, and down. One authored moment, given the room a gesture needs and no
 	   more, so a reader picking a second game is never waiting on the first one. */
 	--play-card-turn: 700ms;
+	/*
+	 * What a card casts on the board.
+	 *
+	 * A card lies on the well rather than floating over the page, so its shadow is short and hard: a
+	 * contact line directly under the stock, and one short drop off it. Both are near-black rather
+	 * than the acetate's navy, because a shadow falls on whichever ground the family is printed on
+	 * and a tinted one reads as a colour under the card instead of as the card being off the board.
+	 *
+	 * The drop lengthens as the card comes up, under a hand, taken, and at the top of its own turn,
+	 * and stays exactly as hard, because what changed is how far off the board it is, not the light.
+	 */
+	--play-card-shadow: 0 1px 0 rgb(0 0 0 / 0.42), 0 2px 3px rgb(0 0 0 / 0.38);
+	--play-card-shadow-near: 0 1px 0 rgb(0 0 0 / 0.4), 0 5px 8px -1px rgb(0 0 0 / 0.45);
+	--play-card-shadow-taken: 0 2px 2px rgb(0 0 0 / 0.4), 0 10px 16px -2px rgb(0 0 0 / 0.5);
+	--play-card-shadow-air: 0 4px 4px rgb(0 0 0 / 0.35), 0 22px 30px -6px rgb(0 0 0 / 0.5);
 
 	/* The chart. It is drawn --chart-height tall inside an answer and fills the room it is given in
 	   the detailed view. --chart-axis is the gutter the probability axis is written in, which has to
@@ -1185,6 +1200,13 @@ select {
 	/* The one part of a field the browser draws for itself, set in the plane's accent like every other
 	   mark the reader makes. */
 	caret-color: var(--plane-accent);
+}
+
+/* The prompt in an empty box, in the muted ink of whatever plane the box is on. Left to the browser
+   it is one fixed grey, which shouts on paper and all but disappears on a plate. */
+::placeholder {
+	color: var(--ink-muted);
+	opacity: 1;
 }
 
 /* A date field is drawn by the platform, and on iOS that means an intrinsic width no rule above can

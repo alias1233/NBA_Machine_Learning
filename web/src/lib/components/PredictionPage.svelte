@@ -291,10 +291,7 @@
 				<h2 class="page-title type-h1" id="models-section">All models</h2>
 
 				<p class="said">
-					Click on a model tab to reveal the evaluation scores of the model. Each value is 
-					calculated on games the model never saw during training. The baseline scores are from 
-					answering with the season's usual spread of outcomes, and calculating the evaluation
-					metrics from those predictions.
+					Click on a model tab to reveal the evaluation scores of the model.
 				</p>
 			</div>
 
