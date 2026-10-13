@@ -1,15 +1,4 @@
-"""
-Who is on each team right now, and who is hurt.
-
-Every other store holds what happened. This one holds what is about to: the team a data service
-currently has each player on, and the word its injury report uses about them. That is what turns the
-site's roster controls from an empty form into who is actually expected to take the floor.
-
-It is a snapshot rather than a history. Each collection replaces the whole table, because a player
-who has left a roster has to leave this one too, and a row nobody rewrote would go on naming a team
-they no longer play for. When the table is empty nothing is assumed, which is exactly how every
-prediction behaved before this store existed.
-"""
+"""Stores the latest roster and injury snapshot."""
 
 from datetime import datetime, timezone
 from typing import Collection
@@ -25,10 +14,10 @@ ALL_CATEGORIES = Categories()
 PLAYER_ID = ALL_CATEGORIES.add_category("PLAYER_ID", DataType.INTEGER)
 TEAM_ID = ALL_CATEGORIES.add_category("TEAM_ID", DataType.INTEGER)
 STATUS = ALL_CATEGORIES.add_category("STATUS", DataType.TEXT)
-"""The injury report's own word, or null for a player it says nothing about."""
+"""Injury status from the injury report, or null if the player is not on it."""
 
 COLLECTED_AT = ALL_CATEGORIES.add_category("COLLECTED_AT", DataType.TEXT)
-"""When the snapshot was taken, in UTC. The same value on every row of one collection."""
+"""Time the snapshot was collected, in UTC."""
 
 # Database
 FILEPATH = paths.database_file("rosters")
@@ -38,7 +27,6 @@ PRIMARY_KEYS = [
 ]
 DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 
-# A roster is almost always read one team at a time, and the primary key is the player.
 INDEXES = [
     [TEAM_ID]
 ]
@@ -48,7 +36,7 @@ DATABASE = Database(
 )
 
 READ_CATEGORIES = [PLAYER_ID, TEAM_ID, STATUS]
-"""The order _from_row reads a row in, named outright so a column added later cannot shift it."""
+"""Column order expected by _from_row."""
 
 def _from_row(row: tuple) -> RosterEntry:
     player_id, team_id, status = row
@@ -57,12 +45,7 @@ def _from_row(row: tuple) -> RosterEntry:
 
 # Writing
 def store(entries: Collection[RosterEntry]) -> int:
-    """
-    Replaces the whole snapshot with the given one and returns how many rows were written.
-
-    An empty snapshot is refused rather than written, because a service that answered with nothing
-    and a league with nobody on it are the same table, and only one of them is real.
-    """
+    """Replaces the stored snapshot with the given entries. Returns the number of rows written."""
 
     if not entries:
         raise ValueError("A roster snapshot cannot be empty. Nothing was stored.")
@@ -97,7 +80,7 @@ def _entries(
     return [_from_row(row) for row in rows]
 
 def on_team(team_id: int) -> list[RosterEntry]:
-    """Who a data service currently has on one team, hurt or not."""
+    """Returns the roster entries for the given team."""
 
     return _entries(
         f"{TEAM_ID.category_name} = :{TEAM_ID.category_name}",
@@ -105,12 +88,7 @@ def on_team(team_id: int) -> list[RosterEntry]:
     )
 
 def entries_for(player_ids: Collection[int]) -> dict[int, RosterEntry]:
-    """
-    What the snapshot says about the named players, keyed by player.
-
-    A player it says nothing about is simply absent from the answer, which is how a caller tells "no
-    longer on this team" apart from "this service has never heard of them".
-    """
+    """Returns the roster entries for the given players, keyed by player ID."""
 
     if not player_ids:
         return {}
@@ -120,7 +98,7 @@ def entries_for(player_ids: Collection[int]) -> dict[int, RosterEntry]:
     return {entry.player_id: entry for entry in found}
 
 def collected_at() -> datetime | None:
-    """When the held snapshot was taken, or None while none has been. Says how stale it is."""
+    """Returns when the stored snapshot was collected, or None if there isn't one."""
 
     with DATABASE:
         newest = DATABASE.max_value(COLLECTED_AT)

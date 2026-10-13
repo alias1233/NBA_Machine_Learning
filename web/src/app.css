@@ -1,9 +1,3 @@
-/*
- * Every color, type size, space, radius and duration the site uses is named here, and nothing
- * outside this file holds a raw one. `light-dark()` picks per theme from a single declaration, so a
- * token is never written twice and there is no theme-specific block.
- */
-
 @font-face {
 	font-family: 'Instrument Serif';
 	src: url('/fonts/instrument-serif-latin.woff2') format('woff2');
@@ -12,8 +6,6 @@
 	font-display: swap;
 }
 
-/* The plate uses only its supporting and display weights. They are static cuts, so loading both is
-   still less wasteful than carrying the seven weights the plate never prints. */
 @font-face {
 	font-family: 'Barlow Condensed';
 	src: url('/fonts/barlow-condensed-latin-700.woff2') format('woff2');
@@ -30,8 +22,6 @@
 	font-display: swap;
 }
 
-/* Cut to the run of weights the site sets, 400 through 800. The weights either side of it were a
-   third of the file and nothing could ever ask for them. */
 @font-face {
 	font-family: 'Inter Tight';
 	src: url('/fonts/inter-tight-latin.woff2') format('woff2');
@@ -40,8 +30,6 @@
 	font-display: swap;
 }
 
-/* One weight, because this face sets micro labels and figures and nothing else, all at 500. Its
-   programming ligatures went with the rest: nothing here is code, and a figure must never be one. */
 @font-face {
 	font-family: 'JetBrains Mono';
 	src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
@@ -53,8 +41,7 @@
 :root {
 	color-scheme: light dark;
 
-	/* The five planes. A block is the opposite theme's paper, which is what gives a page its
-	   composition, so it carries an ink family of its own. */
+	/* Planes */
 	--page: light-dark(#f8f5ee, #1b1a1a);
 	--panel: light-dark(#eae2d2, #2e2d2b);
 	--block: light-dark(#222120, #ede7d9);
@@ -66,9 +53,7 @@
 	--block-ink: light-dark(#f5f1e8, #1c1a16);
 	--block-muted: light-dark(#b0a896, #5c574b);
 
-	/* Reserved space waiting to be filled, which is what every skeleton on the site is drawn in. A
-	   plane token, so a block hands over its own hairline rather than the sunken page tone, which
-	   would read as a bright bar on block paper. */
+	/* Background of placeholder areas. */
 	--waiting: var(--surface-sunken);
 
 	--hairline: light-dark(#e3dccc, #2e2b24);
@@ -76,53 +61,36 @@
 	--hairline-block: light-dark(#3a362e, #cfc7b4);
 	--control-border: light-dark(#6b6559, #807969);
 
-	/* Accent and meaning */
+	/* Accent and status colors */
 	--accent: light-dark(#a83c1e, #e28b5c);
 	--accent-on: light-dark(#ffffff, #141311);
 	--accent-block: light-dark(#e9a177, #a83c1e);
-	/* Where the accent goes when a control is under the pointer. It is a second mix of the same ink
-	   rather than a filter over the whole control, so the words on a filled button keep the contrast
-	   they were chosen for. Each plane's accent has one, and each moves away from that plane's paper:
-	   deeper on light, brighter on dark. */
 	--accent-hover: light-dark(#8a3018, #f0a077);
 	--accent-block-hover: light-dark(#f4b48d, #8a3018);
-	/* The accent of the plane a thing sits on, what reads on top of it filled, and where it goes on
-	   hover. A block sets these to its own and a surface sets them back, so a link, a button and a
-	   focus ring each take the right accent from where they sit rather than from a rule per plane. */
+	/* Accent color of the current surface. Each surface sets its own. */
 	--plane-accent: var(--accent);
 	--plane-accent-on: var(--accent-on);
 	--plane-accent-hover: var(--accent-hover);
 	--over: light-dark(#0b6845, #4bcf9a);
 	--under: light-dark(#b01d57, #f072b0);
-	/* An outcome landing exactly on the line. A third data color rather than the neutral tone,
-	   because a push is a result and not the absence of one. */
+	/* Push, when the result lands exactly on the line. */
 	--push: light-dark(#8c6d10, #e8bf5c);
 	--warn-wash: light-dark(#f8edd6, #2a2211);
 	--warn-border: light-dark(#dfc79b, #5c4a1d);
 	--chart-neutral: light-dark(#8a8375, #807969);
-	/* The leader lines on the About page's annotated answer. One tone in both themes, because a
-	   leader crosses the page and a block on its way to the part it names and those two swap, so it
-	   is the one mid tone that reads on either. */
+	/* Leader lines on the About page's annotated example. */
 	--leader: #7d7668;
-	/* What the model expects, marked on the chart. Ink rather than a hue of its own, so it is the
-	   opposite of the paper in either theme and is never mistaken for over, under or push. */
+	/* Expected value marker on the chart. */
 	--chart-expected: var(--ink);
 
-	/* Type. One family per job: the serif holds large paper headings, the plate face holds every
-	   stamped word, the interface face holds every sentence, and the mono face holds every figure and
-	   micro label. */
+	/* Type */
 	--font-display: 'Instrument Serif', Georgia, serif;
 	--font-plate: 'Barlow Condensed', 'Arial Narrow', sans-serif;
 	--font-ui: 'Inter Tight', system-ui, sans-serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
 	--type-display: clamp(3rem, 9vw, 6rem);
-	/* The plate is stamped rather than typeset. This is the size a page's band is stamped at, under
-	   the hero's own. */
 	--type-plate-display: clamp(2.25rem, 6vw, 5rem);
-	/* An index standing in a slot, where the name of the thing is what a reader is choosing between
-	   and is set large enough to be the texture of the sheet. Measured against the index holding it,
-	   so a narrow column prints it small and a wide one prints it large. */
 	--type-plate-index: clamp(1.0625rem, 6.2cqi, 1.4375rem);
 	--type-h1: clamp(2rem, 5vw, 3.25rem);
 	--type-h2: clamp(1.5rem, 3vw, 2rem);
@@ -130,11 +98,8 @@
 	--type-body: 1rem;
 	--type-small: 0.875rem;
 	--type-micro: 0.75rem;
-	/* What a lead figure counts and whose it is. A step above body text, which nothing else on an
-	   answer takes, so the phrase reads as part of the figure without taking the lead from it. */
 	--type-note: 1.125rem;
 	--type-figure: 1.25rem;
-	/* A figure given room to be read from further away, which is the odds in the detailed view. */
 	--type-figure-large: 1.75rem;
 	--type-figure-lead: clamp(2.5rem, 6vw, 3.5rem);
 
@@ -152,74 +117,42 @@
 	--control-padding-x: 0.75rem;
 	--tap-target: 44px;
 
-	/* Chrome. The header is fixed, so the page reserves exactly what it takes. */
+	/* Chrome */
 	--header-height: calc(var(--tap-target) + var(--space-2) * 2);
 	--header-reveal-zone: 64px;
-	/* How much of the page the header is kept clear of above anything the page travels to. It is also
-	   what a section sized to one screen measures itself against. */
+	/* Space kept above a scroll target so the header does not cover it. */
 	--scroll-lead: calc(var(--header-height) + var(--space-2));
 
 	/* Shape */
 	--radius: 8px;
 	--radius-lg: 14px;
 	--radius-full: 999px;
-	/* The box an inline SVG icon is drawn in. */
+	/* Size of an inline SVG icon. */
 	--icon: 1.25rem;
 
-	/*
-	 * A game dealt as a playing card. Both sides of a game are printed in the two corner indices, the
-	 * way a card prints its own, so the proportion is a real card's and never changes.
-	 *
-	 * The board deals as many whole cards across a row as fit, and how large one may print grows with
-	 * the board between these two. The floor is the narrowest a card is still readable at, which is
-	 * what deals three across a phone. The ceiling is as large as a card wants to be, so a board given
-	 * the whole page deals another row of them rather than four enormous ones.
-	 */
+	/* Game cards */
 	--play-card-floor: 5.25rem;
 	--play-card-wide: 8.25rem;
 	--play-card-ratio: 5 / 7;
-	/* How far a card lifts off the board when it is hovered, focused or picked. */
+	/* Distance a card lifts when hovered, focused or selected. */
 	--play-card-lift: 1rem;
-	/* How far each row of the deal lies off the one above it, one to the left and the next to the
-	   right by the same amount. Three quarters of the gap between cards each way: enough that no two
-	   rows line up down the board, and not so far that a row reads as having slipped. A hand pushed
-	   across a table, rather than a grid. */
+	/* Horizontal offset between one row of cards and the next. */
 	--play-card-stagger: 0.5rem;
-	/* How much larger a card prints at the top of its turn, which is what says it came up out of the
-	   page rather than slid across it. A card, not a poster: barely a fourteenth over its own size. */
+	/* Scale of a card at the peak of its flip. */
 	--play-card-rise: 1.075;
-	/* How near the reader the board's vanishing point stands. Far enough that a card turning keeps
-	   its proportions and near enough that the turn is read as a card and not as a flat sheet. */
 	--play-card-depth: 620px;
-	/* The whole turn: up, over, and down. One authored moment, given the room a gesture needs and no
-	   more, so a reader picking a second game is never waiting on the first one. */
 	--play-card-turn: 700ms;
-	/*
-	 * What a card casts on the board.
-	 *
-	 * A card lies on the well rather than floating over the page, so its shadow is short and hard: a
-	 * contact line directly under the stock, and one short drop off it. Both are near-black rather
-	 * than the acetate's navy, because a shadow falls on whichever ground the family is printed on
-	 * and a tinted one reads as a colour under the card instead of as the card being off the board.
-	 *
-	 * The drop lengthens as the card comes up, under a hand, taken, and at the top of its own turn,
-	 * and stays exactly as hard, because what changed is how far off the board it is, not the light.
-	 */
+	/* Card shadows, one for each lift height. */
 	--play-card-shadow: 0 1px 0 rgb(0 0 0 / 0.42), 0 2px 3px rgb(0 0 0 / 0.38);
 	--play-card-shadow-near: 0 1px 0 rgb(0 0 0 / 0.4), 0 5px 8px -1px rgb(0 0 0 / 0.45);
 	--play-card-shadow-taken: 0 2px 2px rgb(0 0 0 / 0.4), 0 10px 16px -2px rgb(0 0 0 / 0.5);
 	--play-card-shadow-air: 0 4px 4px rgb(0 0 0 / 0.35), 0 22px 30px -6px rgb(0 0 0 / 0.5);
 
-	/* The chart. It is drawn --chart-height tall inside an answer and fills the room it is given in
-	   the detailed view. --chart-axis is the gutter the probability axis is written in, which has to
-	   be given a width because a mark is placed by its value rather than laid out in the flow. How
-	   dense a run has to get before its figures and marks thin out is measured in the chart itself,
-	   against the bars, so it is not a token. */
+	/* Chart */
 	--chart-height: calc(var(--space-8) * 2);
 	--chart-axis: 3.5rem;
 
-	/* Elevation. Flat is the plane tint and nothing else. Raised adds --shadow, and only a thing
-	   that floats above the page is raised. */
+	/* Elevation */
 	--rule: 1px solid var(--hairline);
 	--rule-panel: 1px solid var(--hairline-panel);
 	--rule-block: 1px solid var(--hairline-block);
@@ -239,110 +172,57 @@
 	--ease-out: cubic-bezier(0.4, 0, 1, 1);
 	--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
-	/*
-	 * The plate world.
-	 *
-	 * The home page is a printed statistical plate with a sheet of wet-erase acetate lying on it. The
-	 * plate is what the model measured: flat spot inks on saturated stock, registered, and never
-	 * hand-made. The acetate is the reader's own question, drawn on in grease pencil. Everything the
-	 * site is sure of is printed; everything the reader is asking is drawn.
-	 *
-	 * These do not vary by theme. A printed plate is one object under any light, and inverting it
-	 * would say the ink changed color when the room did. The rest of the site is still on the five
-	 * planes above and is migrated separately.
-	 *
-	 * Every value here is sampled from the approved comp rather than chosen again, so what shipped is
-	 * what was approved. Contrast is measured against --plate: bone ink reads 9.5:1, the muted ink
-	 * 6.0:1, and the spot ink and the pencil 3.5:1 and 3.8:1, which is why neither of the last two
-	 * ever sets small text.
-	 */
+	/* Plate colors. These are the same in light and dark themes. */
 	--plate: #0c2c5c;
-	/* A well printed darker than the plate, for a track or an area waiting to be filled. */
+	/* Darker shade of the plate, for inset areas. */
 	--plate-deep: #071c3c;
-	/* The one printed ink everything readable is set in. */
 	--plate-ink: #ece3d1;
 	--plate-ink-muted: #a9b9e0;
-	/* The spot color, printed. It marks the run of outcomes above the line and fills the one action. */
+	/* Highlight color on the plate. */
 	--plate-spot: #f35411;
 	--plate-spot-on: #0a1d4a;
-	/* The spot ink under the pointer. A press lays one ink, so this is the same ink run heavier. */
 	--plate-spot-hover: #ff6a2b;
-	/* Printed hairlines: the rule that only separates, and the box a figure is printed inside. */
 	--plate-rule: #2a5aa8;
 	--plate-rule-strong: #6d88d4;
-	/* The plate's two printed rules, named the way every other rule on the site is. The strong one is
-	   the box a figure is printed inside and is the only one of the two that carries a meaning. */
 	--rule-plate: 1px solid var(--plate-rule);
 	--rule-plate-strong: 1px solid var(--plate-rule-strong);
 
-	/* The acetate. A real second sheet, so it has a sheen along its top edge and a shadow under it. */
+	/* The acetate */
 	--acetate-sheen: rgb(255 255 255 / 0.16);
 	--acetate-shadow: rgb(1 15 48 / 0.5);
-	/* What a sheet of paper lying on a plate casts onto it. It is the plate's own shadow rather than
-	   the page's, because the ground it falls on is printed stock and not paper. */
 	--sheet-shadow: 0 2px 8px var(--acetate-shadow), 0 14px 34px var(--acetate-shadow);
-	/*
-	 * Wet-erase magenta: every mark that is the reader's rather than the model's.
-	 *
-	 * It comes in two inks, because one magenta cannot clear 3:1 against both a dark ground and a
-	 * light one. The bright ink marks a dark ground and the deep ink marks a light one, and
-	 * --plane-pencil picks between them exactly the way --plane-accent picks an accent, so a mark is
-	 * correct from where it sits rather than from a rule per place.
-	 */
+	/* Magenta for marks made by the user. Brighter on dark backgrounds, deeper on light ones. */
 	--pencil: #f1589a;
 	--pencil-deep: #c2185b;
 	--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
 
-	/* How thick a drawn mark is. A grease pencil does not draw a hairline. */
 	--pencil-width: 3px;
-	/* How long one stroke of a drawn mark takes, and how long after it the second one starts. Two
-	   strokes laid one at a time is the whole of what makes the mark read as drawn by a hand rather
-	   than switched on, so it is given more than --motion-slow to happen in. */
 	--pencil-stroke: 240ms;
 	--pencil-stagger: 180ms;
-	/* The registration crosses the plate is printed with, one per corner. */
 	--registration: 14px;
-	/* The Models index uses one shaped hollow frame per family. The page remains the shared ground. */
 	--models-frame-min-height: 34rem;
 	--models-frame-stagger: 20px;
 	--models-frame-hover-glow: drop-shadow(0 6px 12px currentColor);
 
-	/*
-	 * Layout.
-	 *
-	 * One column, wide, and every band and the header sit on it, so a printed name in a band lines up
-	 * with the wordmark above it and with the work below it. Reading text is capped by measure rather
-	 * than by a second, narrower column.
-	 */
+	/* Layout */
 	--content-width: 76rem;
 	--measure: 68ch;
 	--control-column: 40rem;
 	--answer-column: 30rem;
-	/* The index of sections down the side of an explaining page. */
+	/* Width of the section index beside a long page. */
 	--index-column: 13rem;
 
-	/* The widest a data figure can reach, so a readout that changes value moves nothing around it.
-	   Every odds figure and the detailed view's expected figure each sit in one of these, and the
-	   larger box holds a figure set at --type-figure-large. */
+	/* Fixed width for a number, so the layout does not shift when it changes. */
 	--figure-column: 5.5rem;
 	--figure-column-large: 7rem;
 
-	/*
-	 * Stacking. Four layers, and nothing outside this file names a bare number.
-	 *
-	 * Floating is a menu, a list or a sheet standing over the page. The header is above all of them,
-	 * because a thing in the page must never cover the way out of it. An overlay is a full screen
-	 * sheet, which is the one thing that covers the header, and the skip link is above the lot.
-	 *
-	 * Anything that only has to stack against its own siblings, such as a card lifted off the board,
-	 * isolates instead, so its order can never reach any of these.
-	 */
+	/* Stacking */
 	--layer-floating: 20;
 	--layer-header: 30;
 	--layer-overlay: 40;
 	--layer-skip: 50;
 
-	/* Ads. A slot holds this height whenever ads are on, so nothing shifts when one arrives. */
+	/* Ads */
 	--ad-height: 250px;
 	--ad-height-wide: 90px;
 }
@@ -353,49 +233,29 @@
 	box-sizing: border-box;
 }
 
-/*
- * How far along its own run one stroke of a drawn mark has been laid down. Registered so it can be
- * animated, which an unregistered custom property cannot be, and used as the stop of the mask that
- * lays each stroke in from the corner it starts at. At rest it is past the far end and holds nothing
- * back, so a mark with no animation to run is simply the finished mark.
- */
+/* Registered so it can be animated. Unregistered custom properties cannot be. */
 @property --laid {
 	syntax: '<percentage>';
 	inherits: false;
 	initial-value: 100%;
 }
 
-/* The home header and hero leave the opening plate as one printed object. */
 @keyframes hero-recede {
 	to {
 		translate: 0 calc(var(--space-8) * -1.5);
 	}
 }
 
-/* The page tone is painted on the root, so nothing the browser draws outside the document, including
-   an overscroll or a view transition snapshot, can reveal the default white canvas. */
+/* Background is set on the root so overscroll never shows white. */
 html {
 	background: var(--page);
 	-webkit-text-size-adjust: 100%;
-	/* The header is fixed, so an anchor stops below it rather than under it, with a little of the
-	   page tone above whatever was linked to. Nothing sets its own top margin for this. A target that
-	   opens a new ground takes .lands-flush instead, further down. */
+	/* Keeps anchor targets from landing under the fixed header. */
 	scroll-padding-top: var(--scroll-lead);
-	/* Held on every page, so the header and the page under it sit in the same place whether or not
-	   that page is long enough to scroll. */
 	scrollbar-gutter: stable;
-	/* The bar the browser draws is part of the page too, so it is set in the page's own tones rather
-	   than in the platform's. */
 	scrollbar-color: var(--control-border) var(--page);
 }
 
-/*
- * Marking a word on paper. The plate marks in wet-erase pencil instead, further down. Left to the
- * browser this is a system blue that belongs to no plane on the site.
- *
- * A wash of the plane's own accent rather than a fill, so the words keep the ink and the contrast
- * they were set in whichever paper they are on.
- */
 ::selection {
 	background: color-mix(in srgb, var(--plane-accent) 32%, transparent);
 }
@@ -413,8 +273,6 @@ body {
 	-webkit-font-smoothing: antialiased;
 }
 
-/* The serif carries the name and the two large heading levels. It has one weight, so it never holds
-   small text. Anything below h2 is the interface face. */
 h1,
 h2,
 .type-h1,
@@ -459,24 +317,18 @@ figure {
 	margin: 0;
 }
 
-/* Accent and underlined, which is what marks a link to somewhere else. Anything acting on the page
-   the reader is already on is a button instead. */
 a {
 	color: var(--plane-accent);
 	text-decoration-thickness: 1px;
 	text-underline-offset: 2px;
 }
 
-/* A link set as a sentence is still a control, so it holds the same target as one. The height is
-   the whole of it: the words keep the type role and the plane accent they already had. */
 .text-link {
 	display: inline-flex;
 	align-items: center;
 	min-height: var(--tap-target);
 }
 
-/* Acting on the page the reader is already on is a button, not a link, but it reads as a sentence
-   either way, so it is given the accent and the underline a link takes and nothing else. */
 button.text-link {
 	padding: 0;
 	background: none;
@@ -488,15 +340,12 @@ button.text-link {
 	cursor: pointer;
 }
 
-/* The ring takes the accent of whatever it is drawn on, so it inverts with a block and back with a
-   surface nested in one. */
 :focus-visible {
 	outline: var(--rule-accent);
 	outline-color: var(--plane-accent);
 	outline-offset: 2px;
 }
 
-/* The small mark is stamped too, but stays beneath the name at display size. */
 .wordmark {
 	font-family: var(--font-plate);
 	font-size: var(--type-h3);
@@ -505,7 +354,7 @@ button.text-link {
 	text-transform: uppercase;
 }
 
-/* Type roles the element selectors above do not cover. */
+/* Text styles not covered by the element selectors above. */
 .display {
 	font-family: var(--font-display);
 	font-size: var(--type-display);
@@ -532,7 +381,6 @@ button.text-link {
 	font-variant-numeric: tabular-nums;
 }
 
-/* The interface face, not the mono one, because it is a phrase rather than a measurement. */
 .figure-note {
 	font-size: var(--type-note);
 	font-weight: 500;
@@ -554,7 +402,6 @@ button.text-link {
 	line-height: 1.5;
 }
 
-/* A figure set in the interface face still lines its digits up. Mono gives this for free. */
 .numeric {
 	font-variant-numeric: tabular-nums;
 }
@@ -563,7 +410,7 @@ button.text-link {
 	color: var(--ink-muted);
 }
 
-/* Read by a screen reader, never drawn. */
+/* Hidden visually but still available to screen readers. */
 .visually-hidden {
 	position: absolute;
 	width: 1px;
@@ -575,7 +422,7 @@ button.text-link {
 	white-space: nowrap;
 }
 
-/* The one column the whole site sits on: every band, the header, and the work under them. */
+/* Main content column. */
 .page {
 	width: 100%;
 	max-width: var(--content-width);
@@ -583,26 +430,18 @@ button.text-link {
 	padding-inline: var(--space-4);
 }
 
-/* Sections sit far apart and the page tone shows between them. */
 .sections {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
 }
 
-/*
- * An explaining page: its sections, and beside them the list of what it holds. One column until
- * there is room for the list to stand next to the reading rather than above it.
- */
 .indexed {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
 }
 
-/* A rule above a section heading rather than below it, which is what says a rule belongs to what
-   follows it. It runs the whole column while the text under it is capped by measure, so the two
-   together are what marks the start of a section. */
 .section-rule {
 	padding-block-start: var(--space-3);
 	border-top: var(--rule-panel);
@@ -617,17 +456,10 @@ button.text-link {
 	}
 }
 
-/* A column of running text, capped so a 76rem page never sets a line nobody can track back. */
 .measure {
 	max-width: var(--measure);
 }
 
-/*
- * What one of a prediction page's three regions opens with: a rule, a printed label, and whatever
- * belongs beside it. It is the same rule and label a group of fields opens with, so the board, the
- * parameters and the answer all start on one line across the page. What sits beside the label drops
- * to its own line rather than squeezing where the region is too narrow to hold both.
- */
 .column-label {
 	display: flex;
 	flex-wrap: wrap;
@@ -639,57 +471,22 @@ button.text-link {
 	color: var(--ink);
 }
 
-/*
- * A target the page travels to whose ground is not the ground of the section above it.
- *
- * The lead the root keeps clear of the header would leave a strip of the section above showing at
- * the top of the screen, and a strip of another ground reads as the page having stopped short of
- * where it was going. So the lead is canceled here and the change of ground lands on the top edge
- * of the screen exactly. Nothing is kept clear for the header, which stands over the target's own
- * first stretch, the way it already stands over the band a page opens with.
- *
- * Every scroll-to whose target changes ground takes this, whether it is followed as a link or walked
- * by lib/scroll.ts, which reads the same two properties. A target on the same ground as what is
- * above it does not, because there the lead is what keeps the header off what was linked to.
- */
+/* Scroll target that lands flush with the top of the screen, with no space kept for the header. */
 .lands-flush {
 	scroll-margin-top: calc(var(--scroll-lead) * -1);
 }
 
-/*
- * A band is the page's structural unit. It runs the full width of the screen, carries one register,
- * printed plate or paper, and holds its content on the page column. Everything that used to be a
- * box floating in a narrow column is a band now, which is where the site's composition comes from.
- */
 .band {
 	width: 100%;
 }
 
-/*
- * The band a page opens with bleeds up under the fixed header, because the header is printed on it
- * rather than set above it. It takes the header's height back as its own top padding, so the first
- * thing printed on the band clears the wordmark.
- *
- * How much room it leaves above its own printing is --band-lead. A band that has a whole screen to
- * itself, which is the home page's hero, takes less of it because the answer needs the room.
- */
+/* The first band extends up under the fixed header and adds the header's height back as padding. */
 main > .band:first-child {
 	margin-top: calc(var(--header-height) * -1);
 	padding-block-start: calc(var(--header-height) + var(--band-lead, var(--space-6)));
 }
 
-/*
- * A family's own stock.
- *
- * The press never changes. Every plate on the site is printed in the same bone ink and the same spot
- * orange, and only the sheet under them does, so a reader knows which family they are in before they
- * have read a word. The site's own pages keep the ink blue above.
- *
- * Each ground was picked to hold the bone ink above 9:1 and the spot ink above 3:1, which is what
- * the blue holds, and each carries a muted ink tinted to itself rather than the blue's. The two
- * printed rules are restated with every ground, because a custom property holding another one is
- * substituted where it is declared and would otherwise carry the blue's rules down with it.
- */
+/* Plate colors for each model family. The rule variables are repeated because a custom property resolves where it is declared. */
 [data-plate='player-stats'] {
 	--models-frame-highlight: light-dark(#009b5f, #2bff9e);
 	--plate: #0a3f2d;
@@ -726,11 +523,7 @@ main > .band:first-child {
 	--rule-plate-strong: 1px solid var(--plate-rule-strong);
 }
 
-/*
- * Pages that do not belong to a model family use the block plane for their opening band and header.
- * The page components still speak the shared plate vocabulary, so mapping it here keeps their
- * typography, rules and controls on the block's own ink without a second version of each component.
- */
+/* Pages outside a model family use the block colors for their first band and header. */
 .neutral-page {
 	--plate: var(--block);
 	--plate-deep: var(--block);
@@ -745,13 +538,7 @@ main > .band:first-child {
 	--rule-plate-strong: var(--rule-block);
 }
 
-/*
- * The plate: a printed statistical sheet in flat spot inks on saturated stock. It is the site's own
- * register, and it does not vary by theme, because a printed plate is one object under any light.
- *
- * Everything readable on a plate comes from the remapped tokens below, so a component drawn on one
- * is correct without a line of plate-specific styling. Remap, never restyle.
- */
+/* The plate overrides the shared tokens, so components on it need no extra styles. */
 .plate {
 	background: var(--plate);
 	color: var(--plate-ink);
@@ -777,15 +564,11 @@ main > .band:first-child {
 	--plane-pencil: var(--pencil);
 }
 
-/* Selecting text on a printed sheet marks it, so the mark is the wet-erase pencil. Left alone the
-   browser lays its own blue over a blue plate and the selection cannot be seen at all. */
 .plate ::selection {
 	background: var(--pencil);
 	color: var(--plate-spot-on);
 }
 
-/* Plate lettering is stamped in one face. The site's serif never appears on a plate, because a serif
-   here reads as something typeset elsewhere and pasted on. */
 .plate h1,
 .plate h2,
 .plate h3,
@@ -797,7 +580,6 @@ main > .band:first-child {
 	line-height: 1.1;
 }
 
-/* What a page's opening band is stamped with. */
 .plate-display {
 	font-size: var(--type-plate-display);
 	font-weight: 800;
@@ -806,8 +588,7 @@ main > .band:first-child {
 	text-transform: uppercase;
 }
 
-/* The crosses a press registers a plate by, one per corner. They say nothing to a reader. They are
-   what makes the ground read as something printed rather than as a coloured box. */
+/* Registration crosses, one per corner. */
 .registration {
 	position: absolute;
 	width: var(--registration);
@@ -838,7 +619,6 @@ main > .band:first-child {
 	right: var(--space-3);
 }
 
-/* An accent rule above the page title. */
 .page-title::before {
 	content: '';
 	display: block;
@@ -847,11 +627,7 @@ main > .band:first-child {
 	border-top: var(--rule-accent);
 }
 
-/*
- * The two containers, and no others. Both are --radius-lg with --space-5 of padding, no border and
- * no shadow. The transparent top edge is what a link and the answer color in without moving
- * anything.
- */
+/* The two containers. */
 .panel,
 .block {
 	padding: var(--space-5);
@@ -860,8 +636,6 @@ main > .band:first-child {
 	border-radius: var(--radius-lg);
 }
 
-/* A panel is always on the page plane, the header's menu included, so it sets the page-side accent
-   back whatever it is floating over. */
 .panel {
 	background: var(--panel);
 	--plane-accent: var(--accent);
@@ -870,20 +644,7 @@ main > .band:first-child {
 	--plane-pencil: light-dark(var(--pencil-deep), var(--pencil));
 }
 
-/*
- * Block paper: the opposite theme's paper, and the whole ink family that comes with it. Its accent
- * comes too, because the page-side one has no edge against block paper, and what reads on top of that
- * accent filled is the block's own paper. Every rule on it is the block hairline, so nothing drawn
- * here has to know which paper it landed on.
- *
- * `.block` is one of the two containers on paper and nothing else. A band never takes it: a band is
- * the site talking and prints on plate, and block paper run the width of the screen stops reading as
- * a thing set into the page at all.
- *
- * `.block-plane` is the same paper with none of the container: no padding, no radius and no top
- * edge. A field of a printed composition takes it, which is a shape the page decides rather than an
- * object. Declared once for both, so the ink family is never written down a second time.
- */
+/* Block uses the opposite theme's background, with its own text colors. */
 .block,
 .block-plane {
 	background: var(--block);
@@ -903,8 +664,7 @@ main > .band:first-child {
 	color: var(--block-muted);
 }
 
-/* A nested data or image area inside a block. The page-side tokens apply again here, so a link or a
-   button on one takes the page's accent back off the block it sits inside. */
+/* Nested data or image area inside a block. Switches back to the page colors. */
 .surface {
 	padding: var(--space-4);
 	background: var(--surface);
@@ -921,25 +681,13 @@ main > .band:first-child {
 	color: var(--ink-muted);
 }
 
-/*
- * Reserved space, drawn on the plane's own waiting tone. Empty, loading and answered are the same
- * size everywhere on this site, so one of these stands wherever a value has not been drawn yet.
- *
- * It takes its size from what it is standing in for. A box holding nothing to take one from is given
- * an explicit width and height where it is used.
- *
- * Only .waiting pulses, and it is added exactly while something is on its way. A box standing empty
- * because nothing has been asked for keeps still, because a pulse would say the page is already
- * working on an answer the reader has not asked it for.
- */
+/* Placeholder areas. Only .waiting pulses, while something is loading. */
 .reserved,
 .waiting {
 	background: var(--waiting);
 	border-radius: var(--radius);
 }
 
-/* Held back, because nothing is on its way. It is the shape the answer will take rather than a thing
-   being filled in, and at full strength a block waiting on a reader reads as a block mid-request. */
 .reserved {
 	opacity: 0.55;
 }
@@ -955,20 +703,7 @@ main > .band:first-child {
 	}
 }
 
-/*
- * Printing.
- *
- * How anything printed arrives on this site. An impression comes up out of register and settles
- * into it, once, and never travels to get there, so it can be struck inside a clipped edge without
- * moving what sits under it.
- *
- * A stamp is the full impression, for something struck on its own ground: it lands a hair too large
- * as well. A strike is the same impression where there is no room to come down into, which is
- * anything printed inside a surface that holds its own height.
- *
- * Reduced motion clamps both to a millisecond, so what was printed is still there and nothing is
- * printed in front of the reader.
- */
+/* Printing */
 @keyframes stamp {
 	from {
 		opacity: 0;
@@ -1003,8 +738,6 @@ main > .band:first-child {
 	}
 }
 
-/* A whole container that leads somewhere is one link, and shows it as a top edge and nothing
-   else: no lift, no shadow, no background change. An upcoming game card also scales. */
 a.panel,
 a.block {
 	display: block;
@@ -1012,7 +745,6 @@ a.block {
 	transition: border-top-color var(--motion-fast) var(--ease-in);
 }
 
-/* A block already sets its own ink. A panel takes the page's. */
 a.panel {
 	color: inherit;
 }
@@ -1024,16 +756,7 @@ a.block:focus-visible {
 	border-top-color: var(--plane-accent);
 }
 
-/*
- * A panel that folds open in place: the About page's answers and a model's figures.
- *
- * Both are written into the document whether they are open or not, which is what a search engine
- * and a reader with no scripting are given, and the summary is the control that folds them away.
- * The platform's own disclosure triangle is dropped, because each of these draws its own mark.
- *
- * The content flows open where the browser can interpolate a height to `auto`, and simply appears
- * where it cannot. Reduced motion is handled for the whole site at the foot of this file.
- */
+/* Collapsible panel. */
 summary {
 	display: block;
 	list-style: none;
@@ -1064,16 +787,11 @@ summary::-webkit-details-marker {
 	}
 }
 
-/* A tag takes its color from what it sits on, so one shape serves a block, an accent card and a
-   page. */
 .tag {
 	display: inline-flex;
 	align-items: center;
 	padding: 0 var(--space-2);
 	border: var(--rule-current);
-	/* One line of its own text, which the browser caps at half the height, so a tag on one line is a
-	   pill and one that has wrapped on a narrow card is a rounded box rather than a lens its own
-	   words hang out of. */
 	border-radius: 1lh;
 }
 
@@ -1088,12 +806,7 @@ summary::-webkit-details-marker {
 	color: var(--ink-muted);
 }
 
-/*
- * A group of fields, marked by a rule and its own printed label rather than by a box.
- *
- * A filled, rounded panel around every group is what made a form read as constricted: boxes inside
- * a box inside a page. A rule and space group just as clearly and leave the page open.
- */
+/* Group of fields with a divider and a label. */
 .field-group {
 	display: flex;
 	flex-direction: column;
@@ -1102,22 +815,15 @@ summary::-webkit-details-marker {
 	border-top: var(--rule-panel);
 }
 
-/* A group standing directly under a head that already carries a rule. It opens on that rule rather
-   than restating one of its own two lines below it. */
 .field-group.flush {
 	padding-block-start: 0;
 	border-top: none;
 }
 
-/* The name of a group, printed on its rule at full strength. It names the fields under it, so it is
-   not supporting text. */
 .group-label {
 	color: var(--ink);
 }
 
-/* Two fields on one row, once the column holding them has room for both. Measured against that
-   column and not against the screen, the same as the groups below, because the form now stands in
-   one of a page's regions and the screen says nothing about how wide that region is. */
 .field-pair {
 	display: grid;
 	gap: var(--space-4);
@@ -1129,20 +835,13 @@ summary::-webkit-details-marker {
 	}
 }
 
-/* The form a prediction is asked with: its groups of fields, then the action that ends it. Every
-   family asks with the same one, and only the groups in the middle differ. */
+/* Prediction form. */
 .form-stack {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
 }
 
-/*
- * The groups themselves. They set as two columns whenever the column holding them is wide enough,
- * measured against that column rather than against the screen, so the form fills the page while
- * nothing has been asked and folds to one column as the answer takes its room. No breakpoint
- * decides it and no class has to be passed down.
- */
 .form-groups {
 	display: flex;
 	flex-direction: column;
@@ -1157,15 +856,12 @@ summary::-webkit-details-marker {
 		margin-block-end: calc(var(--space-5) * -1);
 	}
 
-	/* A group is one object, so it never splits across the fold between two columns. */
 	.form-groups > * {
 		break-inside: avoid;
 		margin-block-end: var(--space-5);
 	}
 }
 
-/* The action, and under it the line naming whatever is still missing before it can be pressed. It
-   keeps a little of the page below it when a choice higher up scrolls it into view. */
 .form-submit {
 	display: flex;
 	flex-direction: column;
@@ -1181,9 +877,6 @@ button {
 	color: inherit;
 }
 
-/* Every control is given its width and allowed to shrink under it. Left alone, a date, number or
-   select field takes a width from its own content and pushes itself past the edge of the panel
-   holding it, which is only ever visible on a narrow screen. */
 input[type='text'],
 input[type='search'],
 input[type='date'],
@@ -1197,20 +890,15 @@ select {
 	color: var(--ink);
 	border: var(--rule-control);
 	border-radius: var(--radius);
-	/* The one part of a field the browser draws for itself, set in the plane's accent like every other
-	   mark the reader makes. */
 	caret-color: var(--plane-accent);
 }
 
-/* The prompt in an empty box, in the muted ink of whatever plane the box is on. Left to the browser
-   it is one fixed grey, which shouts on paper and all but disappears on a plate. */
 ::placeholder {
 	color: var(--ink-muted);
 	opacity: 1;
 }
 
-/* A date field is drawn by the platform, and on iOS that means an intrinsic width no rule above can
-   reach and a value centered in it. Dropping the native appearance is what hands both back. */
+/* iOS gives a date input a fixed width and centered text unless appearance is reset. */
 input[type='date'] {
 	appearance: none;
 }
@@ -1226,11 +914,6 @@ select:disabled {
 	cursor: not-allowed;
 }
 
-/*
- * A button is a block of the plane's accent, and it behaves like one under a hand: the ink deepens
- * under the pointer and the block takes a press. Both come from tokens rather than from a filter over
- * the whole control, so the words on it keep the contrast they were chosen for.
- */
 .button {
 	display: inline-flex;
 	align-items: center;
@@ -1256,28 +939,15 @@ select:disabled {
 	background: var(--plane-accent-hover);
 }
 
-/* Pressed. A block being pushed into the page is the whole of the feedback, so it is one pixel and
-   no change of size. */
 .button:active:not(:disabled) {
 	translate: 0 1px;
 }
 
-/* A printed button is square, like everything else the press lays down. Only a control on paper takes
-   the inner radius. */
 .plate .button {
 	border-radius: 0;
 }
 
-/*
- * How near the reader's hand is to the leading control, and whether that control is being held.
- *
- * Registered rather than left as plain properties, because only a registered one can be
- * transitioned, and that is what lets the block leave and return to rest smoothly from the single
- * value a script writes each frame. `--hand` is written by `nearHand` in `src/lib/motion.ts` and
- * `--held` by the stylesheet, so a control has its whole story with no script at all. Only how near
- * the hand is, never which side it is on: a block that chased the pointer would be answering the
- * hand rather than waiting for it.
- */
+/* Registered so they can be transitioned. `--hand` is set by `nearHand` in motion.ts. */
 @property --hand {
 	syntax: '<number>';
 	inherits: true;
@@ -1290,21 +960,7 @@ select:disabled {
 	initial-value: 0;
 }
 
-/*
- * The loudest control on the site, once, in the hero. Taller and wider than the standard target,
- * and stamped in the plate's own lettering rather than set in the interface face at button weight,
- * because being the one thing on a screen worth pressing is a size and a register, not only a
- * color.
- *
- * It is the one block on the plate that is not printed flat. At rest it stands inside its own corner
- * register marks, the way a press marks where a plate is to land, which says the block is a target
- * without moving anything. They close onto it as it is reached for, and again under a press or a
- * keyboard focus, so every way of arriving at the control resolves it the same way.
- *
- * A hand near it also lifts the block off the sheet, square to it and in place. That part is
- * movement rather than state, so it belongs to the pointer alone: a reader who asked for reduced
- * motion, or whose script never ran, still gets the marks, the ink and the arrow.
- */
+/* Main call-to-action button in the hero. */
 .button--lead {
 	position: relative;
 	min-height: calc(var(--tap-target) + var(--space-5));
@@ -1314,15 +970,9 @@ select:disabled {
 	font-weight: 800;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	/* Reached for, pressed or focused all settle the block, and the nearest of the three wins. */
 	--registered: max(var(--hand), var(--held));
 	translate: 0 calc(var(--hand) * -3px);
-	/* Printed larger as it comes forward, which is how an impression lands on this site. Nothing on a
-	   plate casts a shadow, so the size is the whole of what says the block left the sheet, and it
-	   has to be read at a glance rather than measured. */
 	scale: calc(1 + var(--hand) * 0.06);
-	/* The two values are what is smoothed, and everything drawn from them follows. Transitioning
-	   the drawing as well would put a second lag on top of this one. */
 	transition:
 		background var(--motion-fast) var(--ease-in),
 		color var(--motion-fast) var(--ease-in),
@@ -1330,15 +980,7 @@ select:disabled {
 		--held var(--motion) var(--ease-in);
 }
 
-/*
- * The corner marks the block is registered by: cut to the length of the plate's own crosses, one at
- * each corner, standing off the block until it is settled. They close onto its edge and are spent by
- * the time they reach it, which is the whole of the register: the block has landed.
- *
- * Eight straight runs rather than one masked box, because a mask that cuts the middle out of a
- * border needs compositing that is not the same keyword in every browser, and a corner mark is two
- * lines however it is drawn.
- */
+/* Corner marks that close in on the button as the pointer gets near. */
 .button--lead::after {
 	content: '';
 	position: absolute;
@@ -1364,15 +1006,11 @@ select:disabled {
 	--held: 1;
 }
 
-/* Restates the press so a block being pushed in keeps the lift it was reached for with. */
 .button--lead:active:not(:disabled) {
 	translate: 0 calc(var(--hand) * -3px + 1px);
 }
 
-/* The accent in outline rather than filled, for a control that acts on the page but is not what the
-   page is for. One filled button leads a view and every other button in it is one of these, so the
-   filled one is always the primary. It fills on hover, which is the accent arriving rather than a
-   second tone to name. */
+/* Outlined button for secondary actions. */
 .button--quiet {
 	background: none;
 	color: var(--plane-accent);
@@ -1390,25 +1028,15 @@ select:disabled {
 	color: var(--plane-accent-on);
 }
 
-/*
- * A control that cannot be pressed is drawn on the plane's own inert tone rather than as a faded
- * accent. A half-strength accent still reads as the thing to press, only badly printed, which is the
- * one thing a disabled control must not say. Declared after both variants so it holds for either.
- */
 .button:disabled {
 	background: var(--waiting);
 	color: var(--ink-muted);
-	/* Inset, so a disabled control is exactly the same size as one that can be pressed. */
 	box-shadow: inset 0 0 0 1px var(--hairline-panel);
 	border-color: transparent;
 	cursor: not-allowed;
 }
 
-/*
- * Navigation cross-fades and never shows white. The outgoing snapshot holds at full opacity for the
- * whole transition and the incoming one fades in on top of it. Blending both to partial opacity is
- * what lets the canvas show through, which is the flash.
- */
+/* Keeps the old page fully opaque during a view transition, so the cross-fade never shows the background. */
 ::view-transition-old(root) {
 	animation: none;
 	mix-blend-mode: normal;
@@ -1419,8 +1047,6 @@ select:disabled {
 	mix-blend-mode: normal;
 }
 
-/* The wordmark is one moving stamp. Let its new image resize with its shared transition instead of
-   cross-fading two weights on top of each other. */
 ::view-transition-old(site-wordmark) {
 	animation: none;
 	opacity: 0;
@@ -1437,11 +1063,6 @@ select:disabled {
 	}
 }
 
-/*
- * A link to a section of the page already shown travels to it rather than jumping. Anything
- * arriving from another page lands on its section instead, because a scroll running under the
- * cross-fade would jump the moment the fade ended.
- */
 @media (prefers-reduced-motion: no-preference) {
 	html {
 		scroll-behavior: smooth;
@@ -1452,17 +1073,7 @@ select:disabled {
 	}
 }
 
-/*
- * A phone. The page is one column here and the header is not standing in the reader's way: it puts
- * itself away the moment they scroll down and comes back when they scroll up. So nothing has to stop
- * below it, and a target the page travels to keeps only a hair of the page above it rather than a
- * header's worth of room nothing is drawn in. $lib/screen.ts holds the same width for the scripts
- * that have to know it.
- *
- * Width is the scarce thing here, so the gutter the detailed chart writes its probability axis in is
- * cut to what those figures need. It also insets the line handle under the drawing, so both follow
- * from the one value and stay laid out against the same run.
- */
+/* Phone layout. screen.ts uses the same width. */
 @media (width < 40rem) {
 	:root {
 		--scroll-lead: var(--space-2);
@@ -1486,8 +1097,7 @@ select:disabled {
 	}
 }
 
-/* Nothing draws, opens or scrolls smoothly. Color and opacity still change, at --motion-fast.
-   Never disable a state change, only its animation. */
+/* Reduced motion. State still changes, but without animation. */
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,

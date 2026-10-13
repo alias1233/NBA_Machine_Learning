@@ -1,11 +1,4 @@
-"""
-What every model, in every family, has in common.
-
-A model is named, says what it answers about, and says what shape its answer has. That is all the
-service needs to list it and serve it, so nothing here limits what a model may predict.
-
-A family adds a subclass naming its category and holding whatever only that family needs.
-"""
+"""Base model specification shared by every family."""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -17,74 +10,45 @@ from nba_ml.models import metrics
 from nba_ml.models.outputs import ModelOutput
 
 class FeatureColumns(Protocol):
-    """
-    What every family's feature set holds, which is all anything outside a family reads off one.
-
-    A family resolves far more than this, and what it resolves is its own business. These two are
-    named here because a saved model is checked against them. See nba_ml/models/loading.py.
-    """
+    """The fields every family's feature set must have."""
 
     sequence_columns: list[str]
-    """Read for each of the subject's past games."""
+    """Columns taken from each of the subject's past games."""
 
     static_columns: list[str]
-    """Read once, off the game being predicted."""
+    """Columns taken from the game being predicted."""
 
 class GameSide(StrEnum):
-    """One side of a game, which is what an answer belonging to a game names."""
+    """The home or away team of a game."""
 
     HOME = "home"
     AWAY = "away"
 
 @dataclass(frozen=True)
 class ModelSpecification():
-    """
-    One trained model: the name it is saved under, and the answer it gives.
-
-    The name is what `nba-train --model` and `nba-predict --model` take, so two models predicting the
-    same thing with different settings are two specifications with different names.
-    """
+    """Defines a model: its name, how it is described and what it outputs."""
 
     model_category: ClassVar[str]
-    """The family this model belongs to. Set once per family, and it names the folder files sit in."""
+    """The model's family. Also the name of the folder its files are saved in."""
 
     name: str
     title: str = field(kw_only=True)
-    """The short reader-facing name used where models are explained."""
+    """Short display name shown on the site."""
 
     description: str = field(kw_only=True)
-    """The short reader-facing explanation used where this model is explained."""
+    """Short description shown on the site."""
 
     output: ModelOutput
-    """The shape of an answer. See nba_ml/models/outputs.py."""
+    """The model's output type."""
 
     read_from: GameSide | None = field(default=None, kw_only=True)
-    """
-    Which side of the game a value above zero belongs to, for an answer with a direction.
-
-    A point differential is read off the home team's row, so a positive one is the home team's
-    margin and a caller has to say whose margin it is drawing. None where the answer names no side,
-    either because it has no direction or because the request already named the subject.
-    """
+    """For signed outputs such as point differential, the team a positive value belongs to."""
 
     category_sides: tuple[GameSide, ...] | None = field(default=None, kw_only=True)
-    """
-    Which side of the game each category names, in the order the output lists them.
-
-    A category naming a side leads with that side's word, so a caller can put the team playing it in
-    place of the word and turn "home win" into the team's own name. None where no category names a
-    side, which is every yes or no answer.
-    """
+    """The team each output category refers to, in the same order as the categories."""
 
     published_metrics: tuple[str, ...] | None = field(default=None, kw_only=True)
-    """
-    Which measured figures a reader is shown, in the order they are shown, headline first.
-
-    None takes what the shape of the answer suggests, which is right for most models. Set it where a
-    figure that usually means something means nothing here: accuracy on an outcome happening in half
-    a percent of games is 99.5% however bad the model is, so a model like that names the readings
-    that separate it from a bad one instead. Every name has to be in metrics.ALL_METRICS.
-    """
+    """Metrics shown for this model, most important first. None uses the defaults for its output type."""
 
     def __post_init__(self):
         unknown = sorted(set(self.published_metrics or ()) - set(metrics.ALL_METRICS))
@@ -102,13 +66,13 @@ class ModelSpecification():
 
     @property
     def predicts(self) -> tuple[str, ...]:
-        """What this model answers about, in the words a reader sees."""
+        """Display names of what this model predicts."""
 
         raise NotImplementedError
 
     @property
     def reported_metrics(self) -> tuple[str, ...]:
-        """The figures this model publishes, resolved from its own choice or from its answer shape."""
+        """Returns the metrics shown for this model."""
 
         if self.published_metrics is not None:
             return self.published_metrics
@@ -117,22 +81,12 @@ class ModelSpecification():
 
     @property
     def sequences_read(self) -> int:
-        """
-        How many game histories one sample of this model reads.
-
-        One unless the family says otherwise. A model asked about a whole game reads both teams, and
-        a saved file fit on a different number of them cannot answer.
-        """
+        """Number of game sequences in each of this model's samples."""
 
         return 1
 
     def get_feature_set(self) -> FeatureColumns:
-        """
-        Which columns this model reads, resolved by the family that owns them.
-
-        Resolve it once per run and pass it down, so that two models being built at the same time
-        never share column state.
-        """
+        """Returns the model's feature set. Implemented by each family."""
 
         raise NotImplementedError
 

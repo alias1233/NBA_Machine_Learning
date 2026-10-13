@@ -1,4 +1,4 @@
-"""Collecting a player's own information."""
+"""Collects player info."""
 
 from datetime import date
 from typing import Iterable
@@ -8,7 +8,7 @@ from nba_ml.stores import player_games
 from nba_ml.stores import players as players_store
 
 def _with_career_seasons(player_info, careers, player_id):
-    """Fill provider gaps from the player's collected game history."""
+    """Fills in missing first and last seasons from the player's stored games."""
 
     career = careers.get(player_id)
     if career is None:
@@ -29,15 +29,7 @@ def collect(
     starting_index: int = 0,
     print_debug: bool = True
     ) -> int:
-    """
-    Writes one row per player to the store and returns how many were written.
-
-    The index of each player is printed and starting_index picks a stopped run back up from where it
-    reached. A source may cache its player list, so one player does not necessarily mean one request.
-
-    Args:
-        player_ids defaults to every player the source knows of.
-    """
+    """Fetches info for each player, stores it, and returns the number of rows written."""
 
     ids = [player.id for player in source.players()] if player_ids is None else list(player_ids)
 
@@ -59,17 +51,14 @@ def collect(
     return rows_written
 
 def missing_player_ids(source: DataSource) -> list[int]:
-    """Players the source knows of that the store holds nothing for."""
+    """Returns the IDs of players in the source that are not in the store."""
 
     stored = players_store.stored_player_ids()
 
     return [player.id for player in source.players() if player.id not in stored]
 
 def fill_missing_names(source: DataSource, print_debug: bool = True) -> int:
-    """
-    Names the held players that have none, reading the source's player list rather than one request
-    each. Returns how many rows were rewritten.
-    """
+    """Fills in names for stored players that don't have one. Returns the number of rows updated."""
 
     wanted = set(players_store.player_ids_without_names())
     if not wanted:
@@ -91,13 +80,7 @@ def fill_missing_names(source: DataSource, print_debug: bool = True) -> int:
     return rows_written
 
 def refresh_career_seasons(print_debug: bool = True) -> int:
-    """
-    Rewrites every held player's first and last season from the games now stored.
-
-    Collection works these out from a player's own games, because the chosen provider publishes
-    neither a birth date nor a debut year. Filling the archive with older seasons moves both, so
-    this applies that same rule again once the games behind it have changed.
-    """
+    """Updates every stored player's first and last season from the stored games."""
 
     careers = player_games.career_seasons()
     held = players_store.get_all_players_info()
@@ -119,7 +102,7 @@ def refresh_career_seasons(print_debug: bool = True) -> int:
     return rows_written
 
 def update(source: DataSource, print_debug: bool = True) -> int:
-    """Collects the players that are not held yet, then names any held player still without one."""
+    """Collects players that are not stored yet, then fills in any missing names."""
 
     return (
         collect(source, missing_player_ids(source), print_debug=print_debug)
@@ -127,15 +110,7 @@ def update(source: DataSource, print_debug: bool = True) -> int:
     )
 
 def update_from_games(source: DataSource, date_start: date, print_debug: bool = True) -> int:
-    """
-    Collects the players who have a stored game since date_start and no information row yet.
-
-    An hourly run passes the first date its source covers rather than its own lookback, because a
-    player with no information row has every one of their games dropped from the feature build, and
-    a narrow window would only ever retry them on the day they next play. Reading the stored games
-    rather than the source's whole player list still keeps a normal run to one request per genuinely
-    new player, and to none at all once every player is described.
-    """
+    """Collects players who have a stored game since date_start but no info row."""
 
     stored = players_store.stored_player_ids()
     if not stored:

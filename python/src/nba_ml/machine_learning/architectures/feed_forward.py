@@ -16,10 +16,7 @@ class LayerParameters():
     dropout_rate: float = 0
 
 def encode_layer_parameters(hidden_layers: list[LayerParameters]) -> list[dict[str, Any]]:
-    """
-    Turns the layer settings into plain dictionaries, so a saved model keeps loading after this
-    module moves.
-    """
+    """Turns the layer settings into plain dictionaries for saving."""
 
     return [
         {field.name: getattr(layer, field.name) for field in fields(layer)}
@@ -46,10 +43,6 @@ class FeedForward(SavableModule):
             output_dim: int,
             hidden_layers: list[LayerParameters]
             ) -> None:
-        """
-        Args:
-            hidden_layers: one entry per hidden layer, in order.
-        """
         super().__init__()
 
         self.input_dim = input_dim

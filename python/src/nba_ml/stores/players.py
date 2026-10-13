@@ -1,9 +1,4 @@
-"""
-A player's own information, the part that does not change from game to game.
-
-The name is held here as well as the modelled columns, because it is what a person types and what a
-page displays, and neither should need a data service to answer.
-"""
+"""Stores player info such as name, height, weight and draft number."""
 
 from typing import Iterable
 
@@ -38,12 +33,7 @@ DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLI
 
 # Writing
 def store(player_info: pd.DataFrame) -> int:
-    """
-    Adds the given rows, replacing any player already held. Returns how many were written.
-
-    The name is the one column a row may arrive without. Not every service carries it alongside a
-    player's other information, so collection fills it in from the service's player list instead.
-    """
+    """Inserts the given rows, replacing existing players. Returns the number of rows written."""
 
     if PLAYER_NAME.category_name not in player_info.columns:
         player_info = player_info.assign(**{PLAYER_NAME.category_name: None})
@@ -59,7 +49,7 @@ def get_all_players_info() -> pd.DataFrame:
     return data
 
 def stored_player_ids() -> set[int]:
-    """Which players are already held, so a collection run can skip them."""
+    """Returns the IDs of every stored player."""
 
     with DATABASE:
         rows = DATABASE.query(categories=[PLAYER_ID])
@@ -80,7 +70,7 @@ def _named_players(
     return [Player(int(player_id), name) for player_id, name in rows if name is not None]
 
 def get_players(player_ids: Iterable[int]) -> list[Player]:
-    """The named players among the given ids, in the order they were given."""
+    """Returns the given players that have a name, in the order the IDs were given."""
 
     named = {player.id: player for player in _named_players()}
 
@@ -95,11 +85,7 @@ def get_player(player_id: int) -> Player | None:
     return found[0] if found else None
 
 def find_by_name(text: str, limit: int | None = None) -> list[Player]:
-    """
-    Every held player whose name contains the given text, the ones it starts first.
-
-    Matching is done here rather than in SQL because it ignores accents, which SQL's LIKE does not.
-    """
+    """Returns players whose name contains the text. Names starting with it come first."""
 
     wanted = searchable(text)
     found = [player for player in _named_players() if wanted in searchable(player.name)]
@@ -108,7 +94,7 @@ def find_by_name(text: str, limit: int | None = None) -> list[Player]:
     return found if limit is None else found[:limit]
 
 def player_ids_without_names() -> list[int]:
-    """Players whose row arrived without a name, which a collection run fills in."""
+    """Returns the IDs of stored players with no name."""
 
     with DATABASE:
         rows = DATABASE.query(

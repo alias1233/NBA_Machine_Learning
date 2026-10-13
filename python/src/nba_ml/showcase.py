@@ -1,24 +1,4 @@
-"""
-The day's sample predictions, built once by a job and read by everyone.
-
-Nothing on this site predicts on its own. A prediction costs real compute on one small server, so a
-visitor arriving at the home page must never start one, and the home page still has to show what the
-site can actually answer rather than describing it. This is how both hold at once: a job builds a
-handful of real predictions once a day and writes them where the service reads them back, so every
-reader of that day sees the same set and the page costs no forward pass at all.
-
-What appears is chosen at random from the models whose answers are worth drawing, seeded from the day
-itself, so the set is different every morning and identical for every reader of that morning. A model
-answering yes or no is left out, because the home page is showing the shape of an answer and two bars
-have no shape. See MINIMUM_OUTCOMES.
-
-That seeding is the whole trick. A rerun on the same day picks the same models, games, players and
-teams, so a job that is run twice, or run again after a failure, replaces the file with the same set
-rather than reshuffling the page under whoever is reading it.
-
-Every number in the set is a real model answering a real upcoming game. None of it is a
-recommendation, and a sample carries no more weight than the same prediction asked for by hand.
-"""
+"""Defines the sample predictions used by the website's home page hero."""
 
 import json
 import os
@@ -39,30 +19,16 @@ from nba_ml.stores import player_games, players, teams
 FORMAT_VERSION = 1
 
 DEFAULT_COUNT = 6
-"""How many samples a build writes. The home page draws every one of them, so this is a design number."""
+"""Default number of samples per build."""
 
 ROSTER_WINDOW = timedelta(days=365)
-"""How far back a team's players are read from, matching what the service offers as a roster."""
+"""How far back to look for players who played for a team."""
 
 MINIMUM_PAST_GAMES = 10
-"""
-How many earlier games a sample has to rest on before it is worth showing.
-
-An answer built from three games is a real answer and the site says so wherever one is asked for by
-hand. A sample nobody asked for is different: it is the site showing what it can do, so it should not
-lead with its weakest work. A pick resting on less than this is dropped and another is drawn.
-"""
+"""Minimum number of past games a prediction needs to be used as a sample."""
 
 MINIMUM_OUTCOMES = 8
-"""
-How many outcomes a model has to spread its answer over before it is drawn on the home page.
-
-The home page shows an answer nobody asked for, and what it is really showing is the shape of one. A
-model answering yes or no gives two bars, which is a true answer and a dull drawing, so those are
-left out of the draw and are predicted only where a reader asks for one by hand. This counts
-outcomes rather than naming the shapes, so a model answering in eight named categories is drawn and a
-narrow number line is not.
-"""
+"""Minimum number of output classes a model needs to be used for samples."""
 
 @dataclass(frozen=True)
 class NamedTeam():
@@ -76,7 +42,7 @@ class NamedPlayer():
 
 @dataclass(frozen=True)
 class SampleGame():
-    """The game a sample answers, named the way a reader reads it rather than by stored id."""
+    """The game a sample is for, with team names instead of IDs."""
 
     date: str
     home_team: NamedTeam
@@ -86,14 +52,7 @@ class SampleGame():
 
 @dataclass(frozen=True)
 class Sample():
-    """
-    One real answer, carrying everything needed to draw it and nothing worked out from it.
-
-    The expected value, the odds on a line and every phrase a reader reads are arithmetic the browser
-    already holds, so none of it is written here. This is the same shape a prediction endpoint
-    returns, plus the subject it was asked about, because a sample nobody requested has to say what
-    it is of.
-    """
+    """A model prediction with everything the site needs to display it."""
 
     family: str
     model: str
@@ -111,23 +70,18 @@ class Sample():
 class Showcase():
     format_version: int
     built_for: str
-    """The day the set was drawn for, which is what the seeding makes reproducible."""
+    """The date the samples were generated for."""
 
     built_at: str
     samples: list[Sample]
 
 def _rng(day: date) -> random.Random:
-    """
-    The day's own generator.
-
-    Seeded on the ordinal rather than on the string, so the seed is a number that moves by exactly
-    one each day and cannot depend on how a date happens to be written down.
-    """
+    """Returns a random generator seeded by the date, so reruns on the same day pick the same samples."""
 
     return random.Random(day.toordinal())
 
 def _worth_drawing(family: ModelFamily) -> list[ModelSpecification]:
-    """Every model of a family that can answer and is worth drawing. See MINIMUM_OUTCOMES."""
+    """Returns the family's published models that have enough output classes."""
 
     return [
         specification
@@ -156,13 +110,7 @@ def _roster(team_id: int, cutoff: date) -> list[NamedPlayer]:
     ]
 
 def _answer(family_name: str, specification: ModelSpecification, game: Game, subject_team_id: int, player_id: int | None):
-    """
-    Run one model, through the same inference the service runs.
-
-    Nothing here is a second code path for predicting. A sample is the same answer a reader would get
-    asking for it by hand, which is the only reason it is worth showing, and it is asked with the
-    same expected lineups the site opens its roster controls on.
-    """
+    """Runs a prediction with the same inference code the API uses."""
 
     scenarios = expected_rosters.expected_scenarios(game)
 
@@ -191,14 +139,7 @@ def _draw(
     named_teams: dict[int, NamedTeam],
     roster_cutoff: date
     ) -> Sample | None:
-    """
-    One attempt at a sample. None where the pick could not be answered, so the caller draws again.
-
-    A refusal here is ordinary rather than exceptional: a player the feature build holds almost
-    nothing about, a game whose inputs moved between the schedule being read and the model being run.
-    The job is a demonstration, so it steps over one of those and takes the next pick instead of
-    failing the whole build.
-    """
+    """Tries to build a sample for a random game. Returns None if it fails or has too few past games."""
 
     scheduled = chooser.choice(games)
     subject_team_id = chooser.choice(scheduled.team_ids)
@@ -241,15 +182,7 @@ def _draw(
     )
 
 def build(count: int = DEFAULT_COUNT, day: date | None = None) -> Showcase:
-    """
-    Draw the day's set.
-
-    Picks are spread across every family that has something worth drawing, so a set shows the range
-    of what the site answers rather than six versions of one model. Where there are fewer families
-    than samples the families repeat, which is what a site with one trained family looks like and is
-    not a failure. A family whose every model answers too narrowly to draw is not in the rotation at
-    all. See MINIMUM_OUTCOMES.
-    """
+    """Builds the day's samples, rotating through the families that have usable models."""
 
     day = day or season.today()
     chooser = _rng(day)
@@ -272,15 +205,12 @@ def build(count: int = DEFAULT_COUNT, day: date | None = None) -> Showcase:
     }
     roster_cutoff = day - ROSTER_WINDOW
 
-    # Families in a shuffled order, cycled, so the set covers what exists before it repeats anything.
     families = sorted({family.name for family, _ in choosable})
     chooser.shuffle(families)
 
     samples: list[Sample] = []
     attempts = 0
 
-    # A cap rather than a loop until full: every pick runs a model, so a day where most picks refuse
-    # must end with a short set rather than with the job running until something works.
     while len(samples) < count and attempts < count * 6:
         attempts += 1
         wanted = families[len(samples) % len(families)]
@@ -299,13 +229,7 @@ def build(count: int = DEFAULT_COUNT, day: date | None = None) -> Showcase:
     )
 
 def write(showcase: Showcase, showcase_file: Path = paths.SHOWCASE_FILE) -> Path:
-    """
-    Publish the set, whole.
-
-    Written under a working name and moved into place, the same way a feature build is published, so
-    a reader can never catch the file half written and a failed build leaves yesterday's set where
-    the service can still read it.
-    """
+    """Saves the showcase to a temporary file, then renames it to the final path."""
 
     showcase_file.parent.mkdir(parents=True, exist_ok=True)
     working = showcase_file.with_name(showcase_file.name + ".incomplete")
@@ -315,13 +239,7 @@ def write(showcase: Showcase, showcase_file: Path = paths.SHOWCASE_FILE) -> Path
     return showcase_file
 
 def read(showcase_file: Path = paths.SHOWCASE_FILE) -> dict | None:
-    """
-    The published set, or None where there is nothing to read.
-
-    None is normal rather than an error. A machine that has never run the job, a day before the first
-    build, and a file written by a version this one does not understand all read as nothing, and the
-    home page shows what it shows without samples instead of failing.
-    """
+    """Returns the saved showcase, or None if the file is missing or invalid."""
 
     try:
         published = json.loads(showcase_file.read_text(encoding="utf-8"))

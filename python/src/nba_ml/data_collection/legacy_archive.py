@@ -1,21 +1,4 @@
-"""
-Filling the seasons in front of the data source's own floor from an nba.com archive collected earlier.
-
-The chosen provider's box scores only carry every player-model input from
-season.PLAYER_GAME_COLLECTION_START_DATE onwards, which is a few seasons of training data. An
-archive collected through nba_api holds the same box scores, plus-minus included, back to 1996, but
-under nba.com's own identifiers. This reads that archive, translates its identifiers onto the ones
-in use, and writes the games in front of the cutoff into the stores.
-
-Translating them is the whole problem, and the two archives overlap, which is what solves it. Both
-hold the seasons since the cutoff, so a legacy player is recognised by playing the same game and
-recording the same box score line as a player the current archive already knows. No name is compared
-and nothing is guessed. A player who never appeared after the cutoff is not in the current archive at
-all, so they keep an identifier of their own in a reserved range.
-
-This is a developer command and nothing here is deployed. A server serves a five year window that
-starts long after the cutoff, so an imported row never reaches one.
-"""
+"""Imports seasons older than the data source covers from a legacy nba.com archive."""
 
 import sqlite3
 from contextlib import closing
@@ -34,32 +17,18 @@ from nba_ml.sources.base import PLAYER_GAME_BATCH_SIZE
 from nba_ml.stores import player_games, players, team_games, teams
 
 LEGACY_PLAYER_ID_BASE = 10_000_000_000_000
-"""
-Where the identifiers of players only the legacy archive knows start.
-
-Far above any identifier either service issues, so a made up one can never be mistaken for a real
-one, and an imported archive can be told from a collected one by reading a number.
-"""
+"""Offset added to the IDs of players that only exist in the legacy archive."""
 
 LEGACY_GAME_ID_BASE = 10_000_000_000_000
-"""The same, for games. Every imported game is given one, because no provider game answers to it."""
+"""Offset added to the IDs of imported legacy games."""
 
 MINIMUM_MATCHING_GAMES = 3
-"""
-How many games two players must record the same line in before they are taken to be one player.
-
-One agreement across fifteen columns is already near proof, and lowering this to one matched every
-player correctly when it was measured. Three costs almost nothing, because the only players it turns
-away played one or two games in the whole overlap. The figures are in the training reports the
-runs wrote.
-"""
+"""Number of games with identical stat lines needed to treat two player IDs as the same player."""
 
 IMPORTED_PHASES = {
     season.GAME_ID_PREFIXES[SeasonType.REGULAR_SEASON]: season.GAME_ID_PREFIXES[SeasonType.REGULAR_SEASON],
     season.GAME_ID_PREFIXES[SeasonType.PLAYOFFS]: season.GAME_ID_PREFIXES[SeasonType.PLAYOFFS],
-    # The provider files a play-in game under the regular season, so the archive does too. A phase
-    # absent here is left out, which is what happens to the preseason the provider does not carry
-    # and to the All-Star game nothing models.
+    # The data source labels play-in games as regular season, so do the same here.
     season.GAME_ID_PREFIXES[SeasonType.PLAY_IN]: season.GAME_ID_PREFIXES[SeasonType.REGULAR_SEASON]
 }
 
@@ -79,15 +48,10 @@ MATCHING_COLUMNS = (
     player_games.PERSONAL_FOULS,
     player_games.PLUS_MINUS
 )
-"""
-What a player's line in one game is recognised by.
-
-Minutes are left out on purpose. One service rounds them to a whole number and the other keeps the
-seconds, so they are the one box score column the two do not write the same way.
-"""
+"""Stats compared when matching players between archives. Minutes are left out because the two sources differ."""
 
 GAME_KEY = "GAME_KEY"
-"""Names one game the way both archives agree on it: the date and the two teams that played."""
+"""Column with a game key built from the date and both team IDs, since game IDs differ between archives."""
 
 LEGACY_PLAYER_ID = "LEGACY_PLAYER_ID"
 
@@ -101,7 +65,7 @@ MINUTES = player_games.MINUTES_PLAYED.category_name
 
 @dataclass
 class ImportReport():
-    """What one import run found and wrote, which is what the command prints."""
+    """Summary of an import run."""
 
     games: int = 0
     player_rows: int = 0
@@ -115,20 +79,10 @@ class ImportReport():
     newest_game: date | None = None
     unmapped_teams: tuple[int, ...] = field(default_factory=tuple)
     unjoined_players: tuple[int, ...] = field(default_factory=tuple)
-    """
-    Legacy players who played after the cutoff and were still not recognised.
-
-    Each one is a career the import has split in two, so this is the number that says whether the
-    matching worked. Expect a handful of players with almost no games since the cutoff.
-    """
+    """Legacy players who played after the cutoff but could not be matched."""
 
     players_without_information: tuple[int, ...] = field(default_factory=tuple)
-    """
-    Imported players the player information store holds no row for.
-
-    A feature build drops every game of a player it knows nothing about, so any of these is a player
-    whose imported games will not be trained on. Collect the players and run the import again.
-    """
+    """Imported players with no row in the player info store."""
 
     def describe(self) -> str:
         lines = [
@@ -156,7 +110,7 @@ class ImportReport():
 
 
 def _read_table(legacy_directory: Path, store: ModuleType) -> pd.DataFrame:
-    """One store's table out of another data directory, opened read only so nothing can touch it."""
+    """Reads a store's table from the legacy data directory in read-only mode."""
 
     database_file = legacy_directory / paths.DATABASE_DIRECTORY.name / store.FILEPATH.name
     if not database_file.exists():
@@ -168,13 +122,7 @@ def _read_table(legacy_directory: Path, store: ModuleType) -> pd.DataFrame:
 
 
 def _team_id_mapping(legacy_directory: Path) -> dict[int, int]:
-    """
-    Legacy team ids onto the ones in use, matched on the tricode both services publish.
-
-    A franchise keeps one identifier through a move or a rename in both archives, so the thirty
-    current tricodes cover every season. A team that matches nothing, which is what an overseas
-    preseason opponent is, is left out and its games go with it.
-    """
+    """Maps legacy team IDs to current ones by abbreviation."""
 
     held = {team.abbreviation: team.id for team in teams.all_teams()}
     if not held:
@@ -193,12 +141,7 @@ def _team_id_mapping(legacy_directory: Path) -> dict[int, int]:
 
 
 def _with_game_keys(rows: pd.DataFrame) -> pd.DataFrame:
-    """
-    Labels each row with the game it belongs to, named the way both archives agree on it.
-
-    A game is its date and its two teams. Rows of a game that cannot be named that way are dropped,
-    which covers a game one side of which is missing and the pair of games a key would fit twice.
-    """
+    """Adds the GAME_KEY column and drops rows whose game has no unique key."""
 
     by_game = rows.groupby(GAME_ID, sort=False).agg(
         day=(GAME_DATE, "min"),
@@ -213,12 +156,7 @@ def _with_game_keys(rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def _recognisable_lines(rows: pd.DataFrame) -> pd.DataFrame:
-    """
-    The rows whose box score line is the only one like it in its game.
-
-    Two players scoring nothing in the same game cannot be told apart by what they recorded, so
-    neither is used. Any player worth joining has hundreds of games that are not like that.
-    """
+    """Returns the rows whose stat line is unique within their team's game."""
 
     columns = [GAME_KEY, TEAM_ID, *(column.category_name for column in MATCHING_COLUMNS)]
     lines = _with_game_keys(rows)[[PLAYER_ID, *columns]]
@@ -231,13 +169,7 @@ def _player_id_mapping(
     current_overlap: pd.DataFrame,
     minimum_matching_games: int
     ) -> dict[int, int]:
-    """
-    Legacy player ids onto the ones in use, recognised by playing the same games the same way.
-
-    A pair is only believed after it agrees in minimum_matching_games games, and each identifier is
-    claimed once, so two players can never collapse into one. Where two readings disagree the one
-    with more games behind it wins.
-    """
+    """Maps legacy player IDs to current ones by matching stat lines in games both archives have."""
 
     if legacy_overlap.empty or current_overlap.empty:
         return {}
@@ -263,15 +195,7 @@ def _player_id_mapping(
 
 
 def _played_rows(rows: pd.DataFrame, team_ids: dict[int, int]) -> pd.DataFrame:
-    """
-    The legacy rows an import can read: a whole game, played by two known teams, with every column.
-
-    A game is taken whole or not at all, exactly as collection from the provider takes one. Dropping
-    the one row that is short would leave the team row summed behind it a player light.
-
-    The provider drops a player who did not appear before it judges a game complete, so this does
-    too, or a bench row with nothing recorded would throw away the game around it.
-    """
+    """Returns the rows from games that are complete and played between two known teams."""
 
     required = [name for name in player_games.DATABASE.category_names if name != SEASON_TYPE]
     played = rows[rows[MINUTES].fillna(0) > 0]
@@ -285,13 +209,7 @@ def _played_rows(rows: pd.DataFrame, team_ids: dict[int, int]) -> pd.DataFrame:
 
 
 def _imported_phases(rows: pd.DataFrame) -> pd.DataFrame:
-    """
-    Writes each game's phase out, so nothing downstream infers one from an identifier this replaces.
-
-    An older archive left the column empty and wrote the phase in the third character of the game
-    id, which is the first once the leading zeros are gone. A phase this project does not model, and
-    the preseason the provider does not carry, are dropped rather than translated.
-    """
+    """Fills in each row's season type and drops season types that are not imported."""
 
     stored = rows[SEASON_TYPE].astype("string")
     phases = stored.fillna(rows[GAME_ID].astype(str).str[0]).map(IMPORTED_PHASES)
@@ -302,7 +220,7 @@ def _imported_phases(rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def _batches(rows: pd.DataFrame, size: int = PLAYER_GAME_BATCH_SIZE) -> Iterator[pd.DataFrame]:
-    """Whole games in batches of about the given size, so a stopped run leaves behind no half game."""
+    """Yields the rows in batches of roughly `size` without splitting a game."""
 
     rows = rows.sort_values(GAME_ID)
     batch_of_game = (rows.groupby(GAME_ID, sort=False).size().cumsum() - 1) // size
@@ -312,12 +230,7 @@ def _batches(rows: pd.DataFrame, size: int = PLAYER_GAME_BATCH_SIZE) -> Iterator
 
 
 def _check_provider_ids(rows: pd.DataFrame):
-    """
-    Refuses an archive whose own identifiers reach into the range reserved for made up ones.
-
-    These rows are all from the provider, because nothing before the cutoff is imported, so a
-    number this high would mean the reserved range is no longer safe to hand out.
-    """
+    """Raises an error if a collected ID falls in the range reserved for imported rows."""
 
     for column, base in ((PLAYER_ID, LEGACY_PLAYER_ID_BASE), (GAME_ID, LEGACY_GAME_ID_BASE)):
         if not rows.empty and rows[column].max() >= base:
@@ -332,13 +245,7 @@ def _import_player_information(
     player_ids: dict[int, int],
     played: set[int]
     ) -> int:
-    """
-    Writes the information rows of the players only the legacy archive knows.
-
-    A feature build drops every game of a player it holds no information about, so these have to be
-    written or the whole of that player's imported history is thrown away. A player the provider
-    already described keeps the row it gave them.
-    """
+    """Stores player info for imported players that don't have any yet. Returns the number of rows written."""
 
     legacy = _read_table(legacy_directory, players)
     person_id = players.PLAYER_ID.category_name
@@ -354,15 +261,7 @@ def import_games(
     minimum_matching_games: int = MINIMUM_MATCHING_GAMES,
     print_debug: bool = True
     ) -> ImportReport:
-    """
-    Fills the archive with the legacy games played before the data source's own floor.
-
-    Args:
-        legacy_directory is a data directory collected through nba_api, holding its databases the
-        way this one does.
-        until is the first date the data source itself covers. Games on or after it are left to the
-        source, and the ones before it are what this writes.
-    """
+    """Imports legacy games played before the `until` date and returns a report."""
 
     def report_progress(message: str):
         if print_debug:
@@ -402,8 +301,6 @@ def import_games(
     if imported.empty:
         raise RuntimeError(f"The legacy archive holds no complete modelled game before {cutoff}.")
 
-    # Only a player with games on both sides of the cutoff has a career to split, so only they are
-    # worth naming. Anybody the older archive knows solely from the shared games joins nothing.
     report.unjoined_players = tuple(sorted(
         (set(imported[PLAYER_ID].unique()) & set(overlap[PLAYER_ID].unique())) - set(joined)
     ))

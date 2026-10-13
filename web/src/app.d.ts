@@ -8,7 +8,7 @@ declare global {
 	namespace App {
 		interface Error {
 			message: string;
-			/** Why the prediction service refused, when it named a reason. See `src/lib/server/api.ts`. */
+			/** Reason code from the prediction service, if it sent one. */
 			reason?: string;
 		}
 		// interface Locals {}

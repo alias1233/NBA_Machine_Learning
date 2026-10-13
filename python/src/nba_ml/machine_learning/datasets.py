@@ -14,19 +14,7 @@ def _adjust_classification_outputs(
     output_value_step: int = 1,
     impossible_value: int | None = None
     ) -> np.ndarray:
-    """
-    Turns the values into the classes a model is fit against, folding anything outside the class
-    range into the nearest end of it.
-
-    Args:
-        output_value_step is how many values one class covers. At one every value is its own class.
-        Above one the classes are buckets, which is what a model with too few samples to fill a class
-        per value is given.
-
-        impossible_value is a whole number the statistic cannot take, such as a point differential of
-        zero. It is not on the line at all, so everything above it counts one step lower and every
-        class still covers output_value_step outcomes.
-    """
+    """Converts values to class indices. Values outside the range are clipped to the first or last class."""
 
     values = outputs.astype(np.int64)
     steps = values - min_output_value
@@ -43,13 +31,7 @@ def summarize_classification_outputs(
     num_classifications: int,
     output_value_step: int = 1
     ) -> dict[str, Any]:
-    """
-    Describes the labels a classification model will be trained on.
-
-    Both ends fold: anything below the range counts as the first class and anything above it as the
-    last. For a stat with an order, a large share in either end class means the range is too narrow
-    to describe that tail, so both are reported.
-    """
+    """Returns summary stats of the class labels a model will be trained on."""
 
     total = len(outputs)
     summary = {"samples": total, "classes": num_classifications, "values per class": output_value_step}
@@ -71,78 +53,48 @@ def summarize_classification_outputs(
 
 @dataclass
 class GameSequences():
-    """
-    Every game played by each subject, stored once so that the samples reading them only need to
-    hold an index instead of their own copy of the games.
-
-    A subject is whoever the model predicts about, a player or a team. Each subject's games must be
-    ordered from oldest to newest.
-    """
+    """Every subject's games, stored once and sorted oldest to newest."""
 
     sequences: list[np.ndarray]
-    """Per subject, the sequence features of every game played, shaped (games, sequence features)."""
+    """One array per subject with the sequence features of every game. Shape: (games, sequence features)."""
 
     opponent_team_ids: list[np.ndarray]
-    """Per subject, the team id faced in every game played."""
+    """One array per subject with the opponent team ID of every game."""
 
     training_game_counts: np.ndarray
-    """Per subject, how many of the oldest games belong to the training split."""
+    """For each subject, the number of games (counted from the oldest) in the training split."""
 
 @dataclass
 class SequenceInputSamples():
-    """
-    One entry per prediction, holding the static data of the predicted game and a reference into
-    the games that came before it.
-
-    A sample may read more than one subject's games, which is what a model about a whole game does:
-    it reads both teams rather than being asked about one of them. Every array naming a subject is
-    therefore shaped (samples, sequences), with the sequences of one sample always in the same order.
-    """
+    """One entry per sample: its static input and indices pointing to its past games."""
 
     sequence_indices: np.ndarray
-    """Per sample and sequence, which subject of a GameSequences it reads."""
+    """For each sample and sequence, the index of the subject in GameSequences."""
 
     sequence_end_indices: np.ndarray
-    """Per sample and sequence, the exclusive end of the games that came before the predicted game."""
+    """For each sample and sequence, the end index (exclusive) of the games before the predicted game."""
 
     opponent_team_ids: np.ndarray
-    """Per sample and sequence, the team id that subject faces in the predicted game."""
+    """For each sample and sequence, the ID of the team the subject plays in the predicted game."""
 
     static_inputs: np.ndarray
-    """Shaped (samples, static features)."""
+    """Shape: (samples, static features)."""
 
     outputs: np.ndarray
-    """What the model is fit against, which a classification build rewrites as the class that happened."""
+    """Target values the model is trained on."""
 
     game_dates: np.ndarray | None = None
-    """
-    When each predicted game was played, shaped (samples,).
-
-    Carried so a finished split can say which stretch of calendar it covers, and so a naive floor
-    can be worked out from the training games nearest the ones being scored. A prediction carries
-    none, because there is nothing to report about a single sample.
-    """
+    """Date of each predicted game. Shape: (samples,)."""
 
     values: np.ndarray | None = None
-    """
-    What actually happened, kept as it was recorded.
-
-    A classification build folds the ends of its range and buckets what is left, so a class is not
-    the value. Scoring a finished model reads this instead, and a model whose classes are buckets is
-    then measured in the units a reader knows rather than in classes of its own width.
-    """
+    """The actual values before they were converted to classes."""
 
     @property
     def sequence_count(self) -> int:
         return self.sequence_indices.shape[1]
 
 class SequenceGameDataset(Dataset):
-    """
-    Yields (past games per sequence, static input, output) per sample.
-
-    Every game in a sequence carries an extra flag that is 1 when that game was played against the
-    opponent faced in the predicted game, so a sequence model can tell those games apart.
-    """
+    """Each item is (past games for each sequence, static input, output)."""
 
     def __init__(
         self,
@@ -150,13 +102,7 @@ class SequenceGameDataset(Dataset):
         samples: SequenceInputSamples,
         max_sequence_length: int | None
         ):
-        """
-        Args:
-            max_sequence_length: how many of the most recent games to read, or None for all of them.
-
-        The games are held by reference, so every dataset built from the same GameSequences shares
-        one copy of them.
-        """
+        """max_sequence_length is the number of most recent games to use, or None for all of them."""
 
         self.game_sequences = game_sequences
         self.samples = samples
@@ -190,8 +136,7 @@ class SequenceGameDataset(Dataset):
 
     @property
     def outputs(self) -> torch.Tensor:
-        # Built once instead of per sample read. getattr keeps datasets cached before this
-        # existed loadable, since a pickled dataset never runs __init__.
+        # getattr is used so datasets pickled before this attribute existed still load.
         if getattr(self, "_outputs", None) is None:
             self._outputs = torch.from_numpy(self.samples.outputs)
 
@@ -212,15 +157,7 @@ class SequenceGameDataset(Dataset):
 def collate_sequence_batch(
     batch: list[tuple[list[torch.Tensor], torch.Tensor, torch.Tensor]]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Pads every sequence of a batch to the longest one in it.
-
-    A sample's sequences are laid out next to each other and in the order the sample lists them, so
-    a batch of samples reading two sequences is twice as many rows as it has samples. That is what
-    lets one GRU read all of them in one pass and the model fold them back into one row per sample.
-
-    Returns (padded sequences, unpadded sequence lengths, static inputs, outputs).
-    """
+    """Pads a batch to its longest sequence. Returns (sequences, lengths, static inputs, outputs)."""
 
     sample_sequences, static_inputs, outputs = zip(*batch)
     sequences = [sequence for sample in sample_sequences for sequence in sample]
@@ -272,18 +209,7 @@ def build_classification_datasets(
         StandardScaler | None,
         StandardScaler | None
     ]:
-    """
-    Builds the three splits as classification datasets, with the outputs turned into the classes the
-    model is fit against and what actually happened kept beside them.
-
-    Args:
-        min_output_value is the value the first class stands for, and output_value_step how many
-        values one class covers. Anything outside the range folds into the nearest end, and
-        impossible_value names a whole number inside it that the statistic cannot take.
-
-    The scalers are fit only on the games and samples of the training split, and come back None
-    unless standardize_input is set. Passing input_scalers applies an already fitted pair instead.
-    """
+    """Builds the training, validation and test datasets. Scalers are fit on training data only."""
 
     all_samples = [training_samples, validation_samples, test_samples]
 
@@ -347,7 +273,7 @@ def build_inference_dataset(
     sequence_scaler: StandardScaler,
     static_scaler: StandardScaler
     ) -> SequenceGameDataset:
-    """Applies a saved model's own scalers, so it reads a new sample the way it was trained."""
+    """Builds a dataset for inference, standardized with the scalers saved with the model."""
 
     game_sequences, (samples,) = _standardize_sequence_data(
         game_sequences,

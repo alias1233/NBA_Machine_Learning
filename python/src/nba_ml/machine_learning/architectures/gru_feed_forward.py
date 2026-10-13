@@ -14,15 +14,7 @@ GRU_DROPOUT_RATE = 'gru_dropout_rate'
 SEQUENCE_COUNT = 'sequence_count'
 
 class GRUFeedForward(SavableModule):
-    """
-    Reads one or more sequences of past games with a GRU, then feeds their final hidden states and
-    the static data of the predicted game into a feed forward network.
-
-    A sample reads one sequence per subject it is about: a player's own games, or the games of both
-    teams in a game nobody named a side of. Every sequence holds the same columns and is read by the
-    same GRU, because they describe the same kind of thing, and their memories are joined in a fixed
-    order so the network can still tell one from another.
-    """
+    """Runs a GRU over the past game sequences, then passes its output and the static input to a feed forward network."""
 
     SAVED_ARGUMENT_NAMES = (
         SEQUENCE_INPUT_DIM,
@@ -47,12 +39,7 @@ class GRUFeedForward(SavableModule):
             gru_dropout_rate: float = 0,
             sequence_count: int = 1
             ) -> None:
-        """
-        Args:
-            hidden_layers: holds the parameters for each hidden layer of the feed forward network.
-            gru_dropout_rate: only applies between GRU layers, so it is ignored when gru_layers is 1.
-            sequence_count: how many game histories one sample reads.
-        """
+        """gru_dropout_rate only applies between GRU layers, so it is ignored when gru_layers is 1."""
         super().__init__()
 
         self.sequence_input_dim = sequence_input_dim
@@ -84,13 +71,7 @@ class GRUFeedForward(SavableModule):
             sequence_lengths: torch.Tensor,
             static_input: torch.Tensor
             ) -> torch.Tensor:
-        """
-        Args:
-            sequences: padded game sequences of shape
-                (batch * sequence_count, longest sequence, sequence features), with one sample's
-                sequences next to each other and in the order that sample lists them.
-            sequence_lengths: the unpadded length of each sequence, so padding is never read.
-        """
+        """sequences has shape (batch * sequence_count, longest sequence, sequence features)."""
 
         packed_sequences = nn.utils.rnn.pack_padded_sequence(
             sequences,
@@ -101,8 +82,7 @@ class GRUFeedForward(SavableModule):
 
         _, hidden_states = self.gru(packed_sequences)
 
-        # Back to one row per sample, holding every sequence that sample reads. One sequence leaves
-        # this exactly as the GRU produced it.
+        # Reshape to one row per sample, with the hidden states of all its sequences side by side.
         memory = hidden_states[-1].reshape(len(static_input), -1)
 
         return self.network(torch.cat((memory, static_input), dim=1))

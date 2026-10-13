@@ -1,25 +1,13 @@
-<!--
-	The printed band every page opens with.
-
-	It is the site's own register: a plate in flat spot inks on saturated stock, registered with press
-	crosses, running the full width of the screen with its printing held on the page column. The fixed
-	header is printed on it rather than set above it, which is why the band takes the header's height
-	back as its own top padding.
-
-	What comes after the head, if anything, is given the band's whole width. The prediction pages put
-	the night's board there, so the games are dealt on the same sheet the page is stamped on.
--->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
 	type Props = {
-		/** The page's own heading, stamped. */
 		title: string;
-		/** One line saying what the page answers. Omitted where the heading says it all. */
+		/** One-line description of the page. */
 		lede?: string;
-		/** The one way out of the page, printed under the lede. */
+		/** Main action link or button, shown under the lede. */
 		action?: Snippet;
-		/** Anything given the band's full width, under the head. */
+		/** Extra content shown at full width under the heading. */
 		extra?: Snippet;
 	};
 
@@ -57,7 +45,6 @@
 		padding-block-end: var(--space-6);
 	}
 
-	/* A band carrying something of its own below the head hands the bottom edge to it. */
 	.band.extended {
 		padding-block-end: 0;
 	}
@@ -81,8 +68,6 @@
 		font-size: var(--type-note);
 	}
 
-	/* A way out of the page is printed in the one ink rather than in the spot color, which belongs to
-	   the action a page leads with and not to a link beside its title. */
 	.action {
 		margin-block-start: var(--space-1);
 		--plane-accent: var(--plate-ink);
@@ -92,11 +77,6 @@
 		padding-block-end: var(--space-6);
 	}
 
-	/*
-	 * Wider: the stamp takes the leading column and everything said about it stands in the second,
-	 * set on the stamp's last line. A title alone across a sheet this wide leaves most of the band
-	 * empty, and a plate with nothing printed on two thirds of it is not a plate.
-	 */
 	@media (min-width: 64rem) {
 		.head {
 			grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);

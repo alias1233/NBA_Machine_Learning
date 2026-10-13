@@ -1,11 +1,4 @@
-"""
-What an answer means.
-
-An output says what each number a model returns stands for. Everything a reader is shown is drawn
-through it, so a bucket width or an impossible value read the wrong way relabels every figure on the
-site without anything failing. These tests pin down what a position stands for, and that the class a
-value is fit against agrees with the position that value is read back out of.
-"""
+"""Tests for the model output types."""
 
 import numpy as np
 import pytest
@@ -14,7 +7,7 @@ from nba_ml.machine_learning.datasets import _adjust_classification_outputs
 from nba_ml.models.families import ALL_FAMILIES
 from nba_ml.models.outputs import CategoryDistribution, IntegerDistribution, Values
 
-# ONE CLASS PER WHOLE NUMBER: #
+# ONE CLASS PER INTEGER: #
 def test_a_position_stands_for_one_whole_number():
     points = IntegerDistribution(minimum_value=0, outcomes=60)
 
@@ -24,7 +17,7 @@ def test_a_position_stands_for_one_whole_number():
     assert points.value_of(7) == 7
     assert points.label(7) == "7"
 
-# A RUN OF WHOLE NUMBERS PER CLASS: #
+# BUCKETS: #
 def test_a_bucket_covers_its_whole_width_and_is_read_as_its_middle():
     team_points = IntegerDistribution(minimum_value=80, outcomes=22, bucket_width=3)
 
@@ -33,10 +26,8 @@ def test_a_bucket_covers_its_whole_width_and_is_read_as_its_middle():
     assert team_points.label(0) == "80 to 82"
     assert team_points.values(21) == [143, 144, 145]
 
-# AN IMPOSSIBLE VALUE: #
+# IMPOSSIBLE VALUES: #
 def test_an_impossible_value_comes_off_the_number_line_rather_than_out_of_a_bucket():
-    """The point differential, which cannot be zero. Every bucket still covers three outcomes."""
-
     differential = IntegerDistribution(
         minimum_value=-42,
         outcomes=28,
@@ -58,15 +49,13 @@ def test_an_impossible_value_comes_off_the_number_line_rather_than_out_of_a_buck
     assert covered == sorted(covered)
 
 def test_an_impossible_value_has_to_sit_on_a_bucket_edge():
-    """Anywhere else would leave one bucket a different width from the rest."""
-
     with pytest.raises(ValueError):
         IntegerDistribution(minimum_value=-42, outcomes=28, bucket_width=3, impossible_value=1)
 
     with pytest.raises(ValueError):
         IntegerDistribution(minimum_value=-42, outcomes=28, bucket_width=3, impossible_value=-42)
 
-# FITTING AND READING BACK: #
+# VALUE TO CLASS CONVERSION: #
 @pytest.mark.parametrize(
     "output",
     [
@@ -77,14 +66,6 @@ def test_an_impossible_value_has_to_sit_on_a_bucket_edge():
     ]
 )
 def test_the_class_a_value_is_fit_against_is_the_position_it_is_read_back_out_of(output: IntegerDistribution):
-    """
-    Two modules read the same number line, and they have to agree.
-
-    Training turns what happened into a class, in machine_learning/datasets.py, and the site turns a
-    position back into the values it stands for, here. If those ever disagree, every model still
-    trains and every chart still draws, under the wrong labels.
-    """
-
     values = np.array([
         value
         for position in range(output.length)
@@ -111,7 +92,7 @@ def test_a_value_outside_the_range_folds_into_the_nearest_end():
     assert list(classes) == [0, 0, 0, 21, 21, 21]
     assert output.values(0)[0] == 80
 
-# THE OTHER SHAPES: #
+# OTHER OUTPUT TYPES: #
 def test_a_category_answer_is_read_by_position_and_leads_with_the_first():
     win = CategoryDistribution(categories=("home win", "away win"))
 
@@ -128,15 +109,8 @@ def test_an_amount_answer_names_one_quantity_per_position():
     assert minutes.length == 1
     assert minutes.label(0) == "minutes"
 
-# EVERY MODEL THAT SHIPS: #
+# ALL MODELS: #
 def test_every_specification_agrees_with_its_own_output():
-    """
-    A specification is data, so a bad one is only found when something reads it. This reads them all.
-
-    A name is what a command line argument and a saved file are given, so two models sharing one
-    would train over each other's weights.
-    """
-
     specifications = [
         specification
         for family in ALL_FAMILIES
@@ -148,8 +122,6 @@ def test_every_specification_agrees_with_its_own_output():
     assert specifications
 
     for specification in specifications:
-        # Building every label is what proves a range, a bucket width and an impossible value can
-        # actually be read together.
         labels = [specification.output.label(position) for position in range(specification.output.length)]
 
         assert len(labels) == len(set(labels))

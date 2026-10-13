@@ -1,4 +1,4 @@
-"""The deliberately small data release loaded before a prediction server starts."""
+"""Tests for packing and loading the serving data archive."""
 
 import sqlite3
 import tarfile
@@ -66,11 +66,6 @@ def test_a_serving_archive_keeps_only_the_needed_game_window_and_loads_it(tmp_pa
 
 
 def test_a_player_with_no_game_in_the_window_is_left_out_of_the_release(tmp_path):
-    """
-    The archive a developer trains on reaches back decades further than the window a server serves,
-    so a player search on the site must not offer somebody the server holds not one game of.
-    """
-
     retired = fake_data.player_info_frame(fake_data.ALL_PLAYERS[:1]).assign(PERSON_ID=999_001)
     players.store(retired)
     archive = tmp_path / "server-data.tar.gz"
@@ -86,8 +81,6 @@ def test_a_player_with_no_game_in_the_window_is_left_out_of_the_release(tmp_path
 
 
 def test_a_release_holding_a_player_it_describes_nothing_about_is_refused(tmp_path):
-    """A feature build silently drops every game of an unknown player, so this cannot ship."""
-
     archive = tmp_path / "server-data.tar.gz"
     serving_data.pack(archive, date(2024, 10, 30))
     unpacked = tmp_path / "packed"

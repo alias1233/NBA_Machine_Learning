@@ -1,14 +1,4 @@
-"""
-The player game statistics build, from stored box scores to the input of one prediction.
-
-A prediction is two halves built in different places, and they have to agree. The games behind the
-predicted one come out of a build the whole league shares, and the row standing for the game itself
-is built per request. The load bearing check here is that splitting the work that way changes no
-number: a prediction made against a published build reads exactly what a prediction made without one
-reads.
-
-The league these run over is four teams of three players, in tests/fake_data.py.
-"""
+"""Tests for the player stats feature build and inference inputs."""
 
 import numpy as np
 import pytest
@@ -24,13 +14,13 @@ import fake_data
 POINTS_MODEL = specifications.ALL_MODEL_SPECIFICATIONS["points"]
 
 TARGET_PLAYER_ID = fake_data.player_id(1, 0)
-"""The first player of team 1, who takes the largest share of their team's scoring."""
+"""The first player of team 1, who scores the most points on their team."""
 
 TARGET_TEAM_ID = fake_data.team_of(TARGET_PLAYER_ID)
 
 @pytest.fixture
 def collected_league():
-    """Everything a collection run over the fake league would leave in the stores."""
+    """Stores the full fake league, as a collection run would."""
 
     players.store(fake_data.player_info_frame())
     player_games.store(fake_data.player_game_frame())
@@ -38,7 +28,7 @@ def collected_league():
 
 @pytest.fixture
 def features_read():
-    """What the points model reads, resolved once for the test that reads it."""
+    """Returns the feature set of the points model."""
 
     return POINTS_MODEL.get_feature_set()
 
@@ -46,7 +36,7 @@ def target_game(home_team_id: int = TARGET_TEAM_ID, away_team_id: int = 2) -> Ga
     return Game(fake_data.NEXT_GAME_DATE, home_team_id, away_team_id)
 
 def publish_league_build():
-    """Runs the build job the service reads, over whatever the stores hold."""
+    """Builds and publishes a feature build from the stored data."""
 
     union = specifications.union_feature_set()
 
@@ -59,7 +49,7 @@ def publish_league_build():
         )
     )
 
-# THE WHOLE LEAGUE: #
+# LEAGUE BUILD: #
 def test_the_league_build_holds_every_player_and_every_game_they_played(collected_league, features_read):
     histories = features.build_league_histories(features_read)
 
@@ -84,12 +74,6 @@ def test_a_player_with_no_draft_record_reads_as_undrafted_rather_than_as_a_blank
     collected_league,
     features_read
     ):
-    """
-    The data source writes the word for a player it holds no draft record of, and the older nba.com
-    archive leaves the column empty for one. Both have to reach a model as the same thing, because
-    an empty one used to arrive as a blank and turn every training loss into nan.
-    """
-
     written = fake_data.player_info_frame()
     written[players.DRAFT_NUMBER.category_name] = None
     players.store(written)
@@ -111,8 +95,6 @@ def test_an_empty_player_store_explains_that_training_needs_collection(features_
         features.build_league_histories(features_read)
 
 def test_a_players_own_scoring_and_plus_minus_reach_the_build_as_recorded(collected_league, features_read):
-    """Fixed input checks for two player box-score values every model reads."""
-
     history = features.build_league_histories(features_read)[TARGET_PLAYER_ID]
     points_column = features_read.sequence_columns.index(game_columns.POINTS + player_columns.PLAYER_SUFFIX)
     plus_minus_column = features_read.sequence_columns.index(player_games.PLUS_MINUS.category_name)
@@ -130,11 +112,6 @@ def test_a_players_own_scoring_and_plus_minus_reach_the_build_as_recorded(collec
         assert history.sequence_values[position][plus_minus_column] == pytest.approx(plus_minus)
 
 def test_one_build_covers_every_model_of_the_family(collected_league, features_read):
-    """
-    Every model's sequence columns are a subset of the union's by name, which is the only reason one
-    build can answer all fourteen of them.
-    """
-
     union = specifications.union_feature_set()
     build = feature_store.from_histories(
         features.build_league_histories(union),
@@ -147,7 +124,7 @@ def test_one_build_covers_every_model_of_the_family(collected_league, features_r
     assert len(positions) == len(features_read.sequence_columns)
     assert build.game_count == len(fake_data.ALL_PLAYERS) * len(fake_data.games_of(TARGET_TEAM_ID))
 
-# ONE PREDICTION: #
+# INFERENCE: #
 def test_a_prediction_reads_every_game_played_before_the_one_asked_about(collected_league, features_read):
     sequences, sample = features.get_inference_data(
         features_read,
@@ -165,20 +142,13 @@ def test_a_prediction_reads_every_game_played_before_the_one_asked_about(collect
     assert list(sample.sequence_end_indices[0]) == [played]
     assert sample.opponent_team_ids[0][0] == 2
 
-    # The player's own unchanging information sits in front of what is read off the game.
+    # The static input is the player info features followed by the target game's static columns.
     assert sample.static_inputs.shape == (1, len(history.static_input(0)))
 
 def test_a_published_build_answers_a_prediction_exactly_as_building_the_league_per_request_does(
     collected_league,
     features_read
     ):
-    """
-    The load bearing check.
-
-    Sharing one build across every request is what made serving possible. The only thing that proves
-    it changed no answer is taking the same prediction both ways and comparing the numbers.
-    """
-
     arguments = (features_read, TARGET_PLAYER_ID, TARGET_TEAM_ID, target_game(), RosterScenario())
 
     per_request_sequences, per_request_sample = features.get_inference_data(*arguments)
@@ -196,8 +166,6 @@ def test_taking_a_core_teammate_out_changes_the_predicted_game_and_nothing_behin
     collected_league,
     features_read
     ):
-    """A roster change belongs to the game being predicted. The games already played are what they were."""
-
     teammate = fake_data.player_id(TARGET_TEAM_ID, 1)
     arguments = (features_read, TARGET_PLAYER_ID, TARGET_TEAM_ID, target_game())
 
@@ -214,7 +182,7 @@ def test_taking_a_core_teammate_out_changes_the_predicted_game_and_nothing_behin
     )
     assert not np.array_equal(without_teammate.static_inputs, with_everyone.static_inputs)
 
-# WHAT CANNOT BE ANSWERED: #
+# REFUSED REQUESTS: #
 def test_a_player_nothing_is_stored_about_is_refused_rather_than_answered(collected_league, features_read):
     unknown_player_id = 9999
 
@@ -226,8 +194,6 @@ def test_a_player_nothing_is_stored_about_is_refused_rather_than_answered(collec
     assert refused.value.reason is Refusal.MISSING_PLAYER_INFORMATION
 
 def test_a_team_with_no_game_before_the_predicted_one_is_refused(features_read):
-    """One past game is the floor, because the sequence a model reads cannot be empty."""
-
     first_game = fake_data.SEASON_GAMES[0]
 
     players.store(fake_data.player_info_frame())

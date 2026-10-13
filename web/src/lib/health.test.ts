@@ -1,4 +1,4 @@
-// @ts-expect-error The site intentionally carries no Node type package for this Node-only test.
+// @ts-expect-error Node types are not installed. This test only runs in Node.
 import { readFileSync } from 'node:fs';
 
 function check(what: string, actual: unknown, expected: unknown) {

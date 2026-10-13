@@ -1,21 +1,3 @@
-<!--
-	What the line settles at. Under first, then push, then over, which is the order the chart under
-	them reads from left to right.
-
-	Every answer is a sum over probabilities the page already holds, so moving the line asks the
-	server for nothing. 
-
-	All three figures are shown at every line. Push reads 0.0 percent on a half number, because a
-	half number cannot be landed on. Dropping it instead would blink a figure in and out as the
-	slider passed each whole number. Where an outcome covers a run of whole numbers, a push is that
-	outcome's even share of the one number the line sits on.
-
-	All three roll towards whatever the new line settles at, including a roll down to nothing, so the
-	three always read as one movement.
-
-	Each figure sits in a box of its own, as wide as the widest one it can reach, so a figure growing
-	a digit as the line is dragged moves nothing beside it.
--->
 <script lang="ts">
 	import { rolling } from '$lib/motion';
 	import { oddsPercentages } from '$lib/odds';
@@ -24,7 +6,6 @@
 
 	type Props = {
 		odds: LineOdds;
-		/** True where the three are the readout of a whole screen rather than a corner of a block. */
 		large?: boolean;
 	};
 
@@ -39,7 +20,6 @@
 	);
 </script>
 
-<!-- data-explain names each part the About page's annotated answer runs a leader line to. -->
 <dl class:large>
 	<div class="under" data-explain="under">
 		<dt class="micro">Under</dt>
@@ -58,16 +38,11 @@
 </dl>
 
 <style>
-	/* Tracks sized by the widest figure they can reach rather than by the figure in them, so nothing
-	   laid out beside them is resized as the line is dragged. The cap is a ceiling, so on a narrow
-	   screen the three share what there is instead of running past the edge. */
 	dl {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, var(--figure-column)));
 	}
 
-	/* The track is what holds the width. The figure inside it takes only the room its own words need,
-	   so anything measured against one of these finds the figure rather than the track around it. */
 	dl > div {
 		width: max-content;
 		max-width: 100%;
@@ -94,18 +69,12 @@
 		color: var(--push);
 	}
 
-	/* Read from across a screen rather than from a column, so the figures are set larger and each
-	   takes the box that size of figure needs. */
 	dl.large {
 		container-type: inline-size;
 		grid-template-columns: repeat(3, minmax(0, var(--figure-column-large)));
 		gap: var(--space-4);
 	}
 
-	/* Measured against the three tracks themselves rather than against the screen, so the readout is
-	   set at the full large size wherever they have their whole width and steps back towards the
-	   ordinary figure size as a narrow screen squeezes them. The coefficient is what puts a full-width
-	   set of tracks past the ceiling, so having the room at all is what settles it there. */
 	dl.large dd {
 		font-size: clamp(var(--type-figure), 8cqi, var(--type-figure-large));
 	}

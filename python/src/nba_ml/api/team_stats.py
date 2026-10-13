@@ -1,10 +1,4 @@
-"""
-Predicting what one named team does in one game.
-
-Everything specific to this family sits here: the request only it takes, and the endpoint that
-answers it. A request names one of the game's two teams, because the answer belongs to that side and
-would be a different number for the other one.
-"""
+"""Prediction endpoint for the team stats models."""
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -17,14 +11,11 @@ router = APIRouter(prefix="/predictions/team-stats", tags=["team_stats"])
 
 class PredictionRequest(BaseModel):
     team: str
-    """Which side of the game to answer for, as a tricode such as LAL or a full team name."""
+    """The team to predict for, as an abbreviation (e.g. LAL) or full team name."""
 
     game: GameRequest
     rosters: GameRostersRequest = Field(default_factory=GameRostersRequest)
-    """
-    Who each side is playing without or with. Both sides are read, because a team's row carries what
-    the side it faces has available and a defence missing its best player changes what a team scores.
-    """
+    """Players each team is missing or getting back for this game."""
 
 @router.post("/{model}")
 def predict_team_stat(model: str, request: PredictionRequest) -> PredictionResponse:

@@ -1,17 +1,4 @@
-"""
-Turning a finished feature frame into the samples a model is fit on.
-
-Every model here predicts one thing from the games played before it. Only the columns differ between
-families, so the cutting, the splitting and the sample loop sit here and a family says nothing but
-which columns it wants and what a sample is.
-
-A sample is read off one row and reads the games of whoever that row is about. A family predicting a
-whole game rather than one side of it says so twice: only one of a game's two rows may be read off,
-and the sample reads the opposing team's games as well as its own.
-
-The frame this reads must already hold one row per subject per game, sorted by subject and then by
-date, with every column already engineered.
-"""
+"""Turns engineered feature rows into training and inference samples."""
 
 import hashlib
 from dataclasses import dataclass
@@ -25,61 +12,34 @@ import pandas as pd
 from nba_ml.machine_learning.datasets import GameSequences, SequenceInputSamples
 
 OUTPUT = "OUTPUT"
-"""The column holding the value a model is fit against, whatever the family reads it off."""
+"""Name of the column with the target value."""
 
 TRAINING_SPLIT = 0
 VALIDATION_SPLIT = 1
 TEST_SPLIT = 2
 SPLIT_NAMES = ("training", "validation", "test")
-"""What each split is called, in the order build_split_samples returns them."""
+"""Split names, in the order build_split_samples returns them."""
 
 class SplitKey(StrEnum):
-    """What decides which of the two evaluation splits a sample lands in."""
+    """The key used to split evaluation samples into validation and test."""
 
     SUBJECT = "subject"
-    """
-    Whoever the sample is about, so nobody appears in both splits.
-
-    The right choice where there are enough subjects to halve, which is a league of players.
-    """
+    """Split by subject, so a player or team is never in both splits."""
 
     GAME = "game"
-    """
-    The game being predicted, so both rows of a game stay together and every subject is in both.
-
-    The right choice where there are too few subjects to halve without the two halves differing.
-    Thirty teams split in two would measure a team model on fifteen of them, and the fifteen that
-    landed in the test split would decide the figure as much as the model does.
-    """
+    """Split by game, so both rows of a game are in the same split."""
 
 @dataclass(frozen=True)
 class EvaluationSplit():
-    """
-    How the games a model is scored on are held back, and how they are then divided in two.
-
-    Everything before start_date trains the model. Everything on or after it is evaluated, and is
-    divided between validation and test by something other than the date, so both splits span the
-    same stretch of calendar. That is what puts the opening weeks, the closing weeks and the
-    playoffs in both, which a split made by cutting the calendar again cannot do.
-
-    Validation picks the stopping epoch. Test is never read until the finished model is scored, so
-    it is the only figure worth publishing.
-    """
+    """Settings for which games are held out and how they are divided into validation and test."""
 
     start_date: datetime
-    """The first day of the evaluation period. A game on it is evaluated rather than trained on."""
+    """First day of the evaluation period. Earlier games are used for training."""
 
     validation_fraction: float = 0.5
-    """
-    The share of the evaluation period that goes to validation, the rest going to test.
-
-    A half leaves the two the same size. It is a share of the keys, so the share of samples lands
-    near it rather than exactly on it.
-    """
 
     split_on: SplitKey = SplitKey.SUBJECT
     seed: int = 0
-    """Changes which keys land where, without changing how many. Two runs sharing one are identical."""
 
     def __post_init__(self):
         if not 0.0 <= self.validation_fraction <= 1.0:
@@ -88,20 +48,13 @@ class EvaluationSplit():
             )
 
     def _share_of(self, key: int) -> float:
-        """
-        Where one key falls in the unit interval, spread evenly and decided by the key alone.
-
-        Hashed rather than drawn, so the answer does not depend on how many keys came before it or
-        on the order a build met them. The same key lands in the same split every run.
-        """
+        """Hashes a key to a number between 0 and 1. The same key and seed always give the same number."""
 
         digest = hashlib.blake2b(f"{self.seed}:{key}".encode(), digest_size=8).digest()
 
         return int.from_bytes(digest, "big") / float(1 << 64)
 
     def split_of(self, key: int) -> int:
-        """Which evaluation split one key belongs to."""
-
         return VALIDATION_SPLIT if self._share_of(key) < self.validation_fraction else TEST_SPLIT
 
     def splits_of(
@@ -110,7 +63,7 @@ class EvaluationSplit():
         game_ids: np.ndarray,
         game_dates: np.ndarray
         ) -> np.ndarray:
-        """Which split each of one subject's games belongs to, in the order they are given."""
+        """Returns the split of each of a subject's games, in the given order."""
 
         splits = np.full(len(game_dates), TRAINING_SPLIT, dtype=np.int64)
         evaluated = np.flatnonzero(game_dates >= np.datetime64(self.start_date))
@@ -127,47 +80,35 @@ class EvaluationSplit():
 
 @dataclass(frozen=True)
 class GameHistory():
-    """
-    One subject's games, already reduced to the numbers a model reads, oldest game first.
-
-    Everything is a plain array rather than a dataframe, so building a sample is a slice instead of
-    hundreds of thousands of small pandas objects.
-    """
+    """The feature values of one subject's games, sorted oldest first."""
 
     static_subject_values: np.ndarray
-    """The subject's own unchanging information, shaped (subject features,). Empty when it has none."""
+    """Features of the subject that are the same for every game. Shape: (subject features,)."""
 
     game_ids: np.ndarray
     game_dates: np.ndarray
     sequence_values: np.ndarray
-    """Shaped (games, sequence features)."""
+    """Shape: (games, sequence features)."""
 
     static_values: np.ndarray
-    """Shaped (games, static features)."""
+    """Shape: (games, static features)."""
 
     opponent_team_ids: np.ndarray
     outputs: np.ndarray
 
     is_sample_row: np.ndarray
-    """
-    Per game, whether a sample may be read off it.
-
-    Every row qualifies unless the family said otherwise. A game statistic belongs to the game rather
-    than to either side, so its family reads one row of the two and the game becomes one sample.
-    """
+    """Whether each game can be used as a sample."""
 
     @property
     def game_count(self) -> int:
         return len(self.game_dates)
 
     def static_input(self, index: int) -> np.ndarray:
-        """The static half of one sample's input, read off the game being predicted."""
+        """Returns the static input for the game at the given index."""
 
         return np.concatenate((self.static_subject_values, self.static_values[index]))
 
     def starting_on(self, start_date: datetime) -> "GameHistory":
-        """The part of this history on or after a training era's first day."""
-
         start = int(np.searchsorted(self.game_dates, np.datetime64(start_date), side="left"))
         return GameHistory(
             self.static_subject_values,
@@ -181,21 +122,8 @@ class GameHistory():
         )
 
 NO_STATIC_SUBJECT_VALUES = np.empty(0, dtype=np.float32)
-"""What a subject the model knows nothing unchanging about carries, such as a team."""
 
 def check_columns_are_finite(values: np.ndarray, columns: Sequence[str], described: str):
-    """
-    Stops a build that left a blank or an infinity in something a model reads.
-
-    One blank spreads through the whole network, and a training run reports what comes back as a
-    loss of nan rather than as an error, so it is caught while the column that did it can still be
-    named.
-
-    Args:
-        values is shaped (rows, columns), matching the given column names.
-        described names what the columns belong to, which is what a reader is told to go and look at.
-    """
-
     non_finite = (~np.isfinite(values)).sum(axis=0)
     named = [f"{column} ({count:,} rows)" for column, count in zip(columns, non_finite) if count]
 
@@ -216,18 +144,7 @@ def split_into_histories(
     static_subject_values: Mapping[int, np.ndarray] | None = None,
     sample_row_column: str | None = None
     ) -> dict[int, GameHistory]:
-    """
-    Cuts a finished feature frame into one history per subject.
-
-    The columns are pulled out as whole arrays once and then sliced, which is why every subject's
-    games have to sit together in the frame.
-
-    Args:
-        static_subject_values holds what never changes about a subject, keyed by its id. Leave it
-        unset for a subject that carries none.
-        sample_row_column names a column that is true for the rows a sample may be read off. Leave
-        it unset where every row may be.
-    """
+    """Splits a feature dataframe into one GameHistory per subject. It must be sorted by subject, then date."""
 
     game_ids = game_data[game_id_column].to_numpy()
     game_dates = game_data[game_date_column].to_numpy()
@@ -268,20 +185,17 @@ def split_into_histories(
 
 @dataclass(frozen=True)
 class SequenceRead():
-    """One history a sample reads, and where in it the sample stops reading."""
+    """Points a sample to one subject's history and the index where its past games end."""
 
     sequence_index: int
-    """Which subject of a GameSequences this is."""
 
     end_index: int
-    """The exclusive end of the games that came before the predicted one."""
+    """Index of the predicted game. The sample uses the games before it."""
 
     opponent_team_id: int
-    """Who this subject faces in the predicted game, which marks those games inside the sequence."""
+    """ID of the team this subject plays in the predicted game."""
 
 class _SampleAccumulator():
-    """Collects the samples of one split before they are packed into arrays."""
-
     def __init__(self):
         self.sequence_indices: list[list[int]] = []
         self.sequence_end_indices: list[list[int]] = []
@@ -325,13 +239,6 @@ def _print_progress(count: int):
         print(f"\r\033[KData Chunks Processed: {count}", end="", flush=True)
 
 def _game_positions(histories: Mapping[int, GameHistory]) -> dict[tuple[int, int], SequenceRead]:
-    """
-    Where every subject's every game sits, keyed by that subject and the game.
-
-    This is what lets a sample read a second subject of the same game. Only a family whose subjects
-    are teams asks for one, because only then does the other side of a game have a history to read.
-    """
-
     return {
         (subject_id, int(game_id)): SequenceRead(sequence_index, position, int(history.opponent_team_ids[position]))
         for sequence_index, (subject_id, history) in enumerate(histories.items())
@@ -350,31 +257,7 @@ def build_split_samples(
     read_opponent_history: bool = False,
     print_debug: bool = False
     ) -> tuple[GameSequences, list[SequenceInputSamples]]:
-    """
-    Builds every labeled sample the histories hold, split into training, validation and test.
-
-    Each subject's games are kept once and the samples only hold where in them to read, so that a
-    sample can look back over a long history without storing its own copy of it.
-
-    Games played against the predicted game's opponent are marked inside the sequence itself, so a
-    sample is kept even when the subject has rarely faced them.
-
-    Args:
-        evaluation_split says where the training era ends and how the games after it are divided
-        between validation and test. See EvaluationSplit.
-        minimum_past_games is how many games must sit behind one before it can be a sample. Every
-        history a sample reads has to clear it.
-        sequence_columns and static_columns name what the histories hold, in the order they hold it,
-        so that a build that left a blank behind can say which column did it.
-        read_opponent_history adds the opposing team's own games as a second sequence. Only a family
-        whose subjects are teams can ask for this.
-
-    Returns:
-        (the games of every subject, the training, validation and test samples)
-
-    Raises:
-        ValueError where a column a model reads holds a blank or an infinity.
-    """
+    """Builds every labeled sample from the histories, split into training, validation and test."""
 
     if training_start_date is not None:
         histories = {
@@ -383,9 +266,7 @@ def build_split_samples(
             if history.game_dates[-1] >= np.datetime64(training_start_date)
         }
 
-    # After the era is cut, so a blank in a season nothing is fit on stops nothing. Only training
-    # gets here, and every one of its rows is a game that was played, unlike the row a prediction
-    # adds for the game it is about, whose box score is blank because nobody has recorded one yet.
+    # Training rows come from played games, so none of their values should be missing.
     for history in histories.values():
         check_columns_are_finite(history.sequence_values, sequence_columns, "past game columns")
         check_columns_are_finite(history.static_values, static_columns, "predicted game columns")
@@ -409,8 +290,7 @@ def build_split_samples(
 
         splits = evaluation_split.splits_of(subject_id, history.game_ids, history.game_dates)
 
-        # Only the games before the evaluation period are visible to the training split, so the
-        # scalers can be fit without seeing a game either evaluation split is scored on.
+        # The scalers are only fit on the training games.
         training_game_counts.append(int((splits == TRAINING_SPLIT).sum()))
 
         for index in range(minimum_past_games, history.game_count, chunk_step_size):
@@ -425,8 +305,6 @@ def build_split_samples(
             reads = [SequenceRead(sequence_index, index, opponent_team_id)]
 
             if read_opponent_history:
-                # The other side of the same game, read up to it exactly as this one is. A side with
-                # too little behind it is no sample, because a sequence cannot be empty.
                 opponent = positions.get((opponent_team_id, int(history.game_ids[index])))
 
                 if opponent is None or opponent.end_index < minimum_past_games:
@@ -457,25 +335,18 @@ def build_split_samples(
 
 @dataclass(frozen=True)
 class SequenceToRead():
-    """
-    One subject a prediction reads: the games behind the predicted one, and who they face in it.
-
-    The games are given outright rather than as a position in a history, because the two halves of a
-    prediction come from different places. The games behind it come from a build the whole league
-    shares, and the game being predicted is assembled per request.
-    """
+    """A subject's past games and opponents, used as input for a prediction."""
 
     past_games: np.ndarray
-    """Shaped (games, sequence features), oldest first."""
+    """Shape: (games, sequence features). Sorted oldest first."""
 
     past_opponent_team_ids: np.ndarray
-    """Who the subject faced in each of those games, which is what marks the ones against this one."""
 
     opponent_team_id: int
-    """Who the subject faces in the game being predicted."""
+    """ID of the team the subject plays in the predicted game."""
 
 def read_up_to(history: GameHistory, index: int) -> SequenceToRead:
-    """One subject's side of a prediction, taken out of a history that holds the predicted game."""
+    """Returns the subject's games before the given index, plus the opponent at that index."""
 
     return SequenceToRead(
         history.sequence_values[:index],
@@ -487,14 +358,7 @@ def build_inference_sample(
     sides: Sequence[SequenceToRead],
     static_input: np.ndarray
     ) -> tuple[GameSequences, SequenceInputSamples]:
-    """
-    The one sample a prediction runs: the games each side reads, and the game being predicted.
-
-    Args:
-        sides are the subjects the model reads, in the order it reads them.
-        static_input is everything read off the game being predicted, which belongs to the side the
-        answer is read off.
-    """
+    """Builds the single sample used for a prediction from each subject's past games and the static input."""
 
     samples = SequenceInputSamples(
         np.arange(len(sides), dtype=np.int64).reshape(1, -1),
@@ -504,7 +368,7 @@ def build_inference_sample(
         np.zeros(1, dtype=np.float64)
     )
 
-    # None of these games belong to a training split, since nothing is being fit.
+    # Training game counts are 0 because these games aren't used for training.
     game_sequences = GameSequences(
         [side.past_games for side in sides],
         [side.past_opponent_team_ids for side in sides],

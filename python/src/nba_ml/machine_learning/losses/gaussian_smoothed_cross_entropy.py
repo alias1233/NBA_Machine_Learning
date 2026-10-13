@@ -2,18 +2,12 @@ import torch
 import torch.nn.functional as F
 
 class GaussianSmoothedCrossEntropyLoss(torch.nn.Module):
-    """
-    Cross entropy against a label spread over its neighbouring classes, so predicting near the true
-    class costs less than predicting far from it.
-    """
+    """Cross entropy with labels smoothed over neighbouring classes using a Gaussian."""
 
     indices: torch.Tensor
 
     def __init__(self, num_classes: int, sigma: float):
-        """
-        Args:
-            sigma is how far the label spreads, measured in classes.
-        """
+        """sigma is the standard deviation of the smoothing, in classes."""
 
         super().__init__()
 

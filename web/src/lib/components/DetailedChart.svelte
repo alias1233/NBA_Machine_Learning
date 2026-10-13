@@ -1,24 +1,3 @@
-<!--
-	The chart at the size it deserves, over the whole screen.
-
-	It is the same drawing as the one in the answer, given the room to show every outcome at once, a
-	probability axis to read them against and a mark for what the model expects. The line and the odds
-	come with it, because the chart, the line and the odds are one object wherever they are drawn. The
-	odds sit at the end of the line's own row and are set larger, because here they are read from
-	across a screen.
-
-	The exact figures sit behind one disclosure at the top, beside what the model expects. It opens as
-	a panel over the drawing and the controls under it, so nothing else in the view moves, and it holds
-	every outcome ordered either by value or by chance, which is the ranking a reader wants when they
-	want one. It reaches down to the foot of the view rather than stopping at the drawing, because on a
-	phone the drawing alone is three rows of table and a scroll with nowhere to go.
-
-	Opening it puts the reader inside it, so a swipe or an arrow key belongs to the table rather than
-	to whatever it is standing over. Closing hands them back to the control that opened it.
-
-	A modal dialog, so the reader is inside it until they leave: Escape closes an open panel and then
-	the view, focus stays within it, and the page underneath it holds still and comes back where it was.
--->
 <script lang="ts">
 	import DistributionChart from '$lib/components/DistributionChart.svelte';
 	import LineControl from '$lib/components/LineControl.svelte';
@@ -38,9 +17,8 @@
 
 	type Props = {
 		distribution: Distribution;
-		/** What the model predicts, lowercase. */
+		/** Name of the predicted stat, in lowercase. */
 		stat: string;
-		/** What the answer names itself: the player and the stat, then the game. */
 		heading: string;
 		subheading: string;
 		line: number;
@@ -57,20 +35,17 @@
 	let sheet = $state<HTMLElement>();
 	let toggle = $state<HTMLButtonElement>();
 
-	/** Whether the table of every outcome stands over the drawing. */
+	/** True when the table of all outcomes is shown over the chart. */
 	let showing = $state(false);
 
-	/** What that table is ordered by. Value is the order the outcomes come in. */
 	let sort = $state<'value' | 'chance'>('value');
 
-	/** Every outcome the model can answer with, because this view holds the whole answer. */
 	const range = $derived({ first: 0, last: distribution.probabilities.length - 1 });
 
 	const expected = $derived(expectedValue(distribution));
 	const expectedText = $derived(figureText(distribution, expected));
 	const likeliest = $derived(mostLikelyOutcomes(distribution, 1)[0]);
 
-	// Ordered by chance is the ranking, so one table answers both questions the reader can ask of it.
 	const rows = $derived(
 		sort === 'chance'
 			? mostLikelyOutcomes(distribution, distribution.probabilities.length)
@@ -92,7 +67,6 @@
 
 	const percent = (probability: number) => `${(probability * 100).toFixed(1)}%`;
 
-	// The panel over the drawing is the innermost thing open, so it is what Escape leaves first.
 	function onKeydown(event: KeyboardEvent) {
 		if (event.key !== 'Escape' || !showing) return;
 
@@ -100,8 +74,6 @@
 		showing = false;
 	}
 
-	// A press anywhere but the panel and the control that opened it puts it away, which is how a thing
-	// floating over something else is dismissed.
 	$effect(() => {
 		if (!showing) return;
 
@@ -116,8 +88,6 @@
 		return () => document.removeEventListener('pointerdown', away);
 	});
 
-	// It is only ever in the page while it is open, so opening it is what mounting it means. The way
-	// out takes the focus, rather than whichever control happens to be written first.
 	$effect(() => {
 		if (dialog && !dialog.open) {
 			dialog.showModal();
@@ -125,11 +95,10 @@
 		}
 	});
 
-	/** Plain, not state, because this only records where the last run left off. */
+	/** Not reactive. Only stores the value from the last run of the effect. */
 	let wasShowing = false;
 
-	// A panel standing over the drawing owns what the reader does next, so it takes the focus and
-	// gives it back. Everything a swipe or an arrow key could land on instead is behind it.
+	// Moves focus to the panel when it opens and back to the toggle when it closes.
 	$effect(() => {
 		if (showing) sheet?.focus({ preventScroll: true });
 		else if (wasShowing) toggle?.focus({ preventScroll: true });
@@ -148,8 +117,6 @@
 				{/if}
 			</div>
 
-			<!-- What the model expects and the way to the exact figures, together, because both are the
-			     answer read as numbers rather than as a drawing. -->
 			<div class="tools">
 				<dl class="facts">
 					<div>
@@ -179,19 +146,12 @@
 			<DistributionChart detailed {distribution} {stat} {line} {range} {summary} />
 		</div>
 
-		<!-- The handle is inset by the gutter the probability axis takes and is given the whole width
-		     under the run, so it is laid out against the bars rather than against the view. -->
 		<div class="handle">
 			<LineControl id="line-detailed" bind:line {distribution} {range}>
 				<OddsReadout {odds} large />
 			</LineControl>
 		</div>
 
-		<!--
-			Written after the control that opens it, so it follows it for a reader moving by keyboard,
-			and placed over the drawing by the grid rather than by its position in the page. It takes
-			the room its own contents need and no more.
-		-->
 		{#if showing}
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<div bind:this={sheet} id={SHEET} class="panel sheet" tabindex="-1" transition:appear>
@@ -201,8 +161,6 @@
 					<table class="small numeric">
 						<thead>
 							<tr>
-								<!-- The headings are the ordering, so the table is read and reordered in one
-								     place rather than carrying a control above it. -->
 								<th scope="col" aria-sort={sort === 'value' ? 'ascending' : 'none'}>
 									<button type="button" onclick={() => (sort = 'value')}>
 										{sentenceCase(stat)}
@@ -242,11 +200,6 @@
 </dialog>
 
 <style>
-	/*
-	 * The whole screen, on the surface plane, because the chart is a data area and data is drawn on
-	 * page-side ground wherever it sits. It leaves the top layer the moment it closes, so it is given
-	 * a place above the header to close from.
-	 */
 	dialog {
 		position: fixed;
 		inset: 0;
@@ -265,7 +218,6 @@
 		transition: opacity var(--motion) var(--ease-in);
 	}
 
-	/* It rises over the page rather than appearing on top of it. */
 	@starting-style {
 		dialog[open] {
 			opacity: 0;
@@ -276,9 +228,6 @@
 		background: none;
 	}
 
-	/* The chart takes whatever the words above and the controls below leave it, and never falls under
-	   the height it is drawn at in an answer. Every row is placed rather than flowed, because the
-	   chart and the panel that opens over it share one cell. */
 	.view {
 		--view-gutter: var(--space-4);
 
@@ -307,7 +256,6 @@
 		gap: var(--space-4);
 	}
 
-	/* Fixed width, so a figure of a different length never moves the controls beside it. */
 	.facts {
 		display: grid;
 		grid-auto-flow: column;
@@ -324,32 +272,16 @@
 		min-height: 0;
 	}
 
-	/* One column at every width. The handle has to be laid out against the same width the bars are,
-	   so nothing shares its row. */
 	.handle {
 		grid-area: 3 / 1;
 		padding-left: var(--chart-axis);
 	}
 
-	/*
-	 * A panel over the drawing, taking the same column and everything below the words, so opening one
-	 * moves nothing else in the view. It floats above the page, so it is one of the few things on the
-	 * site carrying a shadow. It hangs from the end the control that opened it sits at and is only as
-	 * wide as what it holds, because two columns of figures spread across a screen are harder to read
-	 * across, not easier.
-	 *
-	 * It runs to the foot of the view rather than to the foot of the drawing. The drawing is a set
-	 * height and on a phone that is a scroller three rows tall, which reads as one that does not work.
-	 */
 	.sheet {
 		grid-row: 2 / -1;
 		grid-column: 1;
-		/* Raised over the drawing rather than merely later than it. The chart places its own marks,
-		   and a positioned thing is painted above every plain background whatever the order. */
 		position: relative;
 		z-index: 1;
-		/* It takes the room its own contents need and no more, up to everything it spans, so a short
-		   run is a short panel and sixty rows are a scrolling one. */
 		align-self: start;
 		justify-self: end;
 		width: max-content;
@@ -362,8 +294,6 @@
 		box-shadow: var(--shadow);
 	}
 
-	/* The table is what runs out of room, so it is what scrolls. A swipe that reaches either end of it
-	   stops there rather than carrying on into the view behind. */
 	.sheet-body {
 		min-height: 0;
 		overflow-y: auto;
@@ -398,7 +328,6 @@
 		font-weight: 600;
 	}
 
-	/* The heading is the control, so it reads as the heading and behaves as a button. */
 	th button {
 		display: flex;
 		align-items: center;
@@ -423,21 +352,12 @@
 		color: var(--ink);
 	}
 
-	/* Current color, a stroke and no fill, at the size of the word beside it. */
 	th svg {
 		flex: none;
 		width: 1em;
 		height: 1em;
 	}
 
-	/*
-	 * On a phone the drawing and the handle reach out through the view's left gutter, so the only
-	 * thing between the bars and the edge of the screen is the probability axis itself and its
-	 * figures stop a hair short of that edge. Every pixel that buys goes to the bars.
-	 *
-	 * The right edge keeps its gutter. The last outcome's mark is centered on the last bar and hangs
-	 * past it, so a drawing flush to that edge would cut the number off.
-	 */
 	@media (width < 40rem) {
 		.drawing,
 		.handle {

@@ -1,4 +1,4 @@
-/** Whether a touch ended close enough to where it began to be a tap, not a scroll. */
+/** Returns true if a touch ended close enough to where it started to count as a tap and not a scroll. */
 export function isTap(
 	from: { x: number; y: number },
 	to: Pick<PointerEvent, 'clientX' | 'clientY'>

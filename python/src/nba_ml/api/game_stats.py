@@ -1,11 +1,4 @@
-"""
-Predicting what happens in one game.
-
-Everything specific to this family sits here: the request only it takes, and the endpoint that
-answers it. A request names a game and nothing else, because neither side owns the answer. A point
-differential still has a direction and is the home team's, which the family's inference module
-decides.
-"""
+"""Prediction endpoint for the game stats models."""
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -19,7 +12,7 @@ router = APIRouter(prefix="/predictions/game-stats", tags=["game_stats"])
 class PredictionRequest(BaseModel):
     game: GameRequest
     rosters: GameRostersRequest = Field(default_factory=GameRostersRequest)
-    """Who each side is playing without or with. A game statistic is decided by both teams."""
+    """Players each team is missing or getting back for this game."""
 
 @router.post("/{model}")
 def predict_game_stat(model: str, request: PredictionRequest) -> PredictionResponse:

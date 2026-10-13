@@ -1,4 +1,4 @@
-"""BALLDONTLIE's NBA service, using only endpoints available on ALL-STAR."""
+"""Data source for the BALLDONTLIE API. Only uses endpoints available on the ALL-STAR tier."""
 
 import os
 import time
@@ -44,11 +44,11 @@ STAT_COLUMNS = {
 }
 
 REQUIRED_PLAYER_STAT_FIELDS = ("min", *STAT_COLUMNS, "plus_minus")
-"""Fields every player row needs before a game can enter a model's archive."""
+"""Fields every player row must have for a game to be stored."""
 
 
 def _minutes(value: Any) -> float | None:
-    """Minutes as a number. An empty or zero value means the player did not appear."""
+    """Parses minutes played into a number. Returns None if the player did not play."""
 
     if value in (None, ""):
         return None
@@ -72,7 +72,7 @@ def _minutes(value: Any) -> float | None:
 
 
 def _whole_number(value: Any, minimum: int | None = None) -> int:
-    """A box-score count, which cannot be a boolean, fraction or non-finite number."""
+    """Parses a box score count. Raises ValueError if it isn't a whole, finite number."""
 
     if isinstance(value, bool):
         raise ValueError("a boolean is not a box-score count")
@@ -85,7 +85,7 @@ def _whole_number(value: Any, minimum: int | None = None) -> int:
 
 
 def _number(value: str | None) -> float | None:
-    """A response header read as a number, or None where it is absent or is not one."""
+    """Parses a response header as a number. Returns None if it is missing or not a number."""
 
     try:
         return None if value is None else float(value)
@@ -121,12 +121,7 @@ class BallDontLieSource(DataSource):
         self._games: tuple[tuple, list[Any]] | None = None
 
     def _rate_limit_wait(self, response: requests.Response) -> float:
-        """
-        How long to wait out a rate limit, read off whichever header the service sent.
-
-        A header that is not a number, or one naming a time far away, is capped rather than
-        believed. Nothing watches an hourly job, so a bad header must not park it for an afternoon.
-        """
+        """Returns the seconds to wait after a rate limit response, capped at MAX_RATE_LIMIT_WAIT_SECONDS."""
 
         seconds = _number(response.headers.get("Retry-After"))
         if seconds is None:
@@ -141,11 +136,7 @@ class BallDontLieSource(DataSource):
         params: dict[str, Any],
         allow_missing: bool = False
         ) -> dict[str, Any] | None:
-        """
-        Args:
-            allow_missing answers None where the service holds nothing under this address, rather
-            than stopping the run. Only an address naming one record can be missing.
-        """
+        """Fetches one page of an endpoint. If allow_missing is True, a 404 returns None instead of raising."""
 
         for attempt in range(self.retries):
             self._pace_request()
@@ -222,13 +213,7 @@ class BallDontLieSource(DataSource):
 
     @staticmethod
     def _by_id(endpoint: str, rows: list[Any] | None) -> dict[int, dict[str, Any]]:
-        """
-        A whole listing keyed by its own identifiers.
-
-        A listing the service would not answer for stops the run rather than being held as an empty
-        one. Both listings are kept for the rest of the run, so an empty one would read as a service
-        that has no teams or no players and quietly change everything written afterwards.
-        """
+        """Returns the rows keyed by ID. Raises SourceDataError if the rows are missing or malformed."""
 
         if rows is None:
             raise SourceDataError(f"BALLDONTLIE would not answer for the {endpoint} list.")
@@ -335,13 +320,7 @@ class BallDontLieSource(DataSource):
         date_from: date | None = None,
         date_to: date | None = None
         ) -> list[Any] | None:
-        """
-        The games of one season the service lists, played or not, narrowed to the dates asked for.
-
-        The dates go to the service rather than being filtered here, so an hourly update reads one
-        page instead of a whole season of them. The last answer is held, because the two phases of a
-        season ask the same question and one full-season list is a few hundred kilobytes.
-        """
+        """Returns the games of a season, optionally limited to a date range."""
 
         key = (season_year, date_from, date_to)
         if self._games is not None and self._games[0] == key:
@@ -441,7 +420,7 @@ class BallDontLieSource(DataSource):
     def _complete_game_rows(
         rows: list[Any]
         ) -> tuple[list[dict[str, Any]], list[tuple[Any, Any, str]]]:
-        """Keep final games only when both sides have every model input."""
+        """Keeps only finished games where both teams have every required stat. Also returns the rejected games."""
 
         games: dict[int, list[dict[str, Any]]] = {}
         rejected_games: list[tuple[Any, Any, str]] = []
@@ -557,7 +536,7 @@ class BallDontLieSource(DataSource):
         date_from: date | None = None,
         date_to: date | None = None
         ) -> Iterator[pd.DataFrame]:
-        """Yield complete player games in database-sized batches."""
+        """Yields complete player games in batches small enough to store in one transaction."""
 
         game_ids = self._player_game_ids(season_year, season_type, date_from, date_to)
         if game_ids is None:
@@ -619,7 +598,7 @@ class BallDontLieSource(DataSource):
         return games
 
     def _listing(self, endpoint: str, description: str) -> list[Any]:
-        """One whole paged listing, or a stop. Neither of the roster fetches can be part of a run."""
+        """Fetches every page of an endpoint. Raises SourceDataError if the request fails."""
 
         rows = self._fetch(
             lambda: self._pages(endpoint, description=description),
@@ -632,14 +611,7 @@ class BallDontLieSource(DataSource):
         return rows
 
     def rosters(self) -> list[RosterEntry]:
-        """
-        Who is on each team right now, out of the active player list, with the injury report on top.
-
-        The two are read together because neither is enough on its own. The active list says who is
-        on a roster and nothing about whether they are fit, and the report says who is hurt without
-        naming the sixteen players who are not. A player the report names who is on no active roster
-        is placed by the team the report itself gives them, and dropped when it gives none.
-        """
+        """Returns the current rosters, built from the active player list and the injury report."""
 
         active = self._listing("players/active", "active player list")
         injuries = self._listing("player_injuries", "injury report")

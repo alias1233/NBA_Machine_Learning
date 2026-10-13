@@ -1,10 +1,4 @@
-"""
-Where everything the pipeline reads and writes lives.
-
-Paths are anchored to the workspace rather than the current directory, so a command works from
-anywhere. Set NBA_ML_DATA_DIR to point the whole tree somewhere else, which is what a deployment
-with a mounted volume does.
-"""
+"""File and directory paths used across the project."""
 
 import os
 from pathlib import Path
@@ -19,38 +13,19 @@ TRAINING_CACHE_DIRECTORY = DATA_DIRECTORY / "training_cache"
 FEATURE_BUILDS_DIRECTORY = DATA_DIRECTORY / "feature_builds"
 
 SHOWCASE_FILE = DATA_DIRECTORY / "showcase.json"
-"""
-The day's sample predictions, written by a job and read by the service.
-
-One small file rather than a table, because it is written whole once a day and read whole on every
-home page render, and because a file is replaced atomically without a writer and a reader ever
-contending. See nba_ml/showcase.py.
-"""
+"""Sample predictions for the home page, written by nba-showcase and served by the API."""
 
 BACKUP_DIRECTORY = Path(os.environ.get("NBA_ML_BACKUP_DIR", DATA_DIRECTORY / "backups"))
-"""
-Where backups are written, which a deployment points at a directory of its own.
-
-Outside the data directory by default in a deployment, so a backup never holds the backups before
-it. See nba_ml/cli/backup.py.
-"""
 
 def database_file(name: str) -> Path:
     return DATABASE_DIRECTORY / f"{name}.db"
 
 def feature_build_directory(name: str) -> Path:
-    """
-    Every published version of one whole-league feature build, kept side by side.
-
-    A build is published by writing a new version beside the old one, so a failed job leaves the
-    previous build where the service can still read it.
-    """
+    """Directory containing every published version of a feature build."""
 
     return FEATURE_BUILDS_DIRECTORY / name
 
 def model_directory(category: str, name: str) -> Path:
-    """Everything one trained model produces sits together: the weights, its report, its graphs."""
-
     return MODELS_DIRECTORY / category / name
 
 def model_file(category: str, name: str) -> Path:
@@ -60,17 +35,12 @@ def training_report_file(category: str, name: str) -> Path:
     return model_directory(category, name) / "training_report.txt"
 
 def evaluation_file(category: str, name: str) -> Path:
-    """
-    How the finished model scored on its held-out games, which the service reads back.
-
-    Kept beside the weights so that publishing a model publishes its measurements with it, and kept
-    as JSON so that reading one costs nothing.
-    """
+    """File with the model's scores on its held-out games."""
 
     return model_directory(category, name) / "evaluation.json"
 
 def published_model_files() -> list[Path]:
-    """Saved weights and their evaluations, which are the files a prediction server reads."""
+    """Returns every saved model file and its evaluation file, if it has one."""
 
     files = []
     for weights in MODELS_DIRECTORY.glob("*/*/model.pth"):
@@ -85,6 +55,4 @@ def graphs_directory(category: str, name: str) -> Path:
     return model_directory(category, name) / "graphs"
 
 def training_cache_file(category: str, name: str) -> Path:
-    """The preprocessed training build, kept out of the model directory because it is disposable."""
-
     return TRAINING_CACHE_DIRECTORY / category / name / "training_data.pth"

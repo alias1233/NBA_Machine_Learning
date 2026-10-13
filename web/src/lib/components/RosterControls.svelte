@@ -1,21 +1,3 @@
-<!--
-	Who one team is playing without, and who is playing for it who did not play its last game.
-
-	Every model reads a team as the players who played its last game, and that is what these two
-	fields correct. They open filled in: the collected injury report and roster snapshot say who has
-	been ruled out and who is back or newly arrived, and those names are put in the fields as though
-	the reader had entered them. They submit as the same parameters and can be taken out or added to
-	exactly like a name the reader chose, so a prediction is right about the night without anyone
-	having to look anything up, and still theirs to play with.
-
-	The Out list is the team's own roster, because sitting somebody out means naming somebody already
-	on it. Playing is a search of the whole league instead, since somebody who has just joined is on
-	no roster yet, which is one of the cases the field exists for.
-
-	Both lists go into the address bar as they are chosen, so a prediction made with a changed roster
-	is still a shareable link. A change takes effect on the next prediction, with the rest of the
-	form, so nothing here fires a request on its own.
--->
 <script lang="ts">
 	import PlayerPills from '$lib/components/PlayerPills.svelte';
 	import PlayerSearch from '$lib/components/PlayerSearch.svelte';
@@ -24,25 +6,20 @@
 	import type { Player } from '$lib/types';
 
 	type Props = {
-		/** Unique on the page. It ties each field to its label and the group to its heading. */
+		/** Must be unique on the page. */
 		id: string;
-		/** What this roster is called, which is the team's name where a page carries both sides. */
+		/** Label for this roster. */
 		label: string;
-		/** Who can be sat out: this team's roster, less anyone the page has already ruled out. */
+		/** Players who can be marked out. The team's roster, minus anyone the page already excluded. */
 		candidates: Player[];
 		out: Player[];
 		joined: Player[];
-		/**
-		 * The lineup this side is expected to field, which is what the two lists opened on.
-		 *
-		 * Held so the group can say whether it is still showing that or the reader's own, and put it
-		 * back where they want it. Empty where nothing collected says who will play.
-		 */
+		/** Expected lineup changes for this team. Both lists start with these. */
 		expected: { out: Player[]; joined: Player[] };
-		/** The query parameters the two lists are submitted as. */
+		/** Query parameters the two lists are submitted under. */
 		outName: string;
 		joinedName: string;
-		/** Called after either list changes, so a page can walk the reader on. */
+		/** Called after either list changes, so the page can scroll to the next step. */
 		onchange?: () => void;
 	};
 
@@ -58,7 +35,6 @@
 		onchange
 	}: Props = $props();
 
-	/** Who is left to sit out, which is the roster less whoever is already out of it. */
 	const remaining = $derived(
 		candidates.filter((candidate) => !out.some((player) => player.id === candidate.id))
 	);
@@ -67,17 +43,14 @@
 		chosen.length === suggested.length &&
 		chosen.every((player) => suggested.some(({ id }) => id === player.id));
 
-	/** Whether the reader has moved off the lineup the fields opened on. */
+	/** True if the user changed the lineup from the expected one. */
 	const changed = $derived(
 		!samePlayers(out, expected.out) || !samePlayers(joined, expected.joined)
 	);
 
 	const anyExpected = $derived(expected.out.length > 0 || expected.joined.length > 0);
 
-	/**
-	 * The one line under the fields, which says which of three states the group is in: nobody is
-	 * missing, the night's own lineup is showing, or the reader has made one of their own.
-	 */
+	/** Status line under the fields. One of three messages. */
 	const state = $derived(
 		changed
 			? 'Your own lineup.'
@@ -105,7 +78,7 @@
 		onchange?.();
 	}
 
-	/** Puts both lists back to what the page opened on, which is a name the reader cannot retype. */
+	/** Resets both lists to the expected lineup. */
 	function reset() {
 		out = expected.out;
 		joined = expected.joined;
@@ -149,8 +122,6 @@
 
 	<p class="small muted state" transition:flow>
 		{state}
-		<!-- A name the reader took out cannot be typed back in from memory, so the lineup the fields
-		     opened on stays one press away for as long as it is not the one showing. -->
 		{#if changed}
 			<button type="button" class="text-link" onclick={reset}>
 				{anyExpected ? 'Back to the expected lineup' : 'Clear both lists'}

@@ -1,48 +1,28 @@
-/**
- * Walking the reader to whatever comes next.
- *
- * The controls run down a long column, so after a choice the page moves to the next thing rather
- * than leaving the reader to find it. A step forward through a form runs only when its target is not
- * already fully in view, because scrolling somebody to what they are looking at reads as a twitch. A
- * choice that changes what the page is about walks whatever was showing, so the thing it opened
- * starts at the top of the screen rather than halfway down it.
- *
- * It starts at once and follows its target. The choice that asked for it usually sets off a flow,
- * and where that flow moves the target the page is aimed again as it travels rather than corrected
- * once everything has stopped. So a target the flow leaves where it is costs no wait at all, and one
- * it carries is followed rather than jumped to at the end.
- *
- * Focus never moves with the page.
- */
-
 import { tick } from 'svelte';
 import { prefersReducedMotion } from 'svelte/motion';
 
 import { MOTION, MOTION_SLOW } from '$lib/motion';
 
-/** Which edge of the target the page is brought to, as `scrollIntoView` reads it. */
+/** Edge of the target to align to. Same values as `scrollIntoView`. */
 type Block = 'start' | 'end';
 
-/** How long the page takes to cover all but a twentieth of the distance to its destination. */
+/** Milliseconds the page takes to cover 95% of the distance. */
 const TRAVEL = MOTION_SLOW;
 
-/** Close enough that one eased step would round to nothing, so what is left is closed in one. */
+/** Distance in pixels below which the page jumps straight to the target. */
 const SNAP = 4;
 
-/**
- * How long past the end of its flow a walk keeps following, so a target that never settles cannot
- * hold the page.
- */
+/** Maximum milliseconds a scroll keeps following its target after the transition ends. */
 const LIMIT = 2000;
 
-/** How long a flow handed over as a promise is waited on before the page stops following it. */
+/** Maximum milliseconds to wait for a transition passed as a promise. */
 const FLOW_LIMIT = 10000;
 
-/** The one automatic walk that may move the page. A newer intent replaces an older one. */
+/** Stops the automatic scroll in progress. Only one runs at a time, and a new one replaces the old one. */
 let stopCurrentWalk: (() => void) | undefined;
 let walkVersion = 0;
 
-/** Stops the current automatic walk immediately, without taking the page away from the reader. */
+/** Stops the current automatic scroll and leaves the page where it is. */
 export function stopWalking(): void {
 	walkVersion += 1;
 	stopCurrentWalk?.();
@@ -50,11 +30,7 @@ export function stopWalking(): void {
 
 const length = (value: string) => (Number.isNaN(parseFloat(value)) ? 0 : parseFloat(value));
 
-/**
- * What the target's chosen edge is offset by where it comes to rest: its own scroll margin, and the
- * room the page keeps clear for the header. Both hold still for the whole walk, so they are read
- * once rather than every frame.
- */
+/** Returns the offset to keep at the target's edge, from its scroll margin and the root's scroll padding. */
 function resting(target: HTMLElement, block: Block): number {
 	const own = getComputedStyle(target);
 	const root = getComputedStyle(document.documentElement);
@@ -64,11 +40,7 @@ function resting(target: HTMLElement, block: Block): number {
 		: length(own.scrollMarginBottom) + length(root.scrollPaddingBottom);
 }
 
-/**
- * Where the page has to sit for the target to rest at `block`, which is where `scrollIntoView` would
- * put it. It is worked out rather than handed to the browser because a smooth scroll is aimed once,
- * and this one is aimed again every frame.
- */
+/** Returns the scroll position that aligns the target to `block`. */
 function destination(target: HTMLElement, block: Block, offset: number): number {
 	const box = target.getBoundingClientRect();
 	const edge = block === 'start' ? box.top : box.bottom - window.innerHeight;
@@ -84,33 +56,14 @@ function fullyVisible(target: HTMLElement): boolean {
 }
 
 type Walk = {
-	/** Which edge of the target the page is brought to. */
 	block: Block;
-	/**
-	 * The flow the choice set off, as how long it lasts or as the flow itself. The wait it buys costs
-	 * nothing where the target does not move, because the page is already on its way by then.
-	 *
-	 * A request is a flow of unknown length, so it is handed over as its own promise and the page
-	 * follows the target until it settles and for one motion after it, which is what the answer
-	 * landing takes to lay itself out. Without that the page stops where the target used to be and
-	 * whatever the answer moves is left showing instead of it.
-	 */
+	/** The transition to follow. Either its duration in milliseconds or a promise that settles when it ends. */
 	flowing?: number | Promise<unknown>;
-	/**
-	 * Walk even where the target is already fully in view.
-	 *
-	 * A step forward through a form only wants the page moved when the next thing is off screen. A
-	 * choice that changes what the page is about wants the target put at the top of the screen
-	 * whatever was showing before it, so nothing above it is left standing in the way.
-	 */
+	/** Scrolls even if the target is already fully visible. */
 	always?: boolean;
 };
 
-/**
- * Moves the page to the target and follows it for as long as the flow behind it runs.
- *
- * Awaiting it waits for the page to stop, which is what anything opening at the target needs.
- */
+/** Scrolls the page to the target and keeps following it while a transition is running. */
 export async function walkTo(
 	target: HTMLElement | undefined,
 	{ block, flowing = MOTION, always = false }: Walk
@@ -120,15 +73,13 @@ export async function walkTo(
 	stopWalking();
 	const version = walkVersion;
 
-	// The tick puts the choice in the page, so what is measured below is the page it made.
+	// Waits for the DOM to update, so the measurements below use the new layout.
 	await tick();
 	if (version !== walkVersion) return;
 
 	const instant = prefersReducedMotion.current;
 	const offset = resting(target, block);
 
-	// When the flow is expected to be over, and the point past which the walk gives up whatever the
-	// target is doing. A flow handed over as a promise sets both again the moment it settles.
 	const waiting = typeof flowing === 'number' ? (instant ? 0 : flowing) : FLOW_LIMIT;
 
 	let following = performance.now() + waiting;
@@ -148,7 +99,7 @@ export async function walkTo(
 		let last = performance.now();
 		let traveling = false;
 
-		// The reader taking the page over ends the walk, because the page is theirs from then on.
+		// Ends the scroll. Also called when the user scrolls by wheel or touch.
 		const stop = () => {
 			cancelAnimationFrame(frame);
 			window.removeEventListener('wheel', stop);
@@ -168,8 +119,6 @@ export async function walkTo(
 			const elapsed = now - last;
 			last = now;
 
-			// Not worth moving for yet. The flow can still push it off screen, so this keeps watching
-			// until the flow is over rather than giving up on the first frame.
 			if (!traveling && !always && fullyVisible(target)) {
 				if (now >= following) stop();
 				else frame = requestAnimationFrame(step);
@@ -180,8 +129,7 @@ export async function walkTo(
 
 			const left = destination(target, block, offset) - window.scrollY;
 
-			// Each frame closes the same share of whatever distance is left, so the page eases in on a
-			// target standing still and keeps pace with one the flow is still moving.
+			// Each frame covers a fraction of the remaining distance, based on the time elapsed.
 			const closing =
 				instant || Math.abs(left) < SNAP ? 1 : 1 - Math.exp((-3 * elapsed) / TRAVEL);
 

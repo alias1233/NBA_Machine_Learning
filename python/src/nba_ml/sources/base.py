@@ -1,13 +1,4 @@
-"""
-What every NBA data source has to provide.
-
-A source is the only part of the pipeline that talks to an outside service. It hands back rows named
-the way the stores hold them, so swapping one source for another changes nothing downstream. Rate
-limiting and retrying live here, because they are properties of the service being asked.
-
-A source only fetches. Finding a player or a team by name is a question about what is already
-stored, so it lives in the stores and needs no service at all.
-"""
+"""Base class that every NBA data source implements."""
 
 import time
 from abc import ABC, abstractmethod
@@ -26,25 +17,22 @@ PLAYER_GAME_BATCH_SIZE = 2_500
 """Maximum player-game rows stored in one transaction."""
 
 class SourceAuthenticationError(RuntimeError):
-    """The source rejected its API key or the account tier cannot use the endpoint."""
+    """Raised when the source rejects the API key or the account tier can't use the endpoint."""
 
 class SourceDataError(RuntimeError):
-    """The source returned data that cannot safely enter the archive."""
+    """Raised when the source returns data that is not safe to store."""
 
 class DataSource(ABC):
-    """
-    One provider of NBA data. Subclasses implement the fetches, and pacing and retrying are shared
-    here, so a second service is one module saying where its data comes from and how it names it.
-    """
+    """A provider of NBA data."""
 
     name: str
-    """How this source is named on the command line."""
+    """Name used to select this source on the command line."""
 
     oldest_season: int
-    """The oldest season this source exposes box scores for."""
+    """Oldest season this source has box scores for."""
 
     request_interval: float
-    """Seconds to leave between two requests, which is what keeps a source from refusing to answer."""
+    """Seconds to wait between requests."""
 
     retries: int = 3
     retry_interval: float = 5
@@ -57,7 +45,7 @@ class DataSource(ABC):
         self._progress_reporter: Callable[[str], None] | None = None
 
     def set_progress_reporter(self, reporter: Callable[[str], None] | None):
-        """Names where a long fetch can report its progress."""
+        """Sets the function that long fetches call to report progress."""
 
         self._progress_reporter = reporter
 
@@ -75,11 +63,7 @@ class DataSource(ABC):
         description: str,
         pace: bool = True
         ) -> Fetched | None:
-        """
-        Runs one request against the service, waiting out the rate limit first and retrying a
-        request that fails. Returns None once the retries are used up, so a long collection run
-        carries on past a season the service will not answer for.
-        """
+        """Runs a request with rate limiting and retries. Returns None if every retry fails."""
 
         for attempt in range(self.retries):
             if pace:
@@ -96,7 +80,7 @@ class DataSource(ABC):
         return None
 
     def seasons(self, date_from: date | None = None, date_to: date | None = None) -> list[int]:
-        """Every season this source covers that could hold a game inside the given dates."""
+        """Returns the seasons this source covers that overlap the given dates."""
 
         first = self.oldest_season if date_from is None else season.season_of(date_from)
         last = season.current_season() if date_to is None else season.season_of(date_to)
@@ -105,19 +89,19 @@ class DataSource(ABC):
 
     @abstractmethod
     def teams(self) -> list[Team]:
-        """Every team, with the tricode that identifies it outside this service."""
+        """Returns every team with its abbreviation."""
 
         pass
 
     @abstractmethod
     def players(self) -> list[Player]:
-        """Every player the source knows of, whether or not they are still active."""
+        """Returns every player the source has, active or not."""
 
         pass
 
     @abstractmethod
     def player_info(self, player_id: int) -> pd.DataFrame | None:
-        """One row of a player's own information, named the way the player store holds it."""
+        """Returns one row of player info, with the same column names as the player store."""
 
         pass
 
@@ -129,10 +113,7 @@ class DataSource(ABC):
         date_from: date | None = None,
         date_to: date | None = None
         ) -> pd.DataFrame | None:
-        """
-        Every finished player box score of one season phase, named the way the player game store
-        holds it. The dates narrow that down to games played inside them.
-        """
+        """Returns the finished player box scores of one season and season type within the given dates."""
 
         pass
 
@@ -143,10 +124,7 @@ class DataSource(ABC):
         date_from: date | None = None,
         date_to: date | None = None
         ) -> Iterable[pd.DataFrame | None]:
-        """Yields player-game rows in independently storable batches.
-
-        Sources that fetch a season in one response need only implement player_games().
-        """
+        """Yields player game rows in batches that can each be stored on their own."""
 
         games = self.player_games(season_year, season_type, date_from, date_to)
         if games is None:
@@ -175,25 +153,12 @@ class DataSource(ABC):
 
     @abstractmethod
     def rosters(self) -> list[RosterEntry] | None:
-        """
-        Who is on each team right now, and who the injury report rules out.
-
-        This is the only fetch that says who will play rather than who played. A service that
-        publishes no roster or injury feed answers None, and the pipeline goes on assuming a team
-        plays whoever played its last game. A fetch that should have worked and did not raises
-        instead, so a broken feed is never read as a league with nobody on it.
-        """
+        """Returns the current rosters, or None if the source has no roster data."""
 
         pass
 
     @abstractmethod
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
-        """
-        Every game of one season, whether or not it has been played.
-
-        This is the only fetch that returns games with no box score, and it is what tells the site
-        which games are still to come. A game whose phase this project does not model, or whose two
-        teams are not both decided yet, is left out.
-        """
+        """Returns every game of a season, played or not."""
 
         pass

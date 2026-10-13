@@ -1,4 +1,4 @@
-/** What this page held is on the family's own page now. Kept so an older link still lands. */
+/** This page's content moved to the family page. The redirect keeps old links working. */
 
 import { redirect } from '@sveltejs/kit';
 

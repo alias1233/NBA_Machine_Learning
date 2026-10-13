@@ -1,26 +1,3 @@
-<!--
-	The line, as a handle on the chart's x axis and as a number beside it.
-
-	The handle travels exactly the drawn run. Its thumb is laid out to put it over the split it makes,
-	and the field accepts that same run. The detailed view draws every outcome, so its control reaches
-	every outcome without changing these rules.
-
-	Steps of a half, whatever the model's outcomes are worth. A line is a question a reader asks, not
-	something the answer's shape decides, so it moves in halves even where one bar covers three
-	points. Arrow keys move one step and Page Up and Page Down move five, which a range input does not
-	do on its own.
-
-	The field takes only what the handle can reach. A typed number settles on the nearest of those and
-	the field's own keys step along the same run, so the two controls read the same value at every
-	press and no number the chart stands behind nothing for is ever asked about.
-
-	Where the model names a value it can never answer with, the handle steps straight over it and
-	settles on it, because every line either side of it asks the same question and that value is the
-	plainest way to write it.
-
-	Whatever the line settles at goes at the far end of the field's own row, so the control and what
-	it decides sit at the two ends of one line under the chart.
--->
 <script lang="ts">
 	import { axisAt, axisSpan, valueAt } from '$lib/odds';
 
@@ -28,14 +5,13 @@
 	import type { ChartRange, Distribution } from '$lib/odds';
 
 	type Props = {
-		/** Unique on the page. The chart is drawn twice once the detailed view is open. */
+		/** Must be unique on the page. */
 		id: string;
 		line: number;
-		/** The answer being read, which says what the field accepts and how wide one bar is. */
 		distribution: Distribution;
-		/** The outcomes the chart draws, which set the limits for both controls. */
+		/** Range of outcomes the chart shows. Sets the limits for both controls. */
 		range: ChartRange;
-		/** What the line settles at, or the way to read it larger. Sits at the end of the field row. */
+		/** Rendered at the end of the field row. */
 		children?: Snippet;
 	};
 
@@ -46,22 +22,17 @@
 
 	const width = $derived(distribution.bucketWidth);
 
-	// The handle travels the axis rather than the values, so its thumb tracks the bars even where the
-	// model names a value it can never answer with and the two are not the same run.
 	const span = $derived(axisSpan(distribution, range));
 
-	// The middle of the first and last bars drawn. The handle is laid out against bar middles, because
-	// that is what its thumb has to line up with.
+	// Centers of the first and last bars shown.
 	const drawn = $derived({ first: span.from + width / 2, last: span.to - width / 2 });
 	const columns = $derived(range.last - range.first + 1);
 
-	/** The two ends of everything the handle can settle on, so the field offers exactly that run. */
 	const reach = $derived({
 		lowest: valueAt(distribution, drawn.first),
 		highest: valueAt(distribution, drawn.last)
 	});
 
-	/** The nearest line the handle could have been dragged to, which is where any other one settles. */
 	const nearest = (axis: number) =>
 		valueAt(
 			distribution,
@@ -70,38 +41,25 @@
 
 	let field = $state<HTMLInputElement>();
 
-	/** True while the box holds words the reader is still typing, which the line must not write over. */
+	/** True while the user is typing in the field, so the line does not overwrite it. */
 	let typing = $state(false);
 
-	/** Moves the line along the axis, which is the only run either control travels. */
 	function move(steps: number) {
-		// A step is the line moving rather than the reader typing, so the box takes the new one.
 		typing = false;
 		line = nearest(axisAt(distribution, line) + steps * STEP);
 	}
 
-	// What the box opens holding. Written once, for the server's markup and the first paint, and the
-	// effect below owns it from then on.
 	// svelte-ignore state_referenced_locally
 	const opening = String(line);
 
-	/**
-	 * The box follows the line, except while the reader is typing in it.
-	 *
-	 * Writing into a field under a caret puts the caret back to the front of it. A number typed a
-	 * digit at a time settles the line at every keystroke, so a box following it would be rewritten
-	 * under the reader and the next digit would land at the wrong end. Leaving the box hands it back,
-	 * which is also what puts an emptied or half typed one right.
-	 */
+	// Keeps the field in sync with the line, except while the user is typing.
 	$effect(() => {
 		const settled = String(line);
 
 		if (field && !typing) field.value = settled;
 	});
 
-	// How many steps a key is worth on each control. The handle moves one step on an arrow already, so
-	// it takes only the pages. The field's own arrows count in halves from its minimum, which stops on
-	// the numbers the handle steps over, so it takes both and moves along the axis instead.
+	// The field handles arrow keys itself, because native stepping stops on values the slider skips.
 	const HANDLE_KEYS: Record<string, number> = { PageUp: PAGE_STEPS, PageDown: -PAGE_STEPS };
 	const FIELD_KEYS: Record<string, number> = { ArrowUp: 1, ArrowDown: -1, ...HANDLE_KEYS };
 
@@ -114,7 +72,6 @@
 		move(steps);
 	};
 
-	// A part typed number reads as nothing, so it is left alone until there is something to settle.
 	function onFieldInput(event: Event & { currentTarget: HTMLInputElement }) {
 		typing = true;
 
@@ -180,13 +137,7 @@
 		cursor: pointer;
 	}
 
-	/*
-	 * A range input stops the center of its thumb half a thumb inside each end, and a chart stops the
-	 * center of its first bar half a column inside. Stretching the track by a thumb and pulling it
-	 * back by a column is what makes those two the same place, so the thumb sits exactly over the
-	 * split it makes. It hangs half a thumb past each end doing so, which the padding of whatever it
-	 * sits in absorbs.
-	 */
+	/* Stretched so the thumb's centre sits over the middle of the first and last bars. */
 	input.aligned {
 		width: calc(100% - 100% / var(--columns) + var(--thumb));
 		margin-inline: calc((100% / var(--columns) - var(--thumb)) / 2);
@@ -204,8 +155,6 @@
 		border-radius: var(--radius-full);
 	}
 
-	/* Filled accent at --radius-full. Its width is the one the alignment above is worked out from, so
-	   both read the same token and cannot drift apart. */
 	input[type='range']::-webkit-slider-thumb {
 		appearance: none;
 		width: var(--thumb);
@@ -223,9 +172,6 @@
 		border-radius: var(--radius-full);
 	}
 
-	/* The field at one end and whatever was given to sit beside it at the other. Where the two cannot
-	   share a line the second drops under the first, rather than running past the edge of a surface
-	   that clips it. */
 	.row {
 		display: flex;
 		flex-wrap: wrap;
@@ -240,8 +186,6 @@
 		gap: var(--space-3);
 	}
 
-	/* Wide enough for the longest line any model can be asked about and no wider, so the row still
-	   holds the field and whatever sits at its far end on one line on a phone. */
 	input[type='number'] {
 		width: calc(var(--space-8) * 1.25);
 	}

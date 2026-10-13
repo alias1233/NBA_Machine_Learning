@@ -1,77 +1,52 @@
-"""
-The vocabulary of an NBA season: its phases, its years, and how a game date is written.
-
-Nothing here knows where data comes from or where it is stored, so every stage can use it and a
-change of data source cannot reach it.
-"""
+"""Season types, season years and date helpers."""
 
 from datetime import date, datetime
 from enum import Enum
 from zoneinfo import ZoneInfo
 
 class SeasonType(Enum):
-    """
-    The phases a season is played in. The values are the names the feature columns carry, so a
-    season type crosses the whole pipeline without a translation table.
-    """
+    """The parts of an NBA season."""
 
     PRESEASON = "PRESEASON"
     REGULAR_SEASON = "REGULAR_SEASON"
     PLAYOFFS = "PLAYOFFS"
     PLAY_IN = "PLAY_IN"
 
-# A season is named after the year it starts in, and the next one starts in October. This is the
-# only place that boundary is decided. season_columns.season_of applies the same rule to a column.
+# Month a season starts. A season is identified by the year it starts in.
 SEASON_START_MONTH = 10
 
 PLAYER_GAME_COLLECTION_START_DATE = date(2019, 10, 22)
-"""The first game date whose box scores from the data source carry every player-model input."""
+"""First date the data source has box scores with every stat the player models need."""
 
 COLLECTION_START_SEASON = PLAYER_GAME_COLLECTION_START_DATE.year
-"""The first season whose player games the project collects from a data source."""
+"""First season collected from the data source."""
 
 ARCHIVE_START_SEASON = 1996
-"""
-The oldest season the archive can hold, which is the oldest nba.com publishes a player box score for.
-
-Seasons before COLLECTION_START_SEASON reach the archive only through
-nba_ml/data_collection/legacy_archive.py, which fills the years in front of the source's own floor
-from an nba.com archive collected earlier.
-"""
+"""Oldest season with player box scores on nba.com."""
 
 TRAINING_START_SEASONS = (ARCHIVE_START_SEASON, COLLECTION_START_SEASON)
-"""NBA eras the training command can compare."""
+"""Start seasons the training command can choose between."""
 
 def season_of(day: date) -> int:
-    """The season a date falls in, named after the year that season started."""
+    """Returns the season a date belongs to, as the year that season started."""
 
     return day.year if day.month >= SEASON_START_MONTH else day.year - 1
 
 def season_start_date(season_year: int) -> datetime:
-    """The calendar date a season named by its first year begins."""
-
     return datetime(season_year, SEASON_START_MONTH, 1)
 
 EASTERN_TIMEZONE = ZoneInfo("America/New_York")
-"""
-Where a game date is decided.
-
-A game is filed under its United States eastern date, which is the date its box score is written
-under, and a late tipoff falls on the next day in UTC. A server rented anywhere runs on UTC, so
-nothing may read today's date off the server clock.
-"""
+"""Game dates are US Eastern dates."""
 
 def today() -> date:
-    """Today's game date, which is today in the eastern time zone rather than on this machine."""
+    """Returns today's date in US Eastern time."""
 
     return datetime.now(EASTERN_TIMEZONE).date()
 
 def current_season() -> int:
     return season_of(today())
 
-# A game id such as "0022300001" writes its season phase in the third character. Ids are stored as
-# numbers, so the two leading zeros are gone and it is the first one. This is the only place that
-# mapping is decided, and both the feature columns and the schedule read it.
+# The first digit of a game ID tells its season type.
 GAME_ID_PREFIXES = {
     SeasonType.PRESEASON: "1",
     SeasonType.REGULAR_SEASON: "2",
@@ -80,10 +55,7 @@ GAME_ID_PREFIXES = {
 }
 
 def season_type_of_game_id(game_id: int) -> SeasonType | None:
-    """
-    The phase a game id belongs to, or None for a phase this project does not model. The All-Star
-    game is the one of those that appears on a schedule, and it never appears in a box score.
-    """
+    """Returns the season type of a game ID, or None if its prefix is not recognized."""
 
     prefix = str(game_id)[0]
 
@@ -95,8 +67,6 @@ def season_type_of_game_id(game_id: int) -> SeasonType | None:
 DATE_FORMAT = "%Y-%m-%d"
 
 def to_date_string(day: date) -> str:
-    """Game dates are held as text, so a date has to be written the same way everywhere."""
-
     return day.strftime(DATE_FORMAT)
 
 def from_date_string(text: str) -> datetime:

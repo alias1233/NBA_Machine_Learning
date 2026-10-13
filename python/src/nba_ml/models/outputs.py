@@ -1,21 +1,11 @@
-"""
-What a model answers with.
-
-Every answer is an ordered list of numbers. The output says what each position means, so the service
-can describe a model and return its answer without knowing what it predicts, and a stored answer
-still reads correctly on its own.
-
-A model does not have to be a distribution. Any statistic worth predicting belongs here, whether the
-answer is a chance per outcome or a plain amount. Adding a shape is one class here, one branch
-wherever an answer is drawn, and nothing else.
-"""
+"""The output types a model can have."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar, Literal
 
 class OutputKind(StrEnum):
-    """Names the shape on the wire, so a caller reads the numbers the right way."""
+    """Identifies the output type in API responses."""
 
     INTEGER_DISTRIBUTION = "integer_distribution"
     CATEGORY_DISTRIBUTION = "category_distribution"
@@ -23,35 +13,18 @@ class OutputKind(StrEnum):
 
 @dataclass(frozen=True)
 class IntegerDistribution():
-    """
-    A probability for each whole number, counting up from minimum_value.
-
-    A position may stand for a run of whole numbers rather than one. bucket_width says how many, and
-    at one the answer is a probability per whole number. Wider buckets are for a model with too few
-    samples to fill a class per outcome: the same data spread over fewer classes is a steadier answer.
-
-    Odds for a line are the sums either side of it, so a caller holding the answer can read any line
-    without asking again. A line falling inside a bucket splits it, and the bucket is read as spread
-    evenly over the whole numbers it holds, because that is all the model claims to know.
-    """
+    """A probability for each integer, or bucket of integers, starting at minimum_value."""
 
     minimum_value: int
     outcomes: int
     bucket_width: int = 1
     impossible_value: int | None = None
-    """
-    A whole number inside the range that cannot happen, such as a point differential of zero.
-
-    It is taken off the number line rather than out of one bucket, so every bucket still covers
-    bucket_width outcomes and the buckets either side of it read as -4 to -1 and 1 to 4. Nothing
-    reads the value: it is left out of every label, out of the value a position is read as, and out
-    of the odds on a line. It has to sit on a bucket edge, so no bucket is split by it.
-    """
+    """An integer inside the range that can't happen, such as a point differential of 0."""
 
     kind: Literal[OutputKind.INTEGER_DISTRIBUTION] = OutputKind.INTEGER_DISTRIBUTION
 
     ordered: ClassVar[bool] = True
-    """The positions sit on a number line, so landing one out is a smaller miss than landing ten out."""
+    """The classes are ordered numeric values."""
 
     def __post_init__(self):
         if self.impossible_value is None:
@@ -75,16 +48,12 @@ class IntegerDistribution():
 
     @property
     def value_step(self) -> int:
-        """How far apart the values two neighbouring positions stand for are."""
+        """Returns the distance between the values of two neighbouring classes."""
 
         return self.bucket_width
 
     def value_at(self, step: int) -> int:
-        """
-        The whole number a count of steps up from the lowest one stands for.
-
-        The impossible value is not on the line, so every step from it upward lands one higher.
-        """
+        """Returns the integer that is `step` places above minimum_value, skipping the impossible value."""
 
         value = self.minimum_value + step
 
@@ -94,14 +63,14 @@ class IntegerDistribution():
         return value
 
     def values(self, position: int) -> list[int]:
-        """Every whole number a position stands for, which is what its probability is spread over."""
+        """Returns every integer covered by the class at the given position."""
 
         first = position * self.bucket_width
 
         return [self.value_at(step) for step in range(first, first + self.bucket_width)]
 
     def value_of(self, position: int) -> float:
-        """The middle of what a position stands for, which is the value it is read as."""
+        """Returns the midpoint of the integers covered by the class at the given position."""
 
         values = self.values(position)
 
@@ -114,17 +83,13 @@ class IntegerDistribution():
 
 @dataclass(frozen=True)
 class CategoryDistribution():
-    """
-    A probability per named category, for an answer with no number line to sit on.
-
-    Categories are listed most notable first, because a caller drawing one leads with the first.
-    """
+    """A probability for each named category. The most notable category comes first."""
 
     categories: tuple[str, ...]
     kind: Literal[OutputKind.CATEGORY_DISTRIBUTION] = OutputKind.CATEGORY_DISTRIBUTION
 
     ordered: ClassVar[bool] = False
-    """The categories have no order, so one wrong answer is no nearer than another."""
+    """The categories have no order."""
 
     @property
     def length(self) -> int:
@@ -132,20 +97,14 @@ class CategoryDistribution():
 
     @property
     def first_value(self) -> int:
-        """Categories are numbered from zero, so the first position stands for the value zero."""
-
         return 0
 
     @property
     def value_step(self) -> int:
-        """One category per position, which is what the shared fit reads them as."""
-
         return 1
 
     @property
     def impossible_value(self) -> None:
-        """Every category is one the model can answer with, so none of them is ruled out."""
-
         return None
 
     def label(self, position: int) -> str:
@@ -153,7 +112,7 @@ class CategoryDistribution():
 
 @dataclass(frozen=True)
 class Values():
-    """One number per named quantity, which is what a model predicting an amount answers with."""
+    """A single number for each named quantity."""
 
     quantities: tuple[str, ...]
     kind: Literal[OutputKind.VALUES] = OutputKind.VALUES
@@ -168,25 +127,14 @@ class Values():
 ModelOutput = IntegerDistribution | CategoryDistribution | Values
 
 ClassDistribution = IntegerDistribution | CategoryDistribution
-"""
-The shapes that give a probability per class, which is what a classifier answers with.
-
-Both number their positions from zero and say what value the first one stands for, how far apart two
-of them are and which value the line skips, so one training run fits either and nothing in it has to
-know which it is fitting.
-"""
+"""The output types that give a probability per class."""
 
 DISCRIMINATOR = "kind"
-"""The field telling the shapes apart, which is what lets one response type carry any of them."""
+"""Name of the field that identifies the output type."""
 
 @dataclass(frozen=True)
 class Prediction():
-    """
-    One finished answer: the numbers, and how many earlier games stood behind them.
-
-    Every model here reads a sequence of past games, so how many were found is worth carrying beside
-    the answer. It is what lets a caller say that an answer rests on very little.
-    """
+    """A model's output values and the number of past games they were based on."""
 
     values: list[float]
     past_games: int

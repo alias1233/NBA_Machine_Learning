@@ -1,14 +1,4 @@
-"""
-Building the whole league's features once, so that a prediction does not build them for itself.
-
-This is the job behind the prediction service. It reads the stored box scores, builds every column
-any player game statistics model reads, and publishes the result. The service picks the new build up
-without a restart and keeps the previous one until this succeeds again.
-
-Every choice is a command line argument and nothing is asked for at a prompt, so the command a person
-runs by hand is the command a scheduled job runs. Collect first, because a build only holds what is
-stored.
-"""
+"""Command for building the player feature cache."""
 
 import argparse
 
@@ -24,7 +14,7 @@ def build(
     everything_stored: bool = False,
     print_debug: bool = True
     ):
-    """Build and publish the feature cache the prediction service reads."""
+    """Builds and publishes the feature cache used by the prediction service."""
 
     window_start_date = (
         None if everything_stored

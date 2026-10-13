@@ -1,15 +1,3 @@
-/**
- * The one place the site talks to the prediction service.
- *
- * The service listens on the internal network and is never reachable from a browser, so every call
- * is made here, on the server. When the PostgreSQL prediction cache is built it is read in front of
- * `predictPlayerStat`, and nothing above this file has to change.
- *
- * A failed call throws SvelteKit's HttpError carrying the service's own message, and the reason the
- * service named when it refused. A loader that lets it bubble gets the error page. A loader that
- * wants to keep rendering catches it with `isHttpError` and words the reason for a reader.
- */
-
 import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
 
@@ -30,25 +18,14 @@ import type {
 
 const DEFAULT_URL = 'http://127.0.0.1:8000';
 
-/**
- * How long any call waits before it counts as the service not being there.
- *
- * A refused connection fails at once, but a service that has accepted the connection and then
- * stopped answering does not, and without this a page waits on it for as long as the platform's own
- * default, which is minutes. Well above a prediction, which takes about half a second and may queue
- * behind the cap, so nothing that would have answered is cut off. A caller with a tighter promise to
- * keep passes its own.
- */
+/** Default timeout for a request to the service, in milliseconds. */
 const PATIENCE = 15_000;
 
 function baseUrl(): string {
 	return (env.NBA_API_URL || DEFAULT_URL).replace(/\/+$/, '');
 }
 
-/**
- * FastAPI reports a refusal as `detail`. It is a message, a list of validation problems, or, when
- * the service could not answer from what it holds, a reason and a message.
- */
+/** Gets the error `detail` from a FastAPI response. */
 async function refusalOf(response: Response): Promise<App.Error> {
 	const detail = await response.json().then((body) => body?.detail, () => null);
 
@@ -69,8 +46,7 @@ async function request<T>(
 ): Promise<T> {
 	let response: Response;
 
-	// A call that timed out and a call that was refused are the same thing to whoever asked: no
-	// answer. Both leave here as a 503, so a loader wording one has only the one case to word.
+	// A timeout and a refused connection both become a 503.
 	try {
 		response = await fetch(baseUrl() + path, { signal: AbortSignal.timeout(patience), ...init });
 	} catch {
@@ -86,41 +62,22 @@ export const getHealth = () => request<Health>('/health');
 
 export const getModels = () => request<Model[]>('/models');
 
-/** The evaluation figures used across the configured models, each explained once. */
+/** Returns the definitions of the evaluation metrics the models use. */
 export const getMetricDefinitions = () => request<MetricDefinition[]>('/models/metrics');
 
-/** Every model in one family, each carrying what it measured, for that family's own listing. */
+/** Returns every model in a family with its evaluation results. */
 export const getScoredModels = (family: string) =>
 	request<ScoredModel[]>(`/models/${encodeURIComponent(family)}/info`);
 
-/**
- * The day's sample predictions, already built by a job.
- *
- * This is a file read on the service rather than a prediction, which is the whole point of it: the
- * home page shows real answers without a visitor's arrival costing a forward pass. Null where no set
- * has been published yet, which the page draws around rather than treating as a failure.
- *
- * Given far less patience than anything else here, because it is one file read and because the home
- * page has to render. Anything slower than this is the service being unable to answer, and the plate
- * is drawn without samples rather than the page waiting on it.
- */
+/** Returns the day's sample predictions, or null if none have been published yet. */
 export const getShowcase = () => request<Showcase | null>('/showcase', { patience: 2_000 });
 
 export const getPlayer = (id: number) => request<Player>(`/players/${id}`);
 
-/**
- * Both sides of a chosen game, away first, which is the order a matchup is written in.
- *
- * Each side arrives with the lineup change the collected roster and injury snapshot expects of it,
- * so the roster controls open on who will actually play rather than on an empty form.
- */
+/** Returns both teams' rosters for a game, away team first. */
 export const getRosters = (gameId: number) => request<Roster[]>(`/games/${gameId}/rosters`);
 
-/**
- * The games that can be predicted right now, soonest first. A game stays off this list until every
- * earlier game of both its teams has been collected, because until then a model would read one of
- * the two teams as a game out of date.
- */
+/** Returns the games that can be predicted right now, soonest first. */
 export const getUpcomingGames = () => request<ScheduledGame[]>('/games/upcoming');
 
 export function searchPlayers(search: string, limit = 10) {
@@ -129,7 +86,6 @@ export function searchPlayers(search: string, limit = 10) {
 	return request<Player[]>(`/players?${query}`);
 }
 
-/** One prediction endpoint per family, because what a request has to name is what a family is. */
 function predict(family: string, model: string, body: unknown) {
 	return request<Prediction>(`/predictions/${family}/${encodeURIComponent(model)}`, {
 		method: 'POST',

@@ -1,4 +1,4 @@
-"""One row per team per finished game, straight off the box score."""
+"""Stores team box scores, one row per team per game."""
 
 from datetime import date
 from typing import Collection
@@ -40,7 +40,6 @@ PRIMARY_KEYS = [
 ]
 DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 
-# Every read here but one filters on the date, which the primary key does not cover.
 INDEXES = [[GAME_DATE]]
 
 DATABASE = Database(
@@ -49,7 +48,7 @@ DATABASE = Database(
 
 # Writing
 def store(team_game_data: pd.DataFrame) -> int:
-    """Adds the given rows, replacing any game already held. Returns how many were written."""
+    """Inserts the given rows, replacing existing ones. Returns the number of rows written."""
 
     with DATABASE:
         return DATABASE.add_dataframe(team_game_data)
@@ -71,12 +70,7 @@ def get_game_data_after_date(date_start: date) -> pd.DataFrame:
     return data
 
 def latest_games_before(team_id: int, day: date, limit: int) -> pd.DataFrame:
-    """
-    The team's most recent games before the given day, oldest first.
-
-    A roster reading is measured against exactly the games it was built over, so a caller asking for
-    a window of them gets those games and no others.
-    """
+    """Returns the team's last `limit` games before the given date, oldest first."""
 
     with DATABASE:
         data = DATABASE.query_dataframe(
@@ -92,10 +86,7 @@ def latest_games_before(team_id: int, day: date, limit: int) -> pd.DataFrame:
     return data.iloc[::-1].reset_index(drop=True)
 
 def stored_game_ids(date_start: date | None = None) -> set[int]:
-    """
-    Which games have a box score held, which is what says a scheduled game has actually been
-    collected. A date narrows the scan to the games that could still matter.
-    """
+    """Returns the IDs of games with a stored box score, optionally from date_start onwards."""
 
     SQL_condition = None
     condition_params = None
@@ -115,12 +106,7 @@ def stored_game_ids(date_start: date | None = None) -> set[int]:
     return {int(row[0]) for row in rows}
 
 def team_ids_with_game_since(date_start: date) -> set[int]:
-    """
-    Which teams have a box score stored on or after the given date.
-
-    This is what says a team is still playing. The archive holds franchises that folded and overseas
-    opponents from preseason tours, and neither can be named in a prediction.
-    """
+    """Returns the IDs of teams with a stored game on or after the given date."""
 
     with DATABASE:
         rows = DATABASE.query(
@@ -133,11 +119,7 @@ def team_ids_with_game_since(date_start: date) -> set[int]:
     return {int(row[0]) for row in rows}
 
 def teams_with_game_on(day: date, team_ids: Collection[int]) -> set[int]:
-    """
-    Which of the named teams already have a box score stored on the given date.
-
-    No team plays twice in a day, so a team named here has played the game being asked about.
-    """
+    """Returns which of the given teams have a stored game on the given date."""
 
     if not team_ids:
         return set()
@@ -152,7 +134,7 @@ def teams_with_game_on(day: date, team_ids: Collection[int]) -> set[int]:
     return {int(row[0]) for row in rows} & {int(team_id) for team_id in team_ids}
 
 def latest_game_date() -> date | None:
-    """The newest game held, which is where an update run starts from. None when nothing is held."""
+    """Returns the date of the latest stored game, or None if the store is empty."""
 
     with DATABASE:
         newest = DATABASE.max_value(GAME_DATE)

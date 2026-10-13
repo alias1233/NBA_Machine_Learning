@@ -1,10 +1,4 @@
-"""
-The thirty teams, held so that a request can name one without asking a data service who it is.
-
-The tricode is the identifier everything outside the pipeline uses. It reads well in a URL, every
-service publishes it, and it does not change, so it is also how a second service's team ids would be
-matched onto the ones already stored.
-"""
+"""Stores the NBA teams."""
 
 import pandas as pd
 
@@ -31,7 +25,7 @@ DATABASE = Database(FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLI
 
 # Writing
 def store(teams: pd.DataFrame) -> int:
-    """Adds the given rows, replacing any team already held. Returns how many were written."""
+    """Inserts the given rows, replacing existing teams. Returns the number of rows written."""
 
     with DATABASE:
         return DATABASE.add_dataframe(teams)
@@ -44,7 +38,7 @@ def all_teams() -> list[Team]:
     return [Team(int(team_id), name, abbreviation) for team_id, name, abbreviation in rows]
 
 def find(abbreviation_or_name: str) -> Team | None:
-    """The team matching either a tricode or part of a full name."""
+    """Returns the team matching an abbreviation or part of a team name, or None."""
 
     text = searchable(abbreviation_or_name)
 

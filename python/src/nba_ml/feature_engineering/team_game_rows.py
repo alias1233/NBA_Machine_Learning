@@ -1,17 +1,4 @@
-"""
-Turning the stored team box scores into one engineered row per team per game.
-
-A stored row is one team's line in one game. This adds everything that can be worked out about that
-row before the game is played: what the team and the side it faces had been doing, and where the game
-sits in the schedule and in the season. What it never adds is anything the game itself decided.
-
-Two families read these rows. Team statistics asks about one named team, and game statistics asks
-about the whole game. They cut the rows into samples differently, so that part is theirs, but the
-rows themselves and the columns on them are the same, so they are here.
-
-Every rolling column leaves its own row out, so a row only ever holds what was known before it. That
-is what lets a game not yet played be fed through the same build as one already played.
-"""
+"""Builds one feature row per team per game from the stored team box scores."""
 
 from dataclasses import dataclass
 from enum import Enum
@@ -39,22 +26,18 @@ from nba_ml.feature_engineering.situations import SituationalStat
 from nba_ml.stores import team_games as team_game_store
 
 ROLLING_WINDOW = 15
-"""How many recent games the flat form columns average, which is about five weeks of a season."""
+"""Number of recent games averaged by the rolling mean columns."""
 
-# How fast the weighted form columns forget, in games. A starting choice rather than a swept one:
-# a team changes more slowly than a player's role does, so it forgets more slowly than the one game
-# halflife the player models measured.
+# Halflife of the exponentially weighted mean columns, in games.
 RECENT_FORM_HALFLIFE = 3
 
 SEASON_WINDOW = 82
-"""A full regular season of games, which is how far back the steady level columns read."""
+"""Window for the season-long mean and standard deviation columns. 82 games is one regular season."""
 
-# How much history a prediction reads out of the database. Every window above fits inside it, so a
-# predicted game's columns come out the same as they would from a build over everything held.
+# Years of game history loaded for a prediction.
 HISTORICAL_WINDOW_LENGTH_YEARS = 5
 
-# How many games a team must already have played before one of its games can be a sample. One is the
-# floor rather than a choice: the sequence a model reads cannot be empty.
+# Must be at least 1 because the model's input sequence can't be empty.
 MINIMUM_PAST_GAMES = 1
 
 PAST_MEAN_PREFIX = "PAST_MEAN_"
@@ -62,44 +45,24 @@ PAST_WEIGHTED_MEAN_PREFIX = "PAST_WEIGHTED_MEAN_"
 PAST_SEASON_MEAN_PREFIX = "PAST_SEASON_MEAN_"
 PAST_SEASON_STD_PREFIX = "PAST_SEASON_STD_"
 
-# WHERE A ROW IS FOUND: #
+# KEY COLUMNS: #
 TEAM_ID = team_game_store.TEAM_ID.category_name
 GAME_ID = team_game_store.GAME_ID.category_name
 GAME_DATE = team_game_store.GAME_DATE.category_name
 OPPONENT_TEAM_ID = team_columns.OPPONENT_PREFIX + TEAM_ID
 
-# WHAT A GAME HOLDS: #
+# STAT COLUMNS: #
 WIN = team_game_store.WIN_LOSS.category_name
-"""The win or loss column, which the build rewrites as one for a win."""
+"""The win/loss column. It is converted to 1 for a win and 0 for a loss."""
 
 WON, LOST = 0, 1
-"""
-Which position of a two category answer each result is, for a model fit to say who wins.
-
-A model answering in named categories is fit against the position it should answer with, and a
-reader is led with the first one, so a win comes first. A family naming the two categories orders
-them this way.
-"""
+"""Class indices of a win and a loss for the model that predicts the winner."""
 
 WIN_CATEGORY = 'WIN_CATEGORY'
-"""
-The same result as one of those positions rather than as a flag.
-
-WIN stays one for a win, because it is a stat the build averages and the mean of it is a win rate.
-This is only ever a value to be fit against, so no model reads it as a feature.
-"""
+"""Column with the game result as one of the class indices above."""
 
 IS_HOME_ROW = 'IS_HOME_ROW'
-"""
-True on the home team's row of a game, which is the side a game statistic is read off.
-
-HOME_OR_AWAY is one for away, so a family wanting the home row needs the opposite of it. That
-inversion is written down once, here, rather than in each family that reads it.
-"""
-
-# Points per possession and the four factors were measured on 2026-08-11 and taken out again. They
-# read worse than the raw counts they are worked out from, on a build that already carries
-# possessions, and they cost forty columns. Do not add them back without new evidence.
+"""True on the home team's row. HOME_OR_AWAY is the opposite, with 1 for away."""
 
 BOX_SCORE_STATS = [
     team_game_store.FIELD_GOALS_MADE.category_name,
@@ -122,12 +85,7 @@ COPIED_FROM_THE_OTHER_SIDE = BOX_SCORE_STATS + [
     game_columns.REBOUNDS,
     team_columns.POSSESSIONS
 ]
-"""
-What both teams record separately in a game, and what is carried over from one row to the other.
-
-Each is worth reading twice: once for what the team did, and once for what it let the other side do,
-which is the only defensive reading a box score carries.
-"""
+"""Stats copied from the opponent's row onto each team's row."""
 
 OWN_GAME_STATS = COPIED_FROM_THE_OTHER_SIDE + [
     team_game_store.MINUTES_PLAYED.category_name,
@@ -135,12 +93,6 @@ OWN_GAME_STATS = COPIED_FROM_THE_OTHER_SIDE + [
     team_columns.POINT_DIFFERENTIAL,
     team_columns.GAME_TOTAL
 ]
-"""
-The same, plus what only reads from the team's own side.
-
-Minutes are the same number for both teams and say whether the game went to overtime. The result and
-the two point totals are already both teams together, so neither has an opposing version.
-"""
 
 COMBINED_GAME_STATS = [
     game_columns.POINTS,
@@ -148,17 +100,12 @@ COMBINED_GAME_STATS = [
     team_game_store.ASSISTS.category_name,
     team_game_store.THREE_POINTERS_MADE.category_name
 ]
-"""
-What both teams record together, which is what a statistic belonging to the whole game is read off.
-
-Each is the same number on either row of a game, so a model predicting one names no team. The points
-total is read by far more than the model predicting it, so team_columns names it GAME_TOTAL as well.
-"""
+"""Stats that get a combined total for both teams."""
 
 ALLOWED_GAME_STATS = [
     team_columns.OPPONENT_PREFIX + stat for stat in COPIED_FROM_THE_OTHER_SIDE
 ]
-"""The opposing team's own line in the same game, read as what the team allowed."""
+"""The opponent's stats in the same game, which are what the team allowed."""
 
 RECENT_FORM_STATS = [
     game_columns.POINTS,
@@ -171,13 +118,7 @@ RECENT_FORM_STATS = [
     team_columns.OPPONENT_PREFIX + game_columns.POINTS,
     team_columns.OPPONENT_PREFIX + team_columns.POSSESSIONS
 ]
-"""
-The stats also carried weighted towards the newest games.
-
-A flat window is slow to notice a team that has changed, through a trade or an injury, and both
-readings together say more than either alone. Only the columns that move a score are worth the
-second reading.
-"""
+"""Stats that also get an exponentially weighted mean."""
 
 SEASON_LEVEL_STATS = [
     game_columns.POINTS,
@@ -186,12 +127,7 @@ SEASON_LEVEL_STATS = [
     team_columns.GAME_TOTAL,
     team_columns.POSSESSIONS
 ]
-"""
-What a team's level and its steadiness are read off, over a season length window.
-
-The standard deviation is what separates a team that scores 110 every night from one averaging the
-same across 90 and 130, which is most of what the tails of a distribution are made of.
-"""
+"""Stats that get a mean and standard deviation over the season window."""
 
 CONTEXT_COLUMNS = [
     team_columns.HOME_OR_AWAY,
@@ -203,7 +139,7 @@ CONTEXT_COLUMNS = [
     + season_columns.ALL_SEASON_CONTEXT_COLUMNS
     + schedule_columns.get_recent_game_count_columns()
 )
-"""Where a game sits in the schedule and in the season, which is known before it is played."""
+"""Schedule and season columns that are known before a game is played."""
 
 OPPONENT_CONTEXT_STATS = [
     schedule_columns.REST,
@@ -211,90 +147,39 @@ OPPONENT_CONTEXT_STATS = [
     season_columns.SEASON_GAME_NUMBER,
     season_columns.TEAM_WIN_PERCENTAGE
 ] + schedule_columns.get_recent_game_count_columns()
-"""
-The opposing team's own schedule and record, which decide a game as much as the team's own do.
-
-Home or away and the season phase are left out, because both teams already share them.
-"""
 
 SITUATIONS = [situations.IN_THIS_SEASON_TYPE, situations.AT_HOME_OR_AWAY]
-"""
-Which kinds of game a team's own form is read in. See feature_engineering/situations.py.
-
-Measured on the point differential over three seeds on 2026-08-11. These two beat reading none on
-every seed, and adding the team's form against the side it faces on top of them was worth nothing.
-Two teams meet a handful of times a season and neither roster is the one that met last time, so
-there is little there to read.
-"""
+"""Situations that team form is tracked for."""
 
 READS_CORE_ROSTER = True
-"""
-Whether a row carries who the team has gained, lost and is missing.
-
-A box score says what a team did and nothing about who was on the floor to do it, so without this a
-model reads a side missing its best player as the side that played last week. See
-feature_engineering/team_rosters.py.
-
-It is read off the game being predicted and not off each past game. That is where the reader's own
-answer changes, and reading it inside the sequence would mean publishing the whole league's rosters
-the way the player family publishes its build, because a prediction would then have to fill it in for
-every past game of both teams. Worth trying if a measurement ever asks for it.
-
-Turning it off changes which columns a row carries rather than what they hold, so a model fit one way
-simply cannot answer the other, and models/loading.py is what catches that. It is written down here
-so the two can be measured against each other.
-"""
+"""Whether rows include the core roster columns."""
 
 def _allowed(stat: str) -> str:
-    """What the team let the other side record, which is the only defensive reading a box score has."""
-
     return team_columns.OPPONENT_PREFIX + stat
 
 @dataclass(frozen=True)
 class TargetColumns():
-    """
-    The columns predicting one value needs on top of the ones every model of these families gets.
-
-    The always on lists above already carry the whole box score, both sides of it, and a flat recent
-    average of every one of them. What a target adds is the second and third readings of whatever it
-    is actually about: a form weighted towards the newest games, and a season length level and
-    steadiness. Those are the readings the points models were given because points are what they
-    predict, so a model predicting something else asks for them of its own statistic.
-
-    Adding a model to either family means adding one of these and nothing else.
-    """
+    """The output column for a target and the extra stats it needs on top of the defaults."""
 
     output_column: str
-    """The finished column the value being predicted is read off."""
 
     mean_stats: tuple[str, ...] = ()
-    """
-    Stats to carry a flat recent average of, on top of the box score every model already gets. Only a
-    combined stat needs listing here, since a raw one and its opposing version are always covered.
-    """
+    """Extra stats to add a rolling mean for."""
 
     recent_form_stats: tuple[str, ...] = ()
-    """Stats to read a second time weighted towards the newest games."""
+    """Extra stats to add an exponentially weighted mean for."""
 
     season_level_stats: tuple[str, ...] = ()
-    """
-    Stats to carry a season length mean and standard deviation of, and to read in a kind of game.
-    The standard deviation is most of what the tails of a distribution are made of.
-    """
+    """Extra stats to add a season-long mean and standard deviation for."""
 
 class TargetValue(Enum):
-    """
-    Which finished column of this build a model is fit against, and what it reads on top of the
-    always on columns above.
-    """
+    """The values a team or game model can predict."""
 
     POINT_DIFFERENTIAL = TargetColumns(team_columns.POINT_DIFFERENTIAL)
     TEAM_POINTS = TargetColumns(game_columns.POINTS)
     GAME_TOTAL = TargetColumns(team_columns.GAME_TOTAL)
     RESULT = TargetColumns(WIN_CATEGORY)
 
-    # A rebound is a missed shot nobody has picked up yet, so how many are there to win is decided by
-    # how much each side shoots and how well, and how many the team takes is its own board strength.
     TEAM_REBOUNDS = TargetColumns(
         game_columns.REBOUNDS,
         recent_form_stats=(
@@ -310,8 +195,6 @@ class TargetValue(Enum):
         season_level_stats=(game_columns.REBOUNDS, _allowed(game_columns.REBOUNDS))
     )
 
-    # An assist is a made field goal somebody passed to, so both halves of that are read, and the
-    # side faced is read for how many it lets teams record.
     TEAM_ASSISTS = TargetColumns(
         team_game_store.ASSISTS.category_name,
         recent_form_stats=(
@@ -326,8 +209,6 @@ class TargetValue(Enum):
         )
     )
 
-    # How many a team makes is how many it takes and how often they go in, and how many the side it
-    # faces gives up from behind the line.
     TEAM_THREE_POINTERS = TargetColumns(
         team_game_store.THREE_POINTERS_MADE.category_name,
         recent_form_stats=(
@@ -342,9 +223,6 @@ class TargetValue(Enum):
         )
     )
 
-    # The same three again as one number for the whole game. Each reads its own combined column, so
-    # the model is handed the figure it is fit against rather than left to add two together, and
-    # each side's own half beside it, because two teams' recent games are two different runs of form.
     TOTAL_REBOUNDS = TargetColumns(
         team_columns.combined_column(game_columns.REBOUNDS),
         mean_stats=(team_columns.combined_column(game_columns.REBOUNDS),),
@@ -391,53 +269,30 @@ class TargetValue(Enum):
         )
     )
 
-# WHICH COLUMNS A MODEL READS: #
+# FEATURE SETS: #
 @dataclass(frozen=True)
 class FeatureSet():
-    """
-    Every column name and rolling definition a model built on these rows needs.
-
-    Resolved once per run and passed down, so two models being built at the same time never share
-    column state.
-    """
+    """The columns and rolling definitions used by one model."""
 
     output_column: str
-    """The finished column the value being predicted is read off."""
 
     rolling_categories: list[RollingCategory]
     situational_stats: list[SituationalStat]
-    """What a team's form in games like this one is read over. See feature_engineering/situations.py."""
 
     columns_copied_from_opponent: list[str]
-    """The team columns worth carrying over to the row of the team it is playing."""
 
     sequence_columns: list[str]
-    """Read for each of the team's past games."""
+    """Columns taken from each of the team's past games."""
 
     static_columns: list[str]
-    """Read once, off the game being predicted."""
+    """Columns taken from the game being predicted."""
 
 def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ...] = ()) -> FeatureSet:
-    """
-    Resolves the columns a model predicting the given value reads.
-
-    What every model gets is the whole box score both ways round and everything that moves a score.
-    What the target adds is the same readings of its own statistic. See TargetColumns.
-
-    Args:
-        dropped_static_columns names columns to leave off the game being predicted. A family whose
-        samples all read the same value of one has nothing to learn from it.
-    """
-
     columns = target.value
 
     def gather(always: list[str], selected: tuple[str, ...]) -> list[str]:
-        """The always on stats and whatever the target asked for, in a stable order."""
-
         return sorted(set(always) | set(selected))
 
-    # Anything given a weighted or a season length reading gets the flat one too, because that is
-    # what the other two are read against and what a situational column is measured off.
     mean_stats = gather(
         OWN_GAME_STATS + ALLOWED_GAME_STATS,
         columns.mean_stats + columns.recent_form_stats + columns.season_level_stats
@@ -466,8 +321,6 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
         ]
     )
 
-    # How the team does in games like this one, measured against the recent form above rather than
-    # against a whole season, so a team that has changed is not read as its old self.
     situational_stats = [
         SituationalStat(stat, stat, PAST_MEAN_PREFIX + stat) for stat in season_level_stats
     ]
@@ -475,9 +328,6 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
 
     core_roster_columns = team_rosters.all_columns() if READS_CORE_ROSTER else []
 
-    # Everything the team knows about itself going into the game, read a second time off the side it
-    # is facing. That is what makes one row describe a whole game rather than half of one, and it is
-    # why naming the players missing from either side changes the answer.
     columns_copied_from_opponent = (
         [category.column_name for category in rolling_categories]
         + situational_columns
@@ -511,13 +361,9 @@ def build_feature_set(target: TargetValue, dropped_static_columns: tuple[str, ..
         )
     )
 
-# WHO EACH TEAM HAS: #
+# CORE ROSTERS: #
 def stored_roster_totals(team_game_data: pd.DataFrame) -> CoreRosterTotals | None:
-    """
-    The roster reading a build over stored games needs, or None where these rows do not read one.
-
-    Both families ask for it the same way, so which of the two it is lives here rather than in each.
-    """
+    """Returns the core roster totals for stored games, or None if the roster columns are turned off."""
 
     return team_rosters.stored_totals(team_game_data) if READS_CORE_ROSTER else None
 
@@ -525,23 +371,12 @@ def prediction_roster_totals(
     target_game: Game,
     rosters: Mapping[int, RosterScenario]
     ) -> CoreRosterTotals | None:
-    """
-    The roster reading of the two rows standing for the game being predicted, or None as above.
-
-    Args:
-        rosters is the change each side is making, keyed by team id. A side left out plays whoever
-        played its last game, which is all the stored data says.
-    """
+    """Returns the core roster totals for the game being predicted, or None if the roster columns are turned off."""
 
     return team_rosters.prediction_totals(target_game, rosters) if READS_CORE_ROSTER else None
 
 # BUILDING THE ROWS: #
 def ordered_by_team_and_date(team_game_data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Every grouped column below reads a team's games in the order they happened, and cutting the
-    finished frame into histories needs each team's games to sit together.
-    """
-
     return team_game_data.sort_values(by=[TEAM_ID, GAME_DATE]).reset_index(drop=True)
 
 def build_rows(
@@ -549,16 +384,7 @@ def build_rows(
     team_game_data: pd.DataFrame,
     roster_totals: CoreRosterTotals | None
     ) -> pd.DataFrame:
-    """
-    Returns every team game with its own state going into it and the opposing team's.
-
-    The given frame is modified, so hand it a copy where the caller still needs the original.
-
-    Args:
-        roster_totals is who each team had available, out of feature_engineering/team_rosters.py.
-        None only where READS_CORE_ROSTER is off, since otherwise the rows would read as thirty
-        teams nobody is ever missing from.
-    """
+    """Adds every feature column to the team game rows. Modifies its input."""
 
     team_game_data[GAME_DATE] = pd.to_datetime(team_game_data[GAME_DATE])
     team_game_data = ordered_by_team_and_date(team_game_data)
@@ -590,7 +416,7 @@ def build_rows(
         team_game_data,
         team_game_store.MATCHUP.category_name
         )
-    # A row whose matchup says neither reads as away, so it simply never anchors a game sample.
+    # Rows with an unknown matchup are not home rows, so they are never used as game samples.
     team_game_data[IS_HOME_ROW] = (
         team_game_data[team_columns.HOME_OR_AWAY].eq(0).fillna(False).astype(bool)
     )
@@ -614,8 +440,6 @@ def build_rows(
         season_columns.REGULAR_SEASON
         )
 
-    # The opposing team's own line in each game, which is both what the team allowed and the half of
-    # the result it does not record itself.
     team_game_data = team_columns.add_opponent_stat_columns(
         team_game_data,
         GAME_ID,
@@ -630,13 +454,13 @@ def build_rows(
     team_game_data = team_columns.add_combined_stat_columns(team_game_data, COMBINED_GAME_STATS)
 
     team_game_data = ordered_by_team_and_date(team_game_data)
+    # Rolling columns exclude the current row, so they only use earlier games.
     team_game_data = rolling.add_rolling_function_columns(
         team_game_data,
         features.rolling_categories,
         group_by_column=TEAM_ID
         )
 
-    # After the rolling columns, because a team's form in a kind of game is measured against them.
     team_game_data = situations.add_columns(
         team_game_data,
         TEAM_ID,
@@ -644,7 +468,6 @@ def build_rows(
         features.situational_stats
         )
 
-    # Before the copy below, so a row also carries who the side it faces is missing.
     if READS_CORE_ROSTER:
         if roster_totals is None:
             raise ValueError(
@@ -654,7 +477,6 @@ def build_rows(
 
         team_game_data = team_rosters.add_columns(team_game_data, roster_totals)
 
-    # Last, because it carries the finished rolling columns over to the row of the team being played.
     team_game_data = team_columns.add_opponent_stat_columns(
         team_game_data,
         GAME_ID,
@@ -671,16 +493,7 @@ def build_histories(
     sample_row_column: str | None = None,
     print_debug: bool = False
     ) -> dict[int, GameHistory]:
-    """
-    Turns raw team games into one finished history per team.
-
-    The given frame is not modified, so this can be called more than once on the same data.
-
-    Args:
-        roster_totals is who each team had available. See build_rows.
-        sample_row_column names a column that is true for the rows a sample may be read off. Leave
-        it unset where both sides of a game are samples.
-    """
+    """Builds a GameHistory for each team from the raw team game rows."""
 
     if print_debug:
         print("Feature engineering team game data...")
@@ -702,10 +515,8 @@ def build_histories(
         sample_row_column=sample_row_column
     )
 
-# THE GAME BEING PREDICTED: #
+# TARGET GAME: #
 def read_history_window(target_game: Game) -> pd.DataFrame:
-    """Every stored team game near enough to the predicted one to reach any window the build uses."""
-
     started = target_game.date - relativedelta(years=HISTORICAL_WINDOW_LENGTH_YEARS)
 
     return season_columns.drop_incomplete_game_rows(
@@ -718,17 +529,7 @@ def find_target_game(
     team_id: int,
     target_game: Game
     ) -> tuple[GameHistory, int] | None:
-    """
-    A team's finished history and where the game being predicted sits in it.
-
-    Returns None when the build cannot answer for that team, which means one of two things a caller
-    words the same way: nothing is stored for it near the predicted date, or too little sits in front
-    of the game for a sequence to be read.
-
-    Raises:
-        ValueError if the placeholder rows did not survive the build as exactly one row per team,
-        which is a fault in the build rather than something a caller asked for.
-    """
+    """Returns the team's history and the target game's index, or None if the team has too few past games."""
 
     history = histories.get(team_id)
     if history is None:

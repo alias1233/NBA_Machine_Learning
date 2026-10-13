@@ -38,7 +38,7 @@ def values_of(instance: Any) -> dict[str, Any]:
     return {field.name.replace('_', ' '): getattr(instance, field.name) for field in fields(instance)}
 
 def format_value(value: Any) -> str:
-    """Renders one reported value as a short line of text."""
+    """Formats a value as a short string for the report."""
 
     if isinstance(value, bool):
         return str(value)
@@ -62,7 +62,7 @@ def format_value(value: Any) -> str:
     return str(value)
 
 def print_values(heading: str, values: Mapping[str, Any]):
-    """Prints one reported section to the console in the same shape the report file uses."""
+    """Prints a section to the console in the same format as the report file."""
 
     print(f"\n--- {heading} ---")
     for name, value in values.items():

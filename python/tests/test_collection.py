@@ -1,10 +1,4 @@
-"""
-Collecting data into the stores, with a stand in service in place of the real one.
-
-Nothing here reaches the network. The point is the part between the service and the store: which
-seasons and dates get asked for, what lands in a table, what an update run does the second time it
-is run, and what happens when the service refuses to answer. See tests/fake_data.py for the source.
-"""
+"""Tests for data collection, using a fake data source."""
 
 import sys
 from datetime import date, timedelta
@@ -30,7 +24,7 @@ import fake_data
 from fake_data import FakeSource, PlayedGame
 
 ALL_ROWS = len(fake_data.SEASON_GAMES) * 2
-"""Two team rows per game, which is what a full collection of the fake league writes."""
+"""Number of team rows a full collection of the fake league writes: two per game."""
 
 # TEAMS AND PLAYERS: #
 def test_collecting_teams_fills_the_team_store():
@@ -78,15 +72,8 @@ def test_recent_player_update_does_not_fetch_the_full_player_directory():
     assert sum(request.startswith("player_info") for request in source.requests) == 1
 
 def test_a_player_whose_information_did_not_arrive_is_asked_for_again(monkeypatch):
-    """
-    A player with no information row has every one of their games dropped from the feature build,
-    so a failed request has to be retried rather than waiting on the day they next play.
-    """
-
     missed = fake_data.ALL_PLAYERS[-1]
     rows = fake_data.player_game_frame()
-    # They stopped playing well before the hourly run's own lookback, which is what makes a window
-    # that narrow never ask about them again.
     sat_out = (rows[player_games.GAME_DATE.category_name] >= "2024-11-02") & (
         rows[player_games.PLAYER_ID.category_name] == missed.id
     )
@@ -108,11 +95,6 @@ def test_a_player_whose_information_did_not_arrive_is_asked_for_again(monkeypatc
 
 
 def test_a_player_stored_without_a_name_is_named_from_the_service_player_list():
-    """
-    Not every service carries a name beside a player's other information, so collection fills it in
-    from the list of players instead of asking again per player.
-    """
-
     unnamed = fake_data.player_info_frame(fake_data.ALL_PLAYERS[:1]).drop(
         columns=[players_store.PLAYER_NAME.category_name]
     )
@@ -227,12 +209,6 @@ def test_team_games_are_built_from_stored_player_rows_without_a_source_request()
     ].sum()
 
 def test_a_team_row_holds_its_whole_box_score_when_its_players_are_labelled_inconsistently():
-    """
-    Measured in the nba.com archive on 2026-08-15: 37 team games label one team's own players two
-    different ways. Summing over the label as well as the key would split that team's box score in
-    two and store whichever half was written last, silently short.
-    """
-
     rows = fake_data.player_game_frame()
     first_team_game = (
         (rows[player_games.GAME_ID.category_name] == fake_data.SEASON_GAMES[0].id)
@@ -259,8 +235,6 @@ def test_a_team_row_holds_its_whole_box_score_when_its_players_are_labelled_inco
 
 
 def test_team_rows_are_built_from_player_rows_that_name_no_season_phase():
-    """An archive collected before the phase was stored explicitly leaves the column empty."""
-
     rows = fake_data.player_game_frame()
     rows[player_games.SEASON_TYPE.category_name] = None
     player_games.store(rows)
@@ -285,13 +259,6 @@ def test_team_game_command_does_not_create_a_data_source(monkeypatch):
     assert len(team_games.get_all_team_game_data()) == ALL_ROWS
 
 def test_an_update_run_uses_each_store_own_lookback_date():
-    """
-    This is what an hourly job runs, and it is the whole reason a run is cheap.
-
-    The previous day is included so a late-finalized game and every game on the latest stored date
-    are rewritten rather than missed.
-    """
-
     player_games.store(fake_data.player_game_frame())
     team_games.store(fake_data.team_game_frame(fake_data.SEASON_GAMES[:4]))
 
@@ -307,14 +274,6 @@ def test_an_update_run_uses_each_store_own_lookback_date():
     assert len(team_games.get_all_team_game_data()) == ALL_ROWS
 
 def test_games_backfilled_behind_the_team_store_still_get_team_rows():
-    """
-    A team row is a total of player rows, so the team store can only follow the player one while
-    games arrive newest first. A backfill writes games older than anything the team store holds, and
-    a rebuild starting at its own newest row would step straight over them. Those games would then
-    sit in the archive and reach no model, because a player row whose game has no team row is
-    dropped where the two frames meet.
-    """
-
     newest = fake_data.SEASON_GAMES[-2:]
     player_games.store(fake_data.player_game_frame(newest))
     team_games.store(fake_data.team_game_frame(newest))
@@ -401,8 +360,6 @@ def test_collecting_the_same_games_twice_rewrites_them_rather_than_duplicating_t
     assert len(team_games.get_all_team_game_data()) == ALL_ROWS
 
 def test_a_season_the_service_refuses_is_skipped_and_the_rest_of_the_run_carries_on():
-    """A long run must not be lost to one season the service will not answer for."""
-
     source = FakeSource(failing_seasons=[fake_data.SEASON_YEAR - 1])
 
     written = games.collect_player_games(
@@ -531,7 +488,7 @@ def test_the_seasons_a_source_covers_are_the_ones_it_has_and_no_others():
     assert source.seasons(date(2024, 12, 1), date(2025, 1, 1)) == [fake_data.SEASON_YEAR]
     assert source.seasons(date(1990, 1, 1), date(2025, 1, 1)) == [fake_data.SEASON_YEAR]
 
-# THE SCHEDULE: #
+# SCHEDULE: #
 def test_collecting_the_schedule_stores_games_that_have_not_been_played():
     upcoming = [
         fake_data.scheduled_game(game, status=GameStatus.SCHEDULED)
@@ -552,8 +509,6 @@ def test_collecting_the_schedule_stores_games_that_have_not_been_played():
     assert stored[0].status is GameStatus.SCHEDULED
 
 def test_recollecting_the_schedule_replaces_a_game_that_has_moved():
-    """One request covers a whole season, so a postponed game is corrected rather than duplicated."""
-
     original = fake_data.SEASON_GAMES[0]
     postponed = PlayedGame(
         original.number,

@@ -1,8 +1,4 @@
-"""
-Running a saved player game statistics model against an upcoming game.
-
-This is the half that deploys. It never imports the trainer or the evaluation graphs.
-"""
+"""Runs a trained player stats model on an upcoming game."""
 
 import torch
 
@@ -19,16 +15,7 @@ from nba_ml.models.player_stats.specifications import (
 from nba_ml.stores import player_games
 
 def team_of(player_id: int, game: Game) -> int:
-    """
-    Which of the game's two teams the player is on, taken from the last game they played before it.
-
-    A player who has just moved last played for neither of these teams, and nothing stored says which
-    one they joined, so the caller has to name it.
-
-    Raises:
-        PredictionRefused if the player has no recorded game, or last played for neither of these
-        teams.
-    """
+    """Returns the player's team in the game, based on the last team they played for before it."""
 
     team_id = player_games.latest_team_id(player_id, before=game.date)
     if team_id is None:
@@ -54,19 +41,7 @@ def predict(
     target_player_team_id: int | None = None,
     print_debug: bool = True
     ) -> Prediction:
-    """
-    Returns a probability for every position of this model's output, in that order, and how many of
-    the player's earlier games the answer was built from.
-
-    Args:
-        scenario is the change the request made to the player's team's last lineup. See
-        features.build_target_game_row.
-        target_player_team_id names the player's team outright. Leave it unset unless they have just
-        moved and no game records it yet.
-
-    Raises:
-        PredictionRefused if the game has already been played, or if what is stored cannot answer.
-    """
+    """Returns the predicted probability of each output class, in order."""
 
     requests.refuse_a_played_game(target_game)
 
@@ -100,8 +75,6 @@ def predict(
 
     predicted_probabilities = torch.softmax(predictions, 1)
 
-    # The sample reads every game behind the one being predicted, so where it stops is how many the
-    # build found behind it.
     return Prediction(
         values=predicted_probabilities.tolist()[0],
         past_games=int(samples.sequence_end_indices[0, 0])

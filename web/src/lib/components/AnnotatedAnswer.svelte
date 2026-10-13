@@ -1,26 +1,9 @@
-<!--
-	The answer block as a drawing, which is how the About page teaches reading a prediction.
-
-	It is the block a prediction page draws, at the width it draws it, holding a made-up answer. The
-	line drags and the odds answer it, so a reader learns the block by moving it, and it can never
-	fall out of step with the real thing because it is the real thing. It carries no footer, because
-	its way out leads to the section it is already standing in, and it writes no line into the address
-	bar, because nothing here was asked for.
-
-	The terms sit around it. On a wide page, a hairline leader runs from each to the part it names. A
-	leader is the shortest segment from the words of a term to just inside that part, measured off the
-	page rather than drawn by hand. On a narrower page, the terms follow the block without leaders.
-
-	A part names itself with `data-explain`, which is the whole of what the real components carry for
-	this. Grep that attribute to find them.
--->
 <script lang="ts">
 	import AnswerBlock from '$lib/components/AnswerBlock.svelte';
 
 	import type { Answer, Distribution } from '$lib/odds';
 	import type { ModelOutput } from '$lib/types';
 
-	/** A made-up points answer, shaped like the ones a player model gives: a chance per whole number. */
 	const CENTER = 24;
 	const SPREAD = 7;
 	const OUTCOMES = 55;
@@ -39,8 +22,6 @@
 
 	const ANSWER: Answer = { kind: 'integer_distribution', distribution: EXAMPLE };
 
-	// The shape a model would have declared, read off the answer rather than written twice, because
-	// the block takes what the figure is called from the model and what it draws from the answer.
 	const OUTPUT: ModelOutput = {
 		kind: 'integer_distribution',
 		minimum_value: EXAMPLE.minimumValue,
@@ -49,15 +30,11 @@
 		impossible_value: EXAMPLE.impossibleValue
 	};
 
-	// A whole number rather than the half one a real answer opens on, so all three odds carry a
-	// figure and the push this names is worth reading.
 	const LINE = CENTER;
 
-	/** Which column a term sits in on a wide page. The first three take the left of the block. */
+	/** Number of notes placed on the left side. */
 	const LEFT_COLUMN = 3;
 
-	// Read down the left of the block and then down its right, which is the order the parts they name
-	// run in. The three odds keep the order they are read in everywhere else on the site.
 	const NOTES = [
 		{
 			part: 'lead',
@@ -94,20 +71,19 @@
 	type Leader = { x1: number; y1: number; x2: number; y2: number };
 	type Box = { left: number; right: number; top: number; bottom: number };
 
-	/** How far inside the part a leader ends, so it lands on the thing rather than beside it. */
+	/** Distance in pixels a leader line ends inside its target. */
 	const REACH = 4;
 
 	let frame = $state<HTMLElement>();
 	let subject = $state<HTMLElement>();
 	let leaders = $state<Leader[]>([]);
 
-	// Plain, because nothing reads them except the measuring below.
 	const labels: HTMLElement[] = [];
 
 	const clamp = (value: number, low: number, high: number) =>
 		Math.min(Math.max(value, low), high);
 
-	/** A box brought in on every side, never past its own middle. */
+	/** Shrinks a box on every side, but never past its center. */
 	function inset(box: Box, by: number): Box {
 		const x = Math.min(by, (box.right - box.left) / 2);
 		const y = Math.min(by, (box.bottom - box.top) / 2);
@@ -115,7 +91,7 @@
 		return { left: box.left + x, right: box.right - x, top: box.top + y, bottom: box.bottom - y };
 	}
 
-	/** The words rather than the box drawn around them, so a leader starts where the sentence ends. */
+	/** Returns the label's box without its padding. */
 	function words(label: HTMLElement): Box {
 		const box = label.getBoundingClientRect();
 		const { paddingLeft, paddingRight, paddingTop, paddingBottom } = getComputedStyle(label);
@@ -128,13 +104,7 @@
 		};
 	}
 
-	/**
-	 * The two ends of the shortest segment between a label and the part it names.
-	 *
-	 * Clamping the label's center into the part gives the nearest point on the part, and clamping that
-	 * back into the label gives the nearest point on the label. One rule, so a leader points the same
-	 * way whether the label sits beside the block or under it, and reaches the edge of neither box.
-	 */
+	/** Returns the shortest line between a label and the part it points to. */
 	function shortest(label: Box, part: Box): Leader {
 		const x2 = clamp((label.left + label.right) / 2, part.left, part.right);
 		const y2 = clamp((label.top + label.bottom) / 2, part.top, part.bottom);
@@ -171,8 +141,7 @@
 		});
 	}
 
-	// A resize is every reason the two boxes move: the viewport and a font arriving. The observer
-	// measures on its own first call, so nothing else has to run one.
+	// ResizeObserver calls measure once when it starts observing.
 	$effect(() => {
 		if (!frame || !subject) return;
 
@@ -186,7 +155,6 @@
 </script>
 
 <div class="frame" bind:this={frame}>
-	<!-- Behind the labels, so a leader passing one runs under its words rather than through them. -->
 	<svg class="leaders" aria-hidden="true">
 		{#each leaders as leader}
 			<line x1={leader.x1} y1={leader.y1} x2={leader.x2} y2={leader.y2} />
@@ -223,11 +191,6 @@
 </div>
 
 <style>
-	/*
-	 * One grid holding the block and every term, so a leader between any two of them is measured
-	 * inside one box. A phone gets one column, a tablet two under the block, and a page wide enough
-	 * for the composition sets the terms either side of it.
-	 */
 	.frame {
 		position: relative;
 		display: grid;
@@ -241,10 +204,6 @@
 		justify-self: center;
 	}
 
-	/* Positioned and on the page tone, so a leader running past a term passes under its words rather
-	   than through them. The block is in the flow and the leaders are over it, and positioning these
-	   is what puts them over the leaders in turn. The padding keeps a line off the letters as well as
-	   off the box. */
 	.note {
 		position: relative;
 		display: flex;
@@ -259,8 +218,6 @@
 		margin: 0;
 	}
 
-	/* Over the block, under the terms, and taking no presses, so the block below works exactly as it
-	   does on a prediction page. */
 	.leaders {
 		display: none;
 		position: absolute;
@@ -302,8 +259,6 @@
 			align-self: start;
 		}
 
-		/* Each term shrinks to its own words and sits against the block, so a leader starts where the
-		   sentence ends rather than at the edge of an empty column. */
 		.note {
 			grid-row: var(--row);
 			grid-column: 1;

@@ -1,9 +1,4 @@
-"""
-Fitting a game statistics model.
-
-Everything about the run itself is shared, in models/classifier_training.py. What is here is what
-only this family knows: how its samples are built, and how to describe what one reads.
-"""
+"""Trains the game stats models."""
 
 from datetime import datetime
 from functools import partial
@@ -26,11 +21,8 @@ def _training_inputs(model_specs: GameStatModelSpecification) -> TrainingInputs:
         static_columns=feature_set.static_columns,
         minimum_past_games=team_game_rows.MINIMUM_PAST_GAMES,
         max_sequence_length=MAX_SEQUENCE_LENGTH,
-        # A sample names no team, so the game is the only thing to split on. Thirty teams could not
-        # be halved without the two halves differing anyway.
+        # Samples aren't tied to one team, so they can only be split by game.
         split_on=SplitKey.GAME,
-        # One sample per game reading both sides, which no column name says, so a build made any
-        # other way has to be rebuilt rather than reused.
         build_description=("home rows only", features.SEQUENCES_READ)
     )
 
@@ -44,7 +36,7 @@ def train(
         training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON),
         evaluation_split: EvaluationSplit | None = None
         ) -> classifier_training.TrainingResult:
-    """Fits one model spec, saves it, and writes a report of the run next to it."""
+    """Trains a model, saves it, and writes a training report next to it."""
 
     return classifier_training.train(
         model_specs,
@@ -62,6 +54,6 @@ def rescore(
         model_specs: GameStatModelSpecification,
         print_debug: bool = True
         ) -> metrics.ModelEvaluation:
-    """Rewrites a saved model's held-out evaluation without fitting it again."""
+    """Re-evaluates a saved model on its test set without retraining it."""
 
     return classifier_training.rescore(model_specs, _training_inputs(model_specs), print_debug)

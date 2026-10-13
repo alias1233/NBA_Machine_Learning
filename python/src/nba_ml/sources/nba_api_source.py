@@ -1,12 +1,4 @@
-"""
-The nba.com statistics service, reached through the `nba_api` package.
-
-It is free and complete, but it is reported to refuse requests from datacenter addresses, so it has
-to be tested from the server before anything depends on it. That is why it sits behind DataSource.
-
-The service names its box score columns the way the stores hold them, so those are not renamed here.
-Its own names for anything else are, which is what a source whose names differ does throughout.
-"""
+"""Data source for nba.com stats, using the `nba_api` package."""
 
 from datetime import date, datetime
 
@@ -22,8 +14,7 @@ from nba_ml.entities import Game, GameStatus, Player, RosterEntry, ScheduledGame
 from nba_ml.season import SeasonType
 from nba_ml.sources.base import DataSource
 
-# Columns this service names differently from the stores. A source imports no store, so the two
-# agree on these names rather than share a constant, exactly as they already do for a box score.
+# Columns that have a different name in this source than in the stores.
 COLUMN_NAMES = {
     "DISPLAY_FIRST_LAST": "PLAYER_NAME"
 }
@@ -41,12 +32,11 @@ GAME_STATUSES = {
     3: GameStatus.FINAL
 }
 
-# A team the service has not decided yet, which is how a playoff game reads before the series that
-# feeds it has finished.
+# Team ID used for games whose teams are not known yet.
 UNDECIDED_TEAM_ID = 0
 
 def _scheduled_game(row: pd.Series) -> ScheduledGame | None:
-    """One schedule row, or None when it is a game this project does not model."""
+    """Converts a schedule row to a ScheduledGame. Returns None for unsupported season types or undecided teams."""
 
     game_id = int(row["gameId"])
     season_type = season.season_type_of_game_id(game_id)
@@ -61,7 +51,7 @@ def _scheduled_game(row: pd.Series) -> ScheduledGame | None:
     return ScheduledGame(
         id=game_id,
         game=Game(
-            # The eastern date, because that is the date a box score is written under.
+            # Use the Eastern date, since box scores are stored under it.
             date.fromisoformat(row["gameDateEst"][:10]),
             home_team_id,
             away_team_id,
@@ -71,7 +61,7 @@ def _scheduled_game(row: pd.Series) -> ScheduledGame | None:
         tipoff=None if not tipoff else datetime.fromisoformat(tipoff)
     )
 
-# The service writes a season as the two years it spans, and a date as month, day, year.
+# The API formats a season as "2024-25" and a date as MM/DD/YYYY.
 def season_name(season_year: int) -> str:
     return f"{season_year}-{str(season_year + 1)[-2:]}"
 
@@ -90,7 +80,7 @@ class NBAApiSource(DataSource):
         ]
 
     def players(self) -> list[Player]:
-        """This list ships with the package, so it is only as current as the installed version."""
+        """This list comes bundled with nba_api, so it is only as up to date as the installed version."""
 
         return [Player(player["id"], player["full_name"]) for player in static_players.get_players()]
 
@@ -116,29 +106,17 @@ class NBAApiSource(DataSource):
         )
 
     def rosters(self) -> list[RosterEntry] | None:
-        """
-        None, because nba.com publishes no roster or injury feed this project can read.
-
-        An archive collected through this source therefore goes on assuming a team plays whoever
-        played its last game, and the site's roster controls open empty. See nba_ml/stores/rosters.py.
-        """
+        """Returns None because nba.com has no roster or injury data."""
 
         return None
 
     def schedule(self, season_year: int) -> list[ScheduledGame] | None:
-        """
-        One request covers a whole season, played games and unplayed ones alike, so this is cheap
-        enough to run as often as the box score collection it sits beside.
-        """
-
         return self._fetch(
             lambda: self._season_games(season_year),
             f"the {season_name(season_year)} schedule"
         )
 
     def _season_games(self, season_year: int) -> list[ScheduledGame]:
-        """Reading the rows sits inside the fetch, so a response this cannot read is retried."""
-
         games = ScheduleLeagueV2(season=season_name(season_year)).season_games.get_data_frame()
         scheduled = (_scheduled_game(row) for _, row in games.iterrows())
 

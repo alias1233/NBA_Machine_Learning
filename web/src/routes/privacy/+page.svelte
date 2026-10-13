@@ -9,13 +9,7 @@
 
 	const DESCRIPTION = 'What Bazaar Ball collects and what it sets on your device.';
 
-	/**
-	 * The numbered sections, in the order they are printed.
-	 *
-	 * The advertising section is only printed while ads run, so everything under it moves up a
-	 * number when it is not. Held here rather than typed into each heading, because a section that
-	 * does not render must not leave a hole in the numbering a reader can see.
-	 */
+	/** Numbered sections, in display order. */
 	const SECTIONS = [
 		'collect',
 		...(ADS_ENABLED ? ['advertising'] : []),
@@ -45,7 +39,6 @@
 
 <div class="page privacy">
 	<article class="privacy-copy">
-			<!-- The one date, off the page's own entry, so the sitemap and this line cannot disagree. -->
 			<p id="privacy-updated" class="updated">
 				Last updated: {longDate(PAGES['/privacy'].updated)}
 			</p>

@@ -1,12 +1,4 @@
-"""
-The cap on how many predictions run at once.
-
-The service's memory ceiling is this and nothing else, because FastAPI gives every request its own
-thread and runs as many as arrive. Two rules are being checked. A request over the cap waits and is
-then refused honestly rather than being allowed to start, and the cap falls while no whole-league
-build is published, since every request then builds the league for itself and holds gigabytes doing
-it.
-"""
+"""Tests for the limit on concurrent predictions."""
 
 import asyncio
 from datetime import datetime
@@ -22,7 +14,7 @@ def _slots(running: int = 2, waiting: int = 1, wait_seconds: float = 0.05) -> li
     return limits.PredictionSlots(running, waiting, wait_seconds)
 
 def _publish_a_build():
-    """The smallest thing that counts as a published whole-league build."""
+    """Publishes a minimal feature build."""
 
     built_at = datetime.now()
 
@@ -43,7 +35,7 @@ def _refusal(raised: HTTPException) -> dict:
 
     return raised.detail
 
-# THE CAP: #
+# CONCURRENCY LIMIT: #
 def test_a_request_over_the_cap_waits_for_the_slot_it_needs():
     order: list[str] = []
 
@@ -102,15 +94,12 @@ def test_a_slot_is_given_back_when_the_request_holding_it_fails():
             async with slots.hold():
                 1 / 0
 
-        # Nothing is holding the one slot, so this takes it rather than being refused.
         async with slots.hold():
             return True
 
     assert asyncio.run(run())
 
 def test_a_ceiling_holds_back_a_request_that_the_cap_alone_would_let_through():
-    """What a prediction with no published build asks for: fewer running than the service allows."""
-
     async def run():
         slots = _slots(running=4, waiting=0, wait_seconds=0.02)
 
@@ -119,7 +108,6 @@ def test_a_ceiling_holds_back_a_request_that_the_cap_alone_would_let_through():
                 async with slots.hold(ceiling=1):
                     pass
 
-        # The lowered ceiling was the request's, not the service's, so the cap is what it was.
         async with slots.hold(), slots.hold():
             return True
 
@@ -141,7 +129,7 @@ def test_a_cap_that_leaves_no_room_to_answer_is_refused():
     with pytest.raises(ValueError):
         _slots(wait_seconds=0)
 
-# WHAT THE SERVICE ASKS FOR: #
+# RUNNING CEILING: #
 def test_fewer_run_together_while_no_whole_league_build_is_published():
     assert limits.running_ceiling() == limits.MAX_RUNNING_UNBUILT_PREDICTIONS
 
@@ -150,11 +138,6 @@ def test_fewer_run_together_while_no_whole_league_build_is_published():
     assert limits.running_ceiling() == limits.MAX_RUNNING_PREDICTIONS
 
 def test_asking_for_the_ceiling_never_reads_the_build():
-    """
-    It is asked on the event loop, so reading a build here would stop the service answering anything
-    at all until the read finished. See api/limits.py.
-    """
-
     _publish_a_build()
     feature_store._held.clear()
 

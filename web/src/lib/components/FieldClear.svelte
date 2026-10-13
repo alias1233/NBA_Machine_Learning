@@ -1,22 +1,8 @@
-<!--
-	The control that empties the box it stands in.
-
-	A field holding words carries one at its right edge, so changing an answer is one press rather
-	than a held backspace. It reads as part of the field rather than as something to act on, so it
-	takes the muted ink and none of the platform's own chrome.
-
-	It lies against the bottom of the field, which is where the box is under its label, so whatever
-	holds one positions it. Its width is reported back because the words in the box have to stop
-	before it rather than run under it.
-
-	The word on it is what a reader sees and the first thing anybody hears, and what it empties is
-	said after it, so a page carrying two of these is not two controls both called Clear.
--->
 <script lang="ts">
 	type Props = {
-		/** What pressing it empties, heard after the word Clear and never drawn. */
+		/** Name of what the button clears. Hidden visually and announced after the word Clear. */
 		empties: string;
-		/** How wide it prints, so the field can hold its words clear of it. */
+		/** Measured width of the button, so the field can keep its text from running under it. */
 		width?: number;
 		onclear: () => void;
 	};
@@ -40,8 +26,6 @@
 </button>
 
 <style>
-	/* Inside the box, against its right edge and the full height of it, so it is a finger wide in
-	   both directions without taking a row of its own. */
 	.clear {
 		position: absolute;
 		right: var(--space-2);
@@ -58,7 +42,6 @@
 		cursor: pointer;
 	}
 
-	/* Current color, a stroke and no fill, at the size of the word beside it. */
 	.clear svg {
 		width: 1em;
 		height: 1em;

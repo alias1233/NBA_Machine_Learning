@@ -1,9 +1,4 @@
-"""
-Collecting the schedule, which is the games that have not been played yet.
-
-One request covers a whole season, so an update refetches the season outright rather than working
-out what changed. That is also what keeps a postponed game's new date correct.
-"""
+"""Collects the season schedule."""
 
 from typing import Iterable
 
@@ -16,13 +11,7 @@ def collect(
     seasons: Iterable[int] | None = None,
     print_debug: bool = True
     ) -> int:
-    """
-    Writes one row per scheduled game to the store and returns how many were written.
-
-    Args:
-        seasons defaults to the season under way and the one after it, because next season's
-        schedule is published months before it starts.
-    """
+    """Fetches the schedule for the given seasons, stores it, and returns the number of games written."""
 
     if seasons is None:
         seasons = (season.current_season(), season.current_season() + 1)

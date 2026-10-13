@@ -1,4 +1,4 @@
-"""Prevents provider-native identifiers from sharing one data directory."""
+"""Makes sure a data directory is only used with one data source, since IDs differ between sources."""
 
 from nba_ml import paths
 
@@ -6,7 +6,7 @@ MARKER = paths.DATA_DIRECTORY / "data_source"
 LEGACY_SOURCE = "nba_api"
 
 def claim(source_name: str):
-    """Claim this data directory for one source, or refuse an incompatible source."""
+    """Marks the data directory as belonging to a source. Raises an error if it belongs to another one."""
 
     if MARKER.exists():
         held = MARKER.read_text(encoding="utf-8").strip()

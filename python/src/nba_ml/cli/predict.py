@@ -1,12 +1,4 @@
-"""
-Predicting one statistic in one game, with a model of any family.
-
-Which model to use is an argument and the family it belongs to decides what else the request has to
-name, so adding a family is one entry in PREDICTORS.
-
-Every name typed in is resolved against the stores, so this reaches no data service and works
-offline. Collect first, because a prediction is only as current as what is held.
-"""
+"""Command for running a prediction with any model."""
 
 import argparse
 from argparse import Namespace
@@ -38,8 +30,6 @@ def _player_id(name: str) -> int:
     return found[0].id
 
 def _team_id(abbreviation_or_name: str) -> int:
-    """Accepts either a tricode such as LAL or a team name, since both are easy to type."""
-
     team = teams.find(abbreviation_or_name)
     if team is None:
         raise SystemExit(f"{abbreviation_or_name} does not correspond with a stored team. Run nba-collect teams.")
@@ -68,21 +58,12 @@ def _predict_player_stat(
     )
 
 def _refuse_a_named_player(specification: ModelSpecification, arguments: Namespace):
-    """Neither family below is asked about a player, so naming one is a mistake worth saying out loud."""
-
     if arguments.player:
         raise SystemExit(
             f"--player is only read by a player game statistics model, not {specification.name}."
         )
 
 def _side_of(player_id: int, name: str, game: Game) -> int:
-    """
-    Which side of the game a named player belongs to, taken from the team they last played for.
-
-    A team or game model reads both rosters, so a name has to land on one of them. Nothing stored
-    says which team somebody has just joined, which is what the site's own team pickers are for.
-    """
-
     team_id = player_games.latest_team_id(player_id, before=game.date)
 
     if team_id not in game.team_ids:
@@ -91,7 +72,7 @@ def _side_of(player_id: int, name: str, game: Game) -> int:
     return team_id
 
 def _rosters(game: Game, arguments: Namespace) -> dict[int, RosterScenario]:
-    """Who each side is playing without or with, keyed by team id."""
+    """Returns each team's roster changes from the command line arguments, keyed by team ID."""
 
     without: dict[int, set[int]] = {team_id: set() for team_id in game.team_ids}
     returning: dict[int, set[int]] = {team_id: set() for team_id in game.team_ids}
@@ -155,16 +136,8 @@ PREDICTORS: dict[str, Callable[[ModelSpecification, Game, Namespace], Prediction
     team_stat_specifications.MODEL_CATEGORY: _predict_team_stat,
     game_stat_specifications.MODEL_CATEGORY: _predict_game_stat
 }
-"""What answers with a model of each family, keyed by model category."""
 
 def _print_result(prediction: Prediction, output: ClassDistribution):
-    """
-    Sixty probabilities are unreadable printed out, so this prints the summary of them.
-
-    The output names every position, so this reads any answer shape. An expected value is only
-    printed for an ordered one, since averaging named categories means nothing.
-    """
-
     outcomes = [
         (output.label(position), probability)
         for position, probability in enumerate(prediction.values)
@@ -173,8 +146,6 @@ def _print_result(prediction: Prediction, output: ClassDistribution):
     print(f"\nBuilt from {prediction.past_games} past games.")
 
     if output.ordered:
-        # Read off what each position stands for rather than off its place in the array. Those are
-        # the same thing only where a range starts at zero and a position covers one whole number.
         expected_value = sum(
             output.value_of(position) * probability
             for position, probability in enumerate(prediction.values)

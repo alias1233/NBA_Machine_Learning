@@ -21,7 +21,6 @@
 
 <div class="page terms">
 	<article class="terms-copy">
-		<!-- The one date, off the page's own entry, so the sitemap and this line cannot disagree. -->
 		<p id="terms-updated" class="updated">
 			Last updated: {longDate(PAGES['/terms-and-conditions'].updated)}
 		</p>

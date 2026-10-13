@@ -1,16 +1,4 @@
-"""
-What each game statistics model is, and how it is fit.
-
-No model here names a team. An answer with a direction is read off the home team's row, so a positive
-point differential is the home team's margin and the first win category is the home team's. A game
-total is the same number from either side. A model whose answer belongs to a side says which one, so
-a caller holding the game can name the team rather than say home.
-
-A game is one sample rather than two, so this family has about 51,000 of them, half what team
-statistics has and fourteen times fewer than a player model. A model here answering with a number
-therefore answers in buckets of whole numbers rather than in single ones, because a class per outcome
-would be fit on a few hundred games and answer with noise.
-"""
+"""Defines the game stats models and their training parameters."""
 
 from dataclasses import dataclass, field
 from typing import ClassVar
@@ -26,19 +14,12 @@ from nba_ml.models.outputs import CategoryDistribution, IntegerDistribution
 from nba_ml.models.specifications import GameSide
 
 MODEL_CATEGORY = "game_stats"
-"""Names the folder every model of this family is saved under."""
+"""Name of the folder this family's models are saved in."""
 
 DRAWN_GAME = 0
-"""
-The point differential a basketball game cannot end on, because it is played until somebody leads.
+"""A point differential of 0 is impossible, since NBA games can't end in a tie."""
 
-Naming it takes it off the number line rather than out of one bucket, so the buckets either side of
-it are as wide as every other one. Nothing claims an outcome that never happens: no bucket covers it,
-no label mentions it, and the odds on a line never spread onto it.
-"""
-
-# How many of the most recent games the network reads per history, or None for a whole one. Around
-# half a season, which is as far back as a roster still resembles the one playing.
+# Number of most recent games the model uses per sequence, or None for all of them.
 MAX_SEQUENCE_LENGTH: int | None = 50
 
 GAME_STAT_TRAINING_PARAMETERS = TrainingParameters(
@@ -56,35 +37,18 @@ GAME_STAT_TRAINING_PARAMETERS = TrainingParameters(
     ],
     learning_rate=0.00003
 )
-"""
-Where this family is fit, each part measured against the alternatives on 2026-08-11.
-
-Fewer samples did not want a faster learning rate, as it might sound: every rate above this one was
-worse, and the fastest tried was 1.2% worse. Nor did they want more memory of past games. Widening
-the network either side of these numbers cost accuracy, which is what a family with 51,000 samples
-should be expected to do. The figures are in the training reports the runs wrote.
-"""
 
 @dataclass(frozen=True)
 class GameStatModelSpecification(ClassifierModelSpecification):
-    """
-    One game statistics model. Asking for one names the game and nothing else.
-
-    An answer is a chance per bucket of whole numbers, or a chance per named category where the
-    outcome sits on no number line, such as which side wins.
-
-    A whole number range is chosen so the class at each end folds in a tail no bigger than a class in
-    the body carries. Every value below the range counts as the first class and every value above it
-    as the last, so the ends are real outcomes rather than a cut in the data.
-    """
+    """Specification for a game stats model. A request only needs the game."""
 
     model_category: ClassVar[str] = MODEL_CATEGORY
 
     target: TargetValue
-    """Which finished column of the build the value being predicted is read off."""
+    """The value this model predicts."""
 
     predicted: str
-    """What a reader calls it."""
+    """Display name of the predicted value."""
 
     training_parameters: TrainingParameters = field(default=GAME_STAT_TRAINING_PARAMETERS, kw_only=True)
 
@@ -97,10 +61,7 @@ class GameStatModelSpecification(ClassifierModelSpecification):
         return features.SEQUENCES_READ
 
     def get_feature_set(self) -> FeatureSet:
-        """
-        Resolves which columns this model reads. Resolve it once per run and pass it down, so that
-        two models being built at the same time never share column state.
-        """
+        """Returns the feature set for this model."""
 
         return features.build_feature_set(self.target)
 
@@ -108,8 +69,7 @@ POINT_DIFFERENTIAL_MODEL = GameStatModelSpecification(
     name="point_differential",
     title="Point differential",
     description="The home team's margin, positive for a win and negative for a loss.",
-    # -42 to 42 without zero, in threes: -3 to -1, then 1 to 3. Zero falls on a bucket edge, so no
-    # bucket mixes a home win with a home loss and the range is the same reach either side.
+    # -42 to 42 in buckets of 3, skipping 0. For example, -3 to -1, then 1 to 3.
     output=IntegerDistribution(
         minimum_value=-42, outcomes=28, bucket_width=3, impossible_value=DRAWN_GAME
     ),
@@ -117,39 +77,23 @@ POINT_DIFFERENTIAL_MODEL = GameStatModelSpecification(
     predicted="point differential",
     read_from=GameSide.HOME
     )
-"""
-How much the home team wins or loses by. Everything above zero is the home team winning.
-
-A basketball game cannot end level, so zero is named as the one outcome that cannot happen and comes
-off the line entirely. The first bucket above it is a home win by one, two or three.
-"""
+"""Predicts the home team's margin. A positive value means the home team wins."""
 
 TOTAL_POINTS = GameStatModelSpecification(
     name="total_points",
     title="Total points",
     description="The points both teams score together.",
-    # 171 to 275, in threes. Wider than the other two because a total is two scores added, so it
-    # spreads about half as much again. Each end folds in about 1%, against 2.8% in the middle.
+    # 171 to 275 in buckets of 3.
     output=IntegerDistribution(minimum_value=171, outcomes=35, bucket_width=3),
     target=TargetValue.GAME_TOTAL,
     predicted="game total"
     )
-"""How many points both teams score together."""
 
 WIN_CATEGORIES = ("home win", "away win")
-"""
-What the win probability model answers with, in the order team_game_rows.WON and LOST number them.
-
-A sample is read off the home team's row, so its win is the first category, which is the one a reader
-is led with. A basketball game cannot end level, so the second is the away team winning rather than
-the home team not winning.
-
-Each name leads with the side it belongs to, which is what lets a caller holding the game put the
-team playing that side in place of the word.
-"""
+"""Output categories of the win probability model. The home win comes first."""
 
 WIN_CATEGORY_SIDES = (GameSide.HOME, GameSide.AWAY)
-"""Which side each win category names, read beside WIN_CATEGORIES by position."""
+"""The team each entry in WIN_CATEGORIES refers to, in the same order."""
 
 WIN_PROBABILITY_MODEL = GameStatModelSpecification(
     name="win_probability",
@@ -160,51 +104,36 @@ WIN_PROBABILITY_MODEL = GameStatModelSpecification(
     predicted="win chances",
     category_sides=WIN_CATEGORY_SIDES
     )
-"""
-The chance the home team wins.
 
-It reads exactly what the point differential model reads and is fit the same way, and the two answer
-the same question. This is the better answer of the two: adding up the positive half of a
-differential is a worse reading than a model fit to give the figure outright.
-"""
-
-# The three totals below are picked the way the game total was: each end class folds in about 1% of
-# the games played since 2015, and the bucket width is chosen so a class in the middle carries about
-# as much data as one of the game total's does, which is what bucket_width exists to control. Adding
-# two teams' lines together spreads a statistic about half as much again, so a class per whole number
-# already leaves each class as much data as a game total class has.
 TOTAL_REBOUNDS_MODEL = GameStatModelSpecification(
     name="total_rebounds",
     title="Total rebounds",
     description="The rebounds both teams take together.",
-    # 68 to 110, one class per rebound. Folds 1.0% below and 1.1% above, against 4.5% in the middle.
+    # 68 to 110, one class per rebound.
     output=IntegerDistribution(minimum_value=68, outcomes=43),
     target=TargetValue.TOTAL_REBOUNDS,
     predicted="total rebounds"
     )
-"""How many rebounds both teams take together."""
 
 TOTAL_ASSISTS_MODEL = GameStatModelSpecification(
     name="total_assists",
     title="Total assists",
     description="The assists both teams record together.",
-    # 31 to 68, one class per assist. Folds 0.9% below and 1.0% above, against 5.3% in the middle.
+    # 31 to 68, one class per assist.
     output=IntegerDistribution(minimum_value=31, outcomes=38),
     target=TargetValue.TOTAL_ASSISTS,
     predicted="total assists"
     )
-"""How many assists both teams record together."""
 
 TOTAL_THREE_POINTERS_MODEL = GameStatModelSpecification(
     name="total_three_pointers",
     title="Total three-pointers",
     description="The three-pointers both teams make together.",
-    # 10 to 38, one class per make. Folds 0.6% below and 1.0% above, against 6.5% in the middle.
+    # 10 to 38, one class per make.
     output=IntegerDistribution(minimum_value=10, outcomes=29),
     target=TargetValue.TOTAL_THREE_POINTERS,
     predicted="total three-pointers"
     )
-"""How many three-pointers both teams make together."""
 
 ALL_MODEL_SPECIFICATIONS = {
     specification.name: specification

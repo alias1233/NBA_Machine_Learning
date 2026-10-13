@@ -1,13 +1,4 @@
-"""
-The SQLite table layer every store is built on.
-
-A connection belongs to the thread that opened it, because SQLite refuses one opened elsewhere and
-the prediction service answers requests on several threads at once. Open a table with
-`with database:` around the work, and do not nest two of those blocks on the same table.
-
-These files are read by the prediction service and written by the collection job at the same time,
-from two containers sharing one directory, so every connection is opened for that. See PRAGMAS.
-"""
+"""SQLite table wrapper used by every store."""
 
 import sqlite3 as sq
 import threading
@@ -18,30 +9,16 @@ from typing import Any, Collection
 import pandas as pd
 
 BUSY_TIMEOUT_SECONDS = 30
-"""
-How long a statement waits for another writer before it gives up. Python's own default is five.
-
-The backstop rather than the fix. Write-ahead logging below is what stops a reader queueing behind
-a writer at all. This only decides how long one waits in the cases that still queue, such as the
-moment a second writer holds the file.
-"""
+"""Seconds a statement waits on a locked database before failing."""
 
 PRAGMAS = (
     f"PRAGMA busy_timeout = {BUSY_TIMEOUT_SECONDS * 1000}",
-    # Write-ahead logging is what lets a reader and a writer hold the same file at once. On a
-    # rollback journal a reader queues behind the writer and is refused once its wait runs out.
-    # Measured against a batch-committing writer: with no wait allowed, eight of eighteen reads were
-    # refused on a rollback journal and none under this. It is a property of the file rather than
-    # the connection, so setting it again once it is on costs one read.
+    # WAL mode lets readers keep reading while another connection writes.
     "PRAGMA journal_mode = WAL",
-    # A commit is written but not flushed to the disk platter. A power cut can then lose the last
-    # transactions without corrupting the file, and every row here is collected again in one run.
     "PRAGMA synchronous = NORMAL"
 )
 
 class DataType(Enum):
-    """A value's type. Each name is also the SQL name for that type."""
-
     INTEGER = "integer"
     REAL = "real"
     TEXT = "text"
@@ -50,13 +27,13 @@ class DataType(Enum):
 
 @dataclass(frozen=True)
 class Category():
-    """One column: what it is called, and what it holds."""
+    """A table column with its name and data type."""
 
     category_name: str
     category_type: DataType
 
 class Categories():
-    """Builds a Category list, registering each one as it is named."""
+    """Collects Category objects into a list as they are added."""
 
     def __init__(self):
         self.categories: list[Category] = []
@@ -78,18 +55,12 @@ class DataConflictHandler(Enum):
         REPLACE = "REPLACE"
 
 def held_in(category: Category, values: Collection[int]) -> str:
-    """
-    A filter matching any of the given whole numbers, for [Database.query] and [Database.delete].
-
-    They are written into the condition rather than bound, because one bound parameter is one value
-    and this is a list of them. Each is read as an integer first, so nothing else can reach the SQL.
-    An empty list matches nothing, which is what a caller asking about no rows means.
-    """
+    """Returns a SQL IN condition for the given integers."""
 
     return f"{category.category_name} IN ({','.join(str(int(value)) for value in values)})"
 
 class Database():
-    """One SQLite table, holding the columns it has and the commands that read and write it."""
+    """A single SQLite table with its columns and the SQL commands for reading and writing it."""
 
     def __init__(
         self,
@@ -100,12 +71,6 @@ class Database():
         primary_keys: list[Category],
         indexes: list[list[Category]] | None = None
         ):
-        """
-        Args:
-            indexes are the column groups a filter that is not the primary key reads. Without one,
-            every such query reads the whole table, which is what makes a large archive slow.
-        """
-
         self.filepath = filepath
         self.name = name
         self.categories = categories
@@ -135,7 +100,7 @@ class Database():
 
     def initialize_components(self):
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        # Read before connecting, because connecting is what creates the file.
+        # Check before connecting, since connecting creates the file.
         file_is_new = not self.filepath.exists()
         connection = sq.connect(self.filepath)
 
@@ -153,13 +118,7 @@ class Database():
             raise
 
     def _prepare_schema(self, file_is_new: bool):
-        """
-        Creates the table, any column named since it was created, and the indexes.
-
-        Once per process, because the service opens a connection per query and this is the same
-        work every time. A file that was not there is prepared whatever this process did before,
-        which is what makes a data directory that has been replaced behave like a new one.
-        """
+        """Creates the table, any newly added columns, and the indexes."""
 
         if self._prepared and not file_is_new:
             return
@@ -172,7 +131,7 @@ class Database():
             self._prepared = True
 
     def add_missing_columns(self):
-        """Adds any column named after the table was created. New columns hold null until filled."""
+        """Adds columns defined after the table was created. Existing rows get null in them."""
 
         held = {row[1] for row in self.cursor.execute(f"PRAGMA table_info({self.name})")}
 
@@ -189,8 +148,6 @@ class Database():
         data_conflict_handler: DataConflictHandler
         ) -> str:
 
-        # The columns are named rather than left to the table's own order, so a column added later
-        # still receives the value meant for it.
         column_names = ",".join(category.category_name for category in categories)
         placeholders = ",".join(f":{category.category_name}" for category in categories)
 
@@ -211,8 +168,6 @@ class Database():
 
     @staticmethod
     def get_index_command(name: str, columns: list[Category]) -> str:
-        """Named after the columns it covers, so the same index is never created twice."""
-
         column_names = [category.category_name for category in columns]
 
         return (
@@ -237,13 +192,7 @@ class Database():
         return {category.category_name : v for category, v in value.items()}
 
     def add_dataframe(self, dataframe: pd.DataFrame) -> int:
-        """
-        Adds every row of the given dataframe, reading one column per category and ignoring the
-        rest. Returns how many rows were added.
-
-        Raises:
-            ValueError if the dataframe is missing a category's column.
-        """
+        """Inserts every row of the given dataframe and returns the number of rows."""
 
         missing = [name for name in self.category_names if name not in dataframe.columns]
         if missing:
@@ -266,17 +215,7 @@ class Database():
             order_by: str | None = None,
             distinct: bool = False
             ) -> list:
-        """
-        Queries the table and returns the rows found.
-
-        Args:
-            SQL_condition: a filter in SQL, naming each value it compares against as :COLUMN_NAME.
-            condition_params: the value for each category named in SQL_condition.
-            categories: which columns to return. None returns all of them.
-            limit: the most rows to return. None returns all of them.
-            order_by: a sort in SQL, such as "GAME_DATE DESC", which a limit reads the top of.
-            distinct: drops repeated rows in SQLite rather than handing every one of them back.
-        """
+        """Queries the table. Parameters in SQL_condition are written as :COLUMN_NAME."""
 
         command = (
             f"SELECT {'DISTINCT ' if distinct else ''}{self.get_query_columns(categories)} "
@@ -305,7 +244,7 @@ class Database():
             order_by: str | None = None,
             distinct: bool = False
             ) -> pd.DataFrame:
-        """Identical to [query] except that the rows are returned as a labeled pandas.DataFrame."""
+        """Same as query, but returns the rows as a DataFrame."""
 
         data = self.query(SQL_condition, condition_params, categories, limit, order_by, distinct)
 
@@ -316,10 +255,7 @@ class Database():
         SQL_condition: str,
         condition_params: dict[Category, Any] | None = None
         ) -> int:
-        """
-        Removes the rows matching a filter written the same way [query] writes one. Returns how many
-        went. A filter is required, so nothing can empty a table by leaving one out.
-        """
+        """Deletes the rows matching the condition and returns the number deleted."""
 
         self.cursor.execute(
             f"DELETE FROM {self.name} WHERE {SQL_condition}",
@@ -329,7 +265,7 @@ class Database():
         return self.cursor.rowcount
 
     def max_value(self, category: Category) -> Any:
-        """The largest value held in one category, or None when the table is empty."""
+        """Returns the largest value in a column, or None if the table is empty."""
 
         self.cursor.execute(f"SELECT MAX({category.category_name}) FROM {self.name}")
         return self.cursor.fetchone()[0]

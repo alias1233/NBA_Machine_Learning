@@ -1,21 +1,4 @@
-/**
- * The model families the site knows about.
- *
- * A family is named after what a reader has to choose before it can answer: a player, a team, or a
- * game. That is what makes each family a page of its own, because it is what the page asks for.
- *
- * The service says which family each model belongs to and whether it is published. This adds the
- * part only the site knows: the route the family is predicted on, and how it is described to a
- * reader. A family is described here and nowhere else, so the header menu, the home page and the
- * model page all read the same words.
- *
- * Adding a family is one entry here and one folder under `src/routes/models/`.
- *
- * It also holds the words read off a model rather than off an answer: what it predicts, whose number
- * an answer is when it belongs to one side of a game, and the sentence an answer is announced with.
- */
-
-// Relative and extended, so `npm test` can read this file with Node exactly as it stands.
+// Relative path with the .ts extension, so Node can run this file in `npm test`.
 import { CATEGORY_DECIMALS, expectedValue, figureText, sharePercentages } from './odds.ts';
 
 import type { Answer } from './odds.ts';
@@ -32,8 +15,6 @@ export type ModelFamily = {
 };
 
 export const MODEL_FAMILIES: ModelFamily[] = [
-	// Each description covers everything its family holds. Naming two or three of fourteen models
-	// reads as the whole list to somebody who has not opened the family yet.
 	{
 		name: 'player_stats',
 		slug: 'player-stats',
@@ -54,43 +35,27 @@ export const MODEL_FAMILIES: ModelFamily[] = [
 	}
 ];
 
-/**
- * What a model is printed as wherever it is listed rather than run.
- *
- * The words are the model's own, authored beside it in the service, so the home page's index and a
- * family's About page name it identically without either writing the words down again.
- */
+/** Fields shown for a model in a list. */
 export type ListedModel = Pick<Model, 'name' | 'title' | 'description' | 'published'>;
 
 export type ListedFamily = ModelFamily & {
-	/** Whether the service holds a trained model in it, which is what makes it predictable. */
+	/** True if the family has at least one trained model. */
 	published: boolean;
-	/** Everything in the family, in the order the service names it. */
+	/** All models in the family, in the order the service returns them. */
 	models: ListedModel[];
 };
 
-/** Where every family is listed. The Models tab, the hero's button and /models all lead here. */
 export const MODELS_SECTION = 'models';
 export const MODELS_PATH = `/#${MODELS_SECTION}`;
 
 export const familyPath = (family: ModelFamily) => `/models/${family.slug}`;
 
-/**
- * The section of a family's own page that lists every model it holds and the figures each has
- * earned, and the link that lands a reader on it.
- */
 export const FAMILY_MODELS_SECTION = 'models';
 
 export const familyModelsPath = (family: ModelFamily) =>
 	`${familyPath(family)}#${FAMILY_MODELS_SECTION}`;
 
-/**
- * Which stock a page is printed on: the family whose pages it is one of, or null for the site's own.
- *
- * Every plate on the site prints in the same two inks and only the ground changes, so this is the
- * whole of what a family colors. The value is the family's slug, which `app.css` names the grounds
- * by.
- */
+/** Returns the slug of the family a path belongs to, or null if it is not a family page. */
 export const plateOf = (pathname: string): string | null =>
 	MODEL_FAMILIES.find((family) => {
 		const path = familyPath(family);
@@ -98,17 +63,8 @@ export const plateOf = (pathname: string): string | null =>
 		return pathname === path || pathname.startsWith(`${path}/`);
 	})?.slug ?? null;
 
-/**
- * The families to list, and whether each can be predicted with yet.
- *
- * A family the service does not name at all is left out, so a service that is not answering shows
- * the empty state rather than a page of families nothing stands behind. One it names but has not
- * trained is listed and marked, because a family on the way is worth knowing about.
- */
 export const listedFamilies = (models: Model[]): ListedFamily[] =>
 	MODEL_FAMILIES.map((family) => {
-		// Only the four words a listing prints. The rest of a model is what a prediction page needs,
-		// and carrying it into every page's data is weight nothing on them reads.
 		const held: ListedModel[] = models
 			.filter((model) => model.family === family.name)
 			.map(({ name, title, description, published }) => ({
@@ -125,10 +81,7 @@ export const listedFamilies = (models: Model[]): ListedFamily[] =>
 		};
 	}).filter((family) => family.models.length > 0);
 
-/**
- * What a model predicts, written out. The service names it in lowercase already, so one model reads
- * "points" and the combined one reads "points, rebounds and assists".
- */
+/** Joins the predicted stats into a phrase, such as "points" or "points, rebounds and assists". */
 export function predictsPhrase(predicts: string[]): string {
 	if (predicts.length < 2) return predicts[0] ?? '';
 
@@ -137,28 +90,17 @@ export function predictsPhrase(predicts: string[]): string {
 
 export const sentenceCase = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-/** The two sides of the game being asked about, named in full. */
+/** Full team names for the home and away sides of a game. */
 export type GameSides = Record<GameSide, string>;
 
-/**
- * What the lead figure counts and whose it is, for a model read from one side of the game.
- *
- * A game statistic names no team, so nothing but this says which of the two a margin belongs to.
- * Every other family names its subject in the heading already, so it gets nothing here.
- */
+/** Returns the stat and the team it is counted for, for a model tied to one side of the game. */
 export function figureNote(model: Model | null, sides: GameSides | null): string {
 	if (!model?.read_from || !sides) return '';
 
 	return `${predictsPhrase(model.predicts)} for ${sides[model.read_from]}`;
 }
 
-/**
- * The categories as a reader sees them once a game is chosen.
- *
- * A category naming a side of the game leads with that side's word, so the team playing it goes in
- * place of the word and "home win" is read as "Toronto Raptors win". Null leaves the model's own
- * words, which is every answer naming no side.
- */
+/** Returns the category names with team names filled in, or null to keep the model's own names. */
 export function namedCategories(model: Model | null, sides: GameSides | null): string[] | null {
 	const named = model?.category_sides;
 
@@ -175,11 +117,6 @@ export function namedCategories(model: Model | null, sides: GameSides | null): s
 	});
 }
 
-/**
- * The one sentence an answer is announced with, which is whatever its block leads with.
- *
- * `names` is what the categories are called for the chosen game, where they name one of its sides.
- */
 export function answerSentence(answer: Answer, stat: string, names: string[] | null = null): string {
 	if (answer.kind === 'integer_distribution') {
 		const { distribution } = answer;

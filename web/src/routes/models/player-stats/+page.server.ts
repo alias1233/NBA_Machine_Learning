@@ -1,21 +1,3 @@
-/**
- * The player game statistics page.
- *
- * The whole request lives in the URL, so a prediction renders on the server and a link to one is
- * shareable. A half-filled URL is a valid page: it renders the parameters and no result.
- *
- * A request names one of the games on the board, which of its two teams the player is on, and the
- * player, plus the roster changes the reader made. The game is named by its id alone, because the
- * schedule is the only source of a game and a game it does not hold is one no model can answer
- * about.
- *
- * The player's own team's roster is read as well, and opens on the lineup the collected injury
- * report and roster snapshot expects of it, which the reader is free to change.
- *
- * A model is offered only if it has a trained file and answers in a shape this page has a reading
- * for. A reader is never shown a stat that cannot answer.
- */
-
 import { isHttpError } from '@sveltejs/kit';
 
 import { DRAWN_KINDS } from '$lib/odds';
@@ -42,9 +24,6 @@ export const load: PageServerLoad = async ({ url }) => {
 	let models: Model[] = [];
 	let games: ScheduledGame[] = [];
 
-	// The family's standing listing, asked for alongside everything else. It is not the same set as
-	// the models a prediction can be run with: one that is not trained yet is still worth reading
-	// about, and losing the figures must not take the form down with them.
 	const listing = getScoredModels(FAMILY).catch(() => []);
 
 	try {
@@ -56,8 +35,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		);
 		games = upcoming;
 	} catch {
-		// Nothing on this page works without the service. With no published model the page is its
-		// own empty state, which is what the reader sees.
+		// If the service is down, the page shows its empty state.
 	}
 
 	const asked = models.find(({ name }) => name === parameters.get('model'));
@@ -66,8 +44,6 @@ export const load: PageServerLoad = async ({ url }) => {
 	const gameId = readGameId(parameters);
 	const selectedGame = games.find((game) => game.id === gameId) ?? null;
 
-	// Which side of the game the player is on. The reader names it, and only one of the game's two
-	// teams is an answer to the question.
 	const namedTeam = parameters.get('team') ?? '';
 	const sides = selectedGame
 		? [selectedGame.away_team.abbreviation, selectedGame.home_team.abbreviation]
@@ -76,25 +52,17 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const playerId = Number(parameters.get('player')) || null;
 
-	// A chosen player is never dropped for being off both rosters. Somebody who has just joined a
-	// team has no game on it yet and so appears on neither, and predicting exactly them is one of
-	// the things this site is for.
+	// A player who just joined a team is on neither roster, so a missing roster entry does not drop the player.
 	const [rosters, player] = await Promise.all([
 		selectedGame === null ? [] : getRosters(selectedGame.id).catch(() => []),
 		playerId === null ? null : getPlayer(playerId).catch(() => null)
 	]);
 
-	// A roster naming the player is the last word on which side they are on, whatever the request
-	// said, so somebody picked out of a league search is answered for the team they actually play
-	// for. Nobody names a player who has just joined, which is the case the reader's answer is for.
+	// If a roster includes the player, that team is used instead of the one in the request.
 	const playerTeam =
 		rosters.find((roster) => roster.players.some(({ id }) => id === playerId))?.team.abbreviation ??
 		namedSide;
 
-	// One team's roster, because the player's own team is the only one their model reads. The lineup
-	// its game expects is what the page opens on, less the player being asked about: a statistic is
-	// about somebody taking the floor, so a suggestion that sits them out is a question with no
-	// answer. A reader who names them out by hand is still answered as they asked.
 	const expected = expectedAround(rosterOf(rosters, playerTeam), playerId);
 	const scenario = await readScenario(parameters, expected);
 

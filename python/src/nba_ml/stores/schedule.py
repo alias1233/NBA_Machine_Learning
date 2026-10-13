@@ -1,14 +1,4 @@
-"""
-Every game of a season, played or not.
-
-This is the only table holding games that have no box score, and it is what lets the site name a
-game before it happens. The whole season is kept rather than only what is still to come, because
-deciding whether an upcoming game can be predicted means knowing which earlier games are still
-missing. See nba_ml/upcoming.py for that rule.
-
-A mock game is one added by hand for testing. It is stored beside the real ones so it behaves
-exactly like one, and it carries a flag so every mock game can be removed in a single step.
-"""
+"""Stores the game schedule, including games already played."""
 
 from datetime import date, datetime
 from typing import Collection
@@ -24,7 +14,7 @@ ALL_CATEGORIES = Categories()
 GAME_ID = ALL_CATEGORIES.add_category("GAME_ID", DataType.INTEGER)
 GAME_DATE = ALL_CATEGORIES.add_category("GAME_DATE", DataType.TEXT)
 TIPOFF = ALL_CATEGORIES.add_category("TIPOFF", DataType.TEXT)
-"""When the game starts, written in UTC. Null when the service does not publish a time yet."""
+"""Start time in UTC. Null if the data source has no time for the game yet."""
 
 HOME_TEAM_ID = ALL_CATEGORIES.add_category("HOME_TEAM_ID", DataType.INTEGER)
 AWAY_TEAM_ID = ALL_CATEGORIES.add_category("AWAY_TEAM_ID", DataType.INTEGER)
@@ -40,17 +30,13 @@ PRIMARY_KEYS = [
 ]
 DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 
-# Every read here is ordered by the date and the tipoff, and the ones that are not a single game are
-# narrowed by the date as well. The primary key covers neither, so without this each of them reads
-# the whole season and then sorts it.
 INDEXES = [[GAME_DATE, TIPOFF]]
 
 DATABASE = Database(
     FILEPATH, NAME, ALL_CATEGORIES.get_categories(), DATA_CONFLICT_HANDLER, PRIMARY_KEYS, INDEXES
 )
 
-# A mock game's id keeps the shape of a real one, phase digit first, with a season of 99 that no real
-# season produces. That is only so the two cannot collide. IS_MOCK is what removal reads.
+# Mock game IDs use 99 as the season digits, which no real season has.
 MOCK_SEASON_DIGITS = "99"
 
 def _to_row(game: ScheduledGame) -> dict:
@@ -75,13 +61,13 @@ READ_CATEGORIES = [
     STATUS,
     IS_MOCK
 ]
-"""The order _from_row reads a row in, named outright so a column added later cannot shift it."""
+"""Column order expected by _from_row."""
 
 TEAM_DATE_CATEGORIES = [GAME_ID, GAME_DATE, HOME_TEAM_ID, AWAY_TEAM_ID]
-"""What team_game_dates hands back, in that order. See nba_ml/upcoming.py for what reads them."""
+"""Columns returned by team_game_dates, in order."""
 
 TeamGameDate = tuple[int, str, int, int]
-"""One team_game_dates row: the game's id, its date as stored, then the home and away team."""
+"""A row from team_game_dates: (game ID, date string, home team ID, away team ID)."""
 
 def _from_row(row: tuple) -> ScheduledGame:
     game_id, game_date, tipoff, home_team_id, away_team_id, season_type, status, is_mock = row
@@ -101,7 +87,7 @@ def _from_row(row: tuple) -> ScheduledGame:
 
 # Writing
 def store(games: list[ScheduledGame]) -> int:
-    """Adds the given games, replacing any already held. Returns how many were written."""
+    """Inserts the given games, replacing existing ones. Returns the number of rows written."""
 
     if not games:
         return 0
@@ -110,7 +96,7 @@ def store(games: list[ScheduledGame]) -> int:
         return DATABASE.add_dataframe(pd.DataFrame([_to_row(game) for game in games]))
 
 def next_mock_game_id(season_type: season.SeasonType) -> int:
-    """An unused id for a mock game of the given phase, following on from the mock games held."""
+    """Returns the next unused mock game ID for the given season type."""
 
     prefix = season.GAME_ID_PREFIXES[season_type] + MOCK_SEASON_DIGITS
     held = [game.id for game in all_mock_games() if str(game.id).startswith(prefix)]
@@ -136,26 +122,13 @@ def all_games() -> list[ScheduledGame]:
     return _games()
 
 def team_game_dates() -> list[TeamGameDate]:
-    """
-    Every scheduled game as its id, its date and its two teams.
-
-    Four columns as they are stored rather than whole ScheduledGame objects, because the collection
-    rule reads nothing else and building the season into objects on every render is what
-    /games/upcoming used to cost. Dates stay as text: they are written in one sortable form, so
-    comparing two of them needs no parsing. Pair it with games_with_ids.
-    """
+    """Returns the ID, date and team IDs of every scheduled game."""
 
     with DATABASE:
         return DATABASE.query(categories=TEAM_DATE_CATEGORIES)
 
 def games_with_ids(game_ids: Collection[int]) -> list[ScheduledGame]:
-    """
-    The named games, whole, ordered like every other read here.
-
-    The pair to team_game_dates: pick from the cheap columns, then read only what was picked. An id
-    the table no longer holds is simply absent, so a caller reading twice never has to allow for the
-    table having moved between the two. See nba_ml/upcoming.py.
-    """
+    """Returns the games with the given IDs, sorted by date and tipoff."""
 
     if not game_ids:
         return []
@@ -180,7 +153,7 @@ def get_game(game_id: int) -> ScheduledGame | None:
     return found[0] if found else None
 
 def remove_mock_games() -> int:
-    """Deletes every mock game and returns how many went. Real games are untouched."""
+    """Deletes every mock game and returns the number deleted."""
 
     with DATABASE:
         return DATABASE.delete(f"{IS_MOCK.category_name} = 1")

@@ -1,9 +1,4 @@
-"""
-Collecting NBA data into the local stores.
-
-Every choice is a command line argument and nothing is asked for at a prompt, so the command a
-person runs by hand is the same command a scheduled job runs.
-"""
+"""Command for collecting NBA data into the local databases."""
 
 import argparse
 from datetime import date
@@ -98,9 +93,7 @@ def collect_all(
     print_debug: bool = True,
     refresh_schedule: bool = True
     ) -> int:
-    """Collect the stores a serving update needs, then refresh the schedule and the rosters."""
-
-    # Read before anything is collected, because collecting is what stops the archive being empty.
+    # Check this before collecting games, since that fills the player game store.
     collect_every_player = from_start or player_games.latest_game_date() is None
 
     return (

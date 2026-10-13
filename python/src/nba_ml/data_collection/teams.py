@@ -1,4 +1,4 @@
-"""Collecting the thirty teams. One fetch, and it rarely changes."""
+"""Collects the NBA teams."""
 
 import pandas as pd
 
@@ -6,7 +6,7 @@ from nba_ml.sources.base import DataSource, SourceDataError
 from nba_ml.stores import teams as teams_store
 
 def collect(source: DataSource, print_debug: bool = True) -> int:
-    """Writes one row per team to the store and returns how many were written."""
+    """Fetches the teams, stores them, and returns the number of rows written."""
 
     teams = source.teams()
     if not teams:

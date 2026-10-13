@@ -20,12 +20,10 @@ dependencies = [
     "fastapi[standard]>=0.141.1,<0.142.0",
     "pydantic>=2.0",
 
-    # Windows ships no time zone database, and a game date is a United States eastern date.
+    # Windows has no built-in time zone database.
     "tzdata>=2024.1",
 ]
 
-# Only training and the notebooks need these, and neither runs on the server, so the deployed image
-# is built with --no-dev and never installs them.
 [dependency-groups]
 dev = [
     "pytest>=8.3",
@@ -33,8 +31,7 @@ dev = [
     "matplotlib",
 ]
 
-# The server has no graphics card and the CUDA build of torch is gigabytes of it. Linux is the
-# server, so only Linux takes the processor-only wheel. Every other platform resolves as before.
+# Use the CPU-only build of torch on Linux, which is what the server runs.
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 

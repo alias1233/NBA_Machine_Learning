@@ -1,9 +1,4 @@
-"""
-Predicting one player's statistic in one game.
-
-Everything specific to this family sits here: the request only it takes, and the endpoint that
-answers it. Another family is another module of the same shape, mounted alongside this one.
-"""
+"""Prediction endpoint for the player stats models."""
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -19,7 +14,7 @@ class PredictionRequest(BaseModel):
     player_id: int
     game: GameRequest
     player_team: str | None = None
-    """Only needed when the player has just moved and no game records it yet."""
+    """Only needed if the player just changed teams and hasn't played for the new one yet."""
 
     scenario: ScenarioRequest = Field(default_factory=ScenarioRequest)
 

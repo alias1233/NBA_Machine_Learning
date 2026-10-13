@@ -1,7 +1,3 @@
-/**
- * Information about the owner of this site.
- */
-
 /** Contact information */
 export const CONTACT_EMAIL = `bazaarballcontact@gmail.com`;
 

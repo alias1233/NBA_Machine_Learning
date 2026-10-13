@@ -1,19 +1,3 @@
-<!--
-	The whole prediction, one bar per outcome the model can answer with.
-
-	Bars are discrete because the outcomes are. A smooth curve would claim the model answers in
-	fractions of a point. Where a model answers in buckets, one bar covers that run of whole numbers
-	and is that many times wider on the number line, so a line drawn at any value still lands in the
-	right place. The line splits the chart and the two masses either side of it are the odds, so the
-	split the readout reports is always the split the chart shows.
-
-	It draws on the surface its caller owns, because the chart, the line and the odds are one object.
-
-	Two densities, one drawing, and neither ever travels sideways. In an answer it fills its box. In
-	the detailed view it is given a probability axis, a mark for what the model expects, and a figure
-	over every bar wide enough to hold one. Everything that cannot fit thins out rather than shrinking
-	below legible, because the exact figures are one press away.
--->
 <script lang="ts">
 	import { axisAt, axisSpan, axisTicks, expectedValue, outcomeOf, outcomes } from '$lib/odds';
 
@@ -21,52 +5,49 @@
 
 	type Props = {
 		distribution: Distribution;
-		/** What the model predicts, lowercase, for the line a bar reads out as. */
+		/** Name of the predicted stat, in lowercase. */
 		stat: string;
 		line: number;
-		/** The outcomes to draw. Its caller owns it, because the handle travels across the same run. */
+		/** Range of outcomes to show. */
 		range: ChartRange;
-		/** Stands in for the drawing when it cannot be seen. */
+		/** Text description of the chart for screen readers. */
 		summary: string;
-		/** The detailed view: a probability axis, what the model expects, and a figure over each bar. */
+		/** Detailed view. Adds a probability axis, the expected value and a percentage above each bar. */
 		detailed?: boolean;
-		/** Whether this instance should print its bars in. */
+		/** True if the bars should animate in. */
 		animate?: boolean;
 	};
 
 	let { distribution, stat, line, range, summary, detailed = false, animate = true }: Props = $props();
 
-	// Measured against one column of the drawing, in pixels, because what fits is a question about
-	// the bars rather than about the screen.
+	// The sizes below are in pixels and are compared against the width of one column.
 
-	/** Below this a gap eats the bar, so the run is drawn as one silhouette rather than as slivers. */
+	/** Columns narrower than this get no gap between bars. */
 	const GAP_FLOOR = 6;
-	/** A gap of this share of the column, so the drawing reads the same at every density. */
+	/** The gap is the column width divided by this. */
 	const GAP_SHARE = 12;
-	/** Past which a wider bar gains nothing from a wider gap. */
+	/** Largest gap between bars. */
 	const GAP_CEILING = 6;
-	/** What a bar needs before it can carry its own chance over it. */
+	/** Minimum column width for showing a percentage above each bar. */
 	const FIGURE_ROOM = 44;
-	/** What an outcome mark needs before the marks beside it start to touch. */
+	/** Minimum space an axis label needs so labels do not overlap. */
 	const MARK_ROOM = 32;
 
-	/** The intervals a run is marked at, coarsening until the marks fit. */
+	/** Possible intervals between axis labels. The smallest one that fits is used. */
 	const MARK_STEPS = [1, 2, 5, 10, 20, 50, 100];
 
 	const bars = $derived(outcomes(distribution).slice(range.first, range.last + 1));
 
-	/** The stretch of the axis the drawn run covers, which every mark is placed against. */
 	const span = $derived(axisSpan(distribution, range));
 
 	const tallest = $derived(Math.max(...bars.map(({ probability }) => probability)));
 
-	/** Zero until the drawing has been laid out, which on the server is always. */
+	/** Chart width in pixels. Zero until it is measured, and always zero on the server. */
 	let width = $state(0);
 
-	/** One column of the drawing. The gap is drawn inside it, so this is also the spacing of marks. */
+	/** Width of one column, including its gap. */
 	const column = $derived(bars.length > 0 && width > 0 ? width / bars.length : 0);
 
-	// Unmeasured, a hairline is the usual answer, so it holds one until it knows better.
 	const gap = $derived.by(() => {
 		if (column === 0) return 1;
 		if (column < GAP_FLOOR) return 0;
@@ -74,27 +55,17 @@
 		return Math.min(Math.round(column / GAP_SHARE), GAP_CEILING);
 	});
 
-	/** Whether a bar is wide enough to carry its own chance. Only the detailed view offers one. */
+	/** True if the bars are wide enough to show a percentage above each one. */
 	const figures = $derived(detailed && column >= FIGURE_ROOM);
 
-	// The detailed view reads the bars against a marked axis. In an answer there is no axis, so the
-	// tallest bar fills the box it is given.
 	const axis = $derived(
 		detailed ? axisTicks(tallest) : { top: tallest, step: tallest, values: [] as number[] }
 	);
 
 	const expected = $derived(expectedValue(distribution));
 
-	/**
-	 * Round values at whatever interval fits, plus the two ends where they would not crowd one, plus
-	 * the value the model can never answer with.
-	 *
-	 * That last one holds no room on the axis and carries no bar, but it is the join the two runs
-	 * either side of it meet on and the number a reader reads both against, so it is written under
-	 * the join whatever interval the rest of the marks land on.
-	 */
+	/** Axis labels. Round numbers at the chosen interval, plus both ends and the impossible value if there is one. */
 	const marks = $derived.by(() => {
-		// Measured in whole numbers rather than in bars, because a bar can cover several of them.
 		const needed = (column > 0 ? MARK_ROOM / column : 5) * distribution.bucketWidth;
 		const step = MARK_STEPS.find((size) => size >= needed) ?? MARK_STEPS.at(-1)!;
 
@@ -116,7 +87,7 @@
 			.sort((first, second) => first - second);
 	});
 
-	/** Which outcome is being read, as a position in the answer, or null when none is. */
+	/** Index of the outcome being hovered or focused, or null if there is none. */
 	let reading = $state<number | null>(null);
 
 	const read = $derived(
@@ -127,17 +98,12 @@
 
 	const percent = (probability: number) => `${(probability * 100).toFixed(1)}%`;
 
-	// The gap is drawn inside a column rather than between two, so a column is exactly a bar's share
-	// of the width and a value sits at the same fraction of it however wide the gaps are. Placed off
-	// the axis rather than off the value, so a value the model can never answer with takes no room.
 	const positionOf = (value: number) =>
 		((axisAt(distribution, value) - span.from) / (span.to - span.from)) * 100;
 
 	const within = (value: number) =>
 		axisAt(distribution, value) >= span.from && axisAt(distribution, value) <= span.to;
 
-	// A round step is written without a decimal, so an axis climbing in whole percentages reads as
-	// whole numbers.
 	const tick = (value: number) =>
 		`${(value * 100).toFixed(Number.isInteger(axis.step * 100) ? 0 : 1)}%`;
 
@@ -148,8 +114,7 @@
 		reading = range.first + Math.min(Math.max(index, 0), bars.length - 1);
 	}
 
-	// A touch ends the moment it is lifted, so clearing on that would take the figure away with the
-	// finger. It stands until the next touch instead.
+	// On touch, the value stays shown until the next touch.
 	function endRead(event: PointerEvent) {
 		if (event.pointerType !== 'touch') reading = null;
 	}
@@ -171,7 +136,6 @@
 	class:detailed
 	style="--columns: {bars.length}; --gap: {gap}px; --ticks: {Math.max(axis.values.length - 1, 1)}"
 >
-	<!-- Reserved whether or not a bar is being read, so the chart never moves under the pointer. -->
 	<p class="readout small muted numeric" aria-hidden="true">
 		{read ? `${read.label} ${stat}, ${percent(read.probability)}` : ''}
 	</p>
@@ -186,8 +150,7 @@
 		{/if}
 
 		<div class="field">
-			<!-- One focusable element, not sixty. What it says is in the label, and the full table sits
-			     behind a press in the detailed view. -->
+			<!-- The whole chart is one focusable element, not one per bar. -->
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 			<div
 				class="bars"
@@ -203,8 +166,6 @@
 				onkeydown={readByKey}
 				onblur={() => (reading = null)}
 			>
-				<!-- A bar the line falls inside is neither over nor under, which is the push color at
-				     every bucket width: at a width of one it is the outcome the line landed on. -->
 				{#each bars as bar, index (bar.value)}
 					<div class="column">
 						{#if figures}
@@ -223,15 +184,12 @@
 				{/each}
 			</div>
 
-			<!-- What the model expects, in ink, so it is the opposite of the paper in either theme. The
-			     label turns back on itself past the middle so a mark near the end is never cut off. -->
 			{#if detailed && within(expected)}
 				<div class="mark expected" style="left: {positionOf(expected)}%" aria-hidden="true">
 					<span class="micro" class:before={positionOf(expected) > 50}>Expected</span>
 				</div>
 			{/if}
 
-			<!-- The cut the odds are reporting, in the push gold, wherever the chart is drawn. -->
 			{#if within(line)}
 				<div class="mark chosen" style="left: {positionOf(line)}%" aria-hidden="true">
 					<span class="micro" class:before={positionOf(line) > 50}>Line</span>
@@ -260,13 +218,6 @@
 		text-align: right;
 	}
 
-	/*
-	 * The bars, and the outcome marks under them. The detailed view adds a gutter for its probability
-	 * axis as a first column, and the bars and the marks stay in the last one either way.
-	 *
-	 * The bars take the whole width where there is no gutter, which is what lets the line handle
-	 * beneath be laid out against the same width and land its thumb over the split it makes.
-	 */
 	.plot {
 		display: grid;
 		flex: 1;
@@ -289,9 +240,6 @@
 		touch-action: pan-y;
 	}
 
-	/* The bar hangs at the bottom of its own column, and the gap is drawn inside the column rather
-	   than between two, so a column is exactly a bar's share of the width at every density. That is
-	   what lets a mark be placed by its value alone. */
 	.column {
 		display: flex;
 		flex-direction: column;
@@ -299,7 +247,7 @@
 		min-width: 0;
 	}
 
-	/* No radius. A rounded bar misreports its own height. */
+	/* No border radius. Rounded corners would misrepresent a bar's height. */
 	.bar {
 		flex: none;
 		margin-inline: calc(var(--gap) / 2);
@@ -315,8 +263,6 @@
 		background: var(--under);
 	}
 
-	/* The outcome the line cuts through. A color of its own, because a push is a result rather than
-	   the absence of one. */
 	.bar.split {
 		background: var(--push);
 	}
@@ -330,8 +276,6 @@
 		white-space: nowrap;
 	}
 
-	/* A client-delivered answer rises from the baseline from left to right. Transform keeps the quick
-	   growth out of layout, and a short beat between bars makes the run read as one fluid press. */
 	.drawing .bar {
 		animation: arrive var(--motion) var(--ease-in)
 			calc(var(--arrival-order) * var(--answer-bar-stagger)) backwards;
@@ -351,7 +295,6 @@
 		}
 	}
 
-	/* A vertical mark placed by its value, standing over the bars it cuts between. */
 	.mark {
 		position: absolute;
 		top: 0;
@@ -389,8 +332,6 @@
 		color: var(--push);
 	}
 
-	/* The marks are placed by value, so they line up inside the same box the bars are drawn in and
-	   the strip has to be told how tall to be. */
 	.marks {
 		grid-row: 2;
 		grid-column: -2;
@@ -404,11 +345,7 @@
 		white-space: nowrap;
 	}
 
-	/*
-	 * The detailed view. It fills the room it is given rather than holding a set height, and the
-	 * probability axis takes a gutter of exactly --chart-axis beside the bars, which is the inset the
-	 * line handle under it is given so that both are laid out against the same run.
-	 */
+	/* The detailed view. */
 	.detailed {
 		height: 100%;
 		min-height: var(--chart-height);
@@ -421,7 +358,6 @@
 	.detailed .bars {
 		height: 100%;
 		border-top: var(--rule);
-		/* One hairline per mark, so a bar can be read against the axis beside it. */
 		background: repeating-linear-gradient(
 			to top,
 			var(--hairline) 0 1px,

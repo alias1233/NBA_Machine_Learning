@@ -1,12 +1,4 @@
-"""
-What one team's line in a game says, and what pairing it with the other team's line adds.
-
-A stored row holds one side of a game. The result, the total and everything a team allowed only
-exist once the two sides sit on the same row, which is what the opponent columns here are for.
-
-Every builder takes column names rather than assuming them, so a caller decides which columns are
-worth carrying over.
-"""
+"""Team feature columns, including ones that combine a team's stats with its opponent's."""
 
 import pandas as pd
 
@@ -34,11 +26,7 @@ def add_point_differential_column(
     points_column: str,
     opponent_points_column: str
     ) -> pd.DataFrame:
-    """
-    How much the team won or lost the game by.
-
-    The opposing team's points have to be on the row already, so this runs after they are copied over.
-    """
+    """Adds the team's margin of victory or defeat. The opponent's points must already be on the row."""
 
     team_game_data[POINT_DIFFERENTIAL] = (
         team_game_data[points_column] - team_game_data[opponent_points_column]
@@ -47,24 +35,18 @@ def add_point_differential_column(
 
 COMBINED_PREFIX = 'TOTAL_'
 def combined_column(stat: str) -> str:
-    """What both teams recorded together, which is the column a game total is read off."""
+    """Returns the name of the column with both teams' combined total of a stat."""
 
     return COMBINED_PREFIX + stat
 
 GAME_TOTAL = combined_column(game_columns.POINTS)
-"""The points both teams scored together, named because so much reads it."""
+"""Column with both teams' combined points."""
 
 def add_combined_stat_columns(
     team_game_data: pd.DataFrame,
     stats: list[str]
     ) -> pd.DataFrame:
-    """
-    Adds what both teams recorded together for each of the given stats.
-
-    Each needs the opposing team's own line already on the row, so this runs after it is copied over.
-    A combined stat is the same number on both rows of a game, which is what makes it a statistic of
-    the game rather than of either side.
-    """
+    """Adds a combined total of both teams for each of the given stats."""
 
     for stat in stats:
         team_game_data[combined_column(stat)] = (
@@ -76,7 +58,7 @@ def encode_win_loss_column_as_integer(
     game_data: pd.DataFrame,
     win_loss_column: str
     ) -> pd.DataFrame:
-    """Rewrites the win/loss column as one for a win and zero for a loss."""
+    """Converts the win/loss column to 1 for a win and 0 for a loss."""
 
     game_data[win_loss_column] = encode_equality_as_integer(game_data[win_loss_column], "W")
     return game_data
@@ -85,7 +67,7 @@ def encode_win_loss_column_as_integer(
 HOME_OR_AWAY = 'HOME_OR_AWAY'
 HOME = "HOME"
 AWAY = "AWAY"
-# The raw data writes the away team's game as "ATL @ DET" and the home team's as "DET vs. ATL".
+# The raw matchup is "ATL @ DET" for the away team and "DET vs. ATL" for the home team.
 HOME_OR_AWAY_ENCODING = {
     HOME : "vs.",
     AWAY : '@'
@@ -108,16 +90,7 @@ def add_opponent_stat_columns(
     team_id_column: str,
     columns_to_copy: list[str]
     ) -> pd.DataFrame:
-    """
-    Adds the other team's stats to each row under the opponent prefix.
-
-    Only columns_to_copy are copied. This frame is the widest in the pipeline, so copying all of it
-    would roughly double the peak memory for columns that are never read back. The team id is always
-    copied, because it is what pairs the two rows of a game up.
-
-    Calling this again replaces what an earlier call copied rather than colliding with it, which is
-    what lets a build copy raw stats, roll windows over them, and then copy those windows too.
-    """
+    """Adds the opponent's stats to each row, with the opponent prefix."""
 
     opponent_columns = [team_id_column] + [column for column in columns_to_copy if column != team_id_column]
     copied_column_names = {column: OPPONENT_PREFIX + column for column in opponent_columns}

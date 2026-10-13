@@ -1,4 +1,4 @@
-/** Every family is listed on the home page, so the path they sit under leads to that section. */
+/** Redirects /models to the Models section of the home page. */
 
 import { redirect } from '@sveltejs/kit';
 

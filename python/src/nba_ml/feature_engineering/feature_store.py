@@ -1,20 +1,4 @@
-"""
-A finished whole-league feature build, written once by a job and read by every prediction.
-
-Building the league's features is the expensive half of a prediction and comes out the same for every
-request, because every rolling column leaves its own row out and so a game not yet played cannot
-change a row in front of it. So a job builds it and the service reads what that produced, rather than
-each request building the league for itself.
-
-A build holds one entry per subject: the games they have played, already reduced to the numbers a
-model reads. It holds nothing about a game that has not been played, which is assembled per request
-from the state these games leave behind.
-
-Publishing is atomic. The job writes a new version under a working name, moves it into place whole,
-and then rewrites the pointer naming it. A reader resolves the newest complete version every time it
-is asked, so a build published while the service is running is picked up without a restart, and the
-previous version is kept so a failed job never takes the service down.
-"""
+"""Saves and loads feature builds, the precomputed past-game features used for predictions."""
 
 import json
 import os
@@ -36,39 +20,30 @@ POINTER_FILE = "current"
 WORKING_PREFIX = "incomplete-"
 
 VERSION_FORMAT = "%Y%m%d-%H%M%S"
-"""How a version directory is named. Sorting these names sorts the builds by age."""
+"""Timestamp format used for version directory names. Sorting by name sorts by date."""
 
 KEPT_VERSIONS = 2
-"""
-How many builds are left on disk.
-
-Two, so that the one being served survives the next job whether it succeeds or fails.
-"""
+"""Number of builds kept on disk."""
 
 @dataclass(frozen=True)
 class SubjectSequences():
-    """One subject's past games: when each was played, what it holds, and who it was against."""
+    """The past games of one subject (a player or team): dates, feature values and opponents."""
 
     game_dates: np.ndarray
-    """Shaped (games,), oldest first."""
+    """Shape: (games,). Sorted oldest first."""
 
     sequence_values: np.ndarray
-    """Shaped (games, columns)."""
+    """Shape: (games, columns)."""
 
     opponent_team_ids: np.ndarray
-    """Shaped (games,)."""
+    """Shape: (games,)."""
 
     @property
     def game_count(self) -> int:
         return len(self.game_dates)
 
     def before(self, day: date) -> "SubjectSequences":
-        """
-        Only the games played before the given day, which is all a prediction about it may read.
-
-        A game played on that day counts as after it, so a prediction never reads a game it is being
-        asked to predict alongside.
-        """
+        """Returns only the games played before the given date."""
 
         end = int(np.searchsorted(self.game_dates, np.datetime64(day, 'ns'), side='left'))
 
@@ -79,17 +54,12 @@ class SubjectSequences():
         )
 
     def with_columns(self, positions: np.ndarray) -> "SubjectSequences":
-        """The same games holding only the columns at the given positions, in that order."""
+        """Returns the same games with only the columns at the given positions."""
 
         return replace(self, sequence_values=self.sequence_values[:, positions])
 
 def sequences_in(history: GameHistory) -> SubjectSequences:
-    """
-    The half of a finished history a prediction reads.
-
-    Everything left behind is either what a finished game is fit against or what is read off the game
-    being predicted, and the game being predicted is not in a build at all.
-    """
+    """Extracts the dates, sequence values and opponents from a GameHistory."""
 
     return SubjectSequences(
         history.game_dates,
@@ -98,7 +68,7 @@ def sequences_in(history: GameHistory) -> SubjectSequences:
     )
 
 def no_games(columns: int) -> SubjectSequences:
-    """What a subject a build found no games at all for reads as."""
+    """Returns an empty SubjectSequences with the given number of columns."""
 
     return SubjectSequences(
         np.empty(0, dtype='datetime64[ns]'),
@@ -108,34 +78,27 @@ def no_games(columns: int) -> SubjectSequences:
 
 @dataclass(frozen=True)
 class FeatureBuild():
-    """Every subject's past games as one build produced them, plus what that build read."""
+    """A feature build: the past games of every subject, plus metadata."""
 
     version: str
-    """Names the directory this was written to, and is what tells two builds apart."""
+    """Name of the directory the build is saved in."""
 
     built_at: datetime
     window_start_date: date | None
-    """The oldest game the build read, or None where it read everything stored."""
+    """Earliest game date included in the build. None if it used every stored game."""
 
     sequence_columns: tuple[str, ...]
-    """What each column of every subject's games holds, in that order."""
+    """Names of the columns in each subject's sequence_values, in order."""
 
     subjects: Mapping[int, SubjectSequences]
-    """Each subject's games, keyed by their id. A subject the build found none for is simply absent."""
+    """Each subject's games, keyed by subject ID."""
 
     @property
     def game_count(self) -> int:
         return sum(subject.game_count for subject in self.subjects.values())
 
     def column_positions(self, wanted: Sequence[str]) -> np.ndarray:
-        """
-        Where each of the named columns sits in this build, so a model can read its own columns out
-        of a build made for every model at once.
-
-        Raises:
-            ValueError naming the columns this build does not hold, which is what a build made before
-            a column was added looks like. Rebuilding is the fix.
-        """
+        """Returns the index of each given column in this build."""
 
         held = {column: position for position, column in enumerate(self.sequence_columns)}
         missing = [column for column in wanted if column not in held]
@@ -153,7 +116,7 @@ def from_histories(
     sequence_columns: Sequence[str],
     window_start_date: date | None
     ) -> FeatureBuild:
-    """Keeps the half of a finished build a prediction reads. See sequences_in."""
+    """Creates a FeatureBuild from the given histories, keeping only what predictions need."""
 
     built_at = datetime.now()
 
@@ -183,7 +146,7 @@ def _write(directory: Path, build: FeatureBuild):
     counts = np.array([subject.game_count for subject in subjects], dtype=np.int64)
 
     def joined(arrays: list[np.ndarray], empty_shape: tuple[int, ...]) -> np.ndarray:
-        """Every subject's games in one array, which the offsets beside it cut back apart."""
+        """Concatenates every subject's array into one. The saved offsets are used to split it again."""
 
         return np.concatenate(arrays) if arrays else np.empty(empty_shape, dtype=np.float32)
 
@@ -204,16 +167,7 @@ def _write(directory: Path, build: FeatureBuild):
     )
 
 def publish(name: str, build: FeatureBuild) -> Path:
-    """
-    Writes a build and makes it the one every reader resolves.
-
-    The version is written under a working name and moved into place whole, so a reader never meets a
-    half written one, and the pointer is rewritten last. Older versions past KEPT_VERSIONS then go,
-    along with anything a run that died before its move left behind.
-
-    Returns:
-        The directory the build was written to.
-    """
+    """Writes the build to a temporary directory, renames it, then updates the pointer file."""
 
     directory = paths.feature_build_directory(name)
     working = directory / (WORKING_PREFIX + build.version)
@@ -239,12 +193,7 @@ def _remove_old_versions(name: str):
         shutil.rmtree(version, ignore_errors=True)
 
 def _remove_working_versions(name: str):
-    """
-    Clears out every directory still under a working name, which is what a run that died before its
-    move left behind. Nothing else prunes them, so repeated failures would otherwise fill the disk.
-
-    Safe because the jobs are serialised by a lock on the host, so no other run holds one of these.
-    """
+    """Deletes temporary directories left behind by failed builds."""
 
     directory = paths.feature_build_directory(name)
 
@@ -256,13 +205,7 @@ def _remove_working_versions(name: str):
 
 # READING: #
 def _complete_versions(name: str) -> list[Path]:
-    """
-    Every finished build on disk, oldest first. A version is named after when it was built, so
-    sorting the names sorts them by age.
-
-    A directory still under its working name is left out however finished it looks, because a job
-    that died between writing it and moving it into place is exactly what that name means.
-    """
+    """Returns every complete build on disk, oldest first."""
 
     directory = paths.feature_build_directory(name)
 
@@ -280,12 +223,7 @@ def _complete_versions(name: str) -> list[Path]:
     )
 
 def _newest_version(name: str) -> Path | None:
-    """
-    Which build a reader should use: the one the pointer names, or the newest complete one.
-
-    The pointer is what the last successful job left behind. Falling back to the newest complete
-    version covers a pointer that was never written or names a build that has since been removed.
-    """
+    """Returns the build named in the pointer file, or the newest complete one if it is missing."""
 
     versions = _complete_versions(name)
 
@@ -301,7 +239,7 @@ def _newest_version(name: str) -> Path | None:
     )
 
 def _read(version: Path) -> FeatureBuild:
-    """One build off disk. Every subject's games are views into one array rather than copies."""
+    """Loads a build from disk."""
 
     described = json.loads((version / DESCRIPTION_FILE).read_text(encoding="utf-8"))
     window_start_date = described["window_start_date"]
@@ -332,24 +270,12 @@ _held: dict[str, FeatureBuild] = {}
 _reading = threading.Lock()
 
 def is_published(name: str) -> bool:
-    """
-    Whether there is a build to read, answered without reading one.
-
-    current() loads the whole build and holds a lock across the read, so a caller that only needs
-    this answer must not ask for it that way. This is a directory listing and a small file read.
-    See api/limits.py, which asks on every request and from the event loop.
-    """
+    """Returns True if a build exists, without loading it."""
 
     return _newest_version(name) is not None
 
 def current(name: str) -> FeatureBuild | None:
-    """
-    The build every prediction reads, or None while none has been published.
-
-    Which version is newest is resolved on every call, which is a small file read, so a build
-    published while the service is running is picked up without a restart. The build itself is read
-    once and shared by every request after that.
-    """
+    """Returns the current build, or None if none has been published. The loaded build is cached."""
 
     version = _newest_version(name)
 

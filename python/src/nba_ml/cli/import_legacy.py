@@ -1,13 +1,4 @@
-"""
-Filling the archive with the seasons the data source does not reach, out of an older nba.com archive.
-
-A developer command, run once on the machine that trains. It reads a second data directory rather
-than a service, so it takes no source and makes no request. See
-nba_ml/data_collection/legacy_archive.py for how the two archives' identifiers are matched up.
-
-Collect from the data source before running this. The seasons the two archives share are what a
-legacy player is recognised by, and without them nothing can be.
-"""
+"""Command for importing older seasons from a legacy nba.com archive."""
 
 import argparse
 from datetime import date

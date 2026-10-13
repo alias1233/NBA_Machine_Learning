@@ -1,50 +1,3 @@
-<!--
-	The night's games, dealt as a hand of playing cards across the board.
-
-	Each game is one card printed on bone stock in the plate's two inks. The two sides of the game are
-	the two corner indices, exactly where a card prints its own, and the tip-off is its face. Which
-	suit a card carries and how far off square it lies come from the game's id, so the hand is the same
-	hand on every render and means nothing beyond making a night read as a deal rather than as a grid.
-
-	Every game is dealt face up and none of them scrolls, because choosing one is now the first thing a
-	reader does and a game they cannot see is a game they cannot pick. The board fits as many across a
-	row as the column holding it has room for, so the same deal reads on a phone and beside two other
-	columns on a laptop.
-
-	Choosing a card changes parameters, it does not navigate. The reader stays exactly where they were
-	and the URL is rewritten by replacing rather than pushing. The href is what the card falls back to
-	where scripting is off.
-
-	Every card casts a short, hard shadow on the board, which is the one thing that says the hand is
-	lying on the well rather than printed into it. It is short because the cards are resting on the
-	board rather than floating over it, and it lengthens with every way a card comes off it: under a
-	hand, taken, and at the top of its own turn.
-
-	Choosing one is a hand taking it off the board: it comes up out of the page, turns over on the
-	upright axis so the reader sees its printed back at the top of the lift, and falls back square and
-	clear of the deal, in warmed stock under the spot ink, ringed and marked with the reader's own
-	grease-pencil X. Because it genuinely turns over, every card carries a back, and the back is the
-	one printed thing on the site that belongs to the deck rather than to a game.
-
-	A hand narrowed by a search is dealt again rather than redrawn. A card the search no longer
-	answers for fades where it lies, and the cards that stay travel to the places it left, so the
-	board reads as the same hand with fewer cards in it. A hand that arrived with the page was not
-	dealt in front of anybody, so it is simply lying there.
-
-	The X is drawn once the card has landed, in the corner the two indices leave free, because a hand
-	marks a card it is holding and not one still in the air, and because the printing on a card is what
-	a reader takes the game off. A hovered card only lifts, and by half as much, so a card that has
-	been chosen is never mistaken for one the pointer happens to be on.
-
-	The turn runs only where the choice was made in front of the reader. A card that was already chosen
-	when the page arrived is simply lying there, because nothing happened for it to answer. A reader
-	who has asked for stillness is not given the turn at all, and their card lands marked at once.
-
-	Every card keeps its own turn to the end. A reader who picks a second game before the first has
-	landed does not have the first one snatched out of the air: it goes on turning, and because it is
-	no longer the chosen card it comes down face up and square back into the deal, which is a card
-	being put back.
--->
 <script lang="ts">
 	import { flip } from 'svelte/animate';
 
@@ -57,43 +10,23 @@
 
 	type Props = {
 		games: ScheduledGame[];
-		/** The game the parameters currently describe, if they describe one. */
+		/** The selected game, if there is one. */
 		selected: ScheduledGame | null;
 		hrefOf: (game: ScheduledGame) => string;
 		onchoose: (game: ScheduledGame) => void;
-		/** The card the reader is over or has focused, and null once they leave it. */
+		/** Called with the hovered or focused game, and with null when the user leaves it. */
 		onpreview?: (game: ScheduledGame | null) => void;
 	};
 
 	let { games, selected, hrefOf, onchoose, onpreview }: Props = $props();
 
-	/**
-	 * The cards a turn is running on, which is normally one and never more than a handful.
-	 *
-	 * A list rather than a single card because a reader who picks a second game before the first has
-	 * landed must not have the first one yanked out of the air. Each card keeps its own turn to the
-	 * end, and one the choice has moved off finishes face up and settles back into the deal, which is
-	 * what the animation lands on once the card is no longer the chosen one.
-	 */
+	/** Ids of the cards that are currently flipping. */
 	let turning = $state<number[]>([]);
 
-	/**
-	 * Which game the board was last drawn for, so only a change the reader made runs the turn.
-	 *
-	 * Plain rather than state, because writing it is how the last choice is remembered and must not
-	 * itself be a change. Undefined until the first run, which is what the board arrived with: a game
-	 * already chosen then lies still, and every choice after it is turned over.
-	 */
+	/** Id of the last selected game. Not reactive, so writing it does not rerun the effect. */
 	let settled: number | null | undefined;
 
-	/**
-	 * Whether the board has been drawn once, which is what tells a card the reader dealt from a card
-	 * that was already on the table when they arrived.
-	 *
-	 * Svelte plays an entrance for anything created after the very first render, and on a soft
-	 * navigation that is the whole page. A hand a reader has only just opened was not narrowed in
-	 * front of them, so nothing on it arrives in motion.
-	 */
+	/** True after the first render. */
 	let drawn = $state(false);
 
 	$effect(() => {
@@ -112,9 +45,7 @@
 
 		settled = chosen;
 
-		/* A reader who has asked for stillness never gets a turn, so nothing may be left waiting on one
-		   to finish. Asked here rather than in the stylesheet because the mark is held back until the
-		   card has landed, and a card that never takes off has already landed. */
+		// No flip if nothing is selected or the user prefers reduced motion.
 		if (chosen === null) return;
 		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 		if (turning.includes(chosen)) return;
@@ -127,13 +58,7 @@
 		onchoose(game);
 	}
 
-	/**
-	 * The turn is over.
-	 *
-	 * Only the card's own animation ends it. The reader's mark draws itself on arrival and its own
-	 * ending bubbles up through the same handler, which would otherwise call the turn finished before
-	 * it had started.
-	 */
+	/** Ends a flip. Ignores animation events that bubble up from child elements. */
 	function landed(
 		event: AnimationEvent & { currentTarget: EventTarget & HTMLAnchorElement },
 		id: number
@@ -141,7 +66,7 @@
 		if (event.target === event.currentTarget) turning = turning.filter((at) => at !== id);
 	}
 
-	/** The card spoken as a sentence, since a reader hearing it has no corners to read. */
+	/** Returns the card's text for screen readers. */
 	function spoken(game: ScheduledGame): string {
 		const when = [gameDay(game.date), tipoffTime(game)].filter(Boolean).join(', ');
 
@@ -158,9 +83,6 @@
 		{@const { suit, tilt } = deal(game.id)}
 		{@const pip = SUIT_PATH[suit]}
 
-		<!-- The card leaves where it lies and the rest of the hand closes over it, which is one hand
-		     dealt again rather than a list redrawn. Nothing enters in motion until the reader has
-		     changed the hand themselves. -->
 		<li
 			style:--tilt="{tilt}deg"
 			style:--order={index}
@@ -190,8 +112,6 @@
 						<svg class="pip" viewBox="0 0 24 24" aria-hidden="true"><path d={pip} /></svg>
 					</span>
 
-					<!-- The card's face: what a reader picking a game actually needs off it. The suit stands
-					     behind it as a watermark, printed faintly, the way a card's own face is. -->
 					<span class="face">
 						<svg class="watermark" viewBox="0 0 24 24" aria-hidden="true"><path d={pip} /></svg>
 						<span class="time numeric">{tipoffTime(game) ?? 'Time to come'}</span>
@@ -203,18 +123,11 @@
 						<span class="tricode"><span class="joiner">at</span> {game.home_team.abbreviation}</span>
 					</span>
 
-					<!-- The reader's own X, drawn in the corner the two indices leave free, so the card's
-					     printing is never marked across. It is laid once the card is lying still, because a
-					     hand marks a card it is holding rather than one still turning. -->
 					{#if chosen && !overturn}
 						<span class="marked"><PencilMark bleed="0px" /></span>
 					{/if}
 				</span>
 
-				<!-- The back of the deck, and the same back on every card, because a back that told you
-				     which card it was would not be one. Bone margin and a field of printed lattice, and
-				     nothing else: a back is a pattern, and a figure standing in the middle of one is a
-				     thing to read on a side of the card that has nothing to say. -->
 				<span class="back" aria-hidden="true">
 					<span class="weave"></span>
 				</span>
@@ -231,67 +144,28 @@
 </ul>
 
 <style>
-	/*
-	 * A spread, not a fan. Cards lie side by side so both indices stay readable, and each sits at its
-	 * own small angle so the deal reads as dealt rather than as ruled.
-	 *
-	 * As many across a row as the column has room for, measured against that column rather than
-	 * against the screen, so one rule deals three across a phone and eight across the whole page. The
-	 * row gap is what a lifted and ringed card needs above it.
-	 */
 	.hand {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(var(--play-card-min), 1fr));
 		gap: var(--space-5) var(--space-4);
-		/* The cards stack against each other and against nothing else. A lifted card belongs to the
-		   board, not over the page, so its order can never reach the header above it. */
 		isolation: isolate;
-		/* How wide a card may print at, measured against the board rather than against the screen. It
-		   grows with the board until a card is as large as one wants to be, which is what deals four
-		   across the column a prediction page gives it and a whole row more across a wider one. */
 		--play-card-min: clamp(var(--play-card-floor), 22cqi, var(--play-card-wide));
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
 
-	/*
-	 * Each card measures its own printing, so the cell around it is what those sizes are read
-	 * against and no breakpoint decides them. It is also what the reader's tag hangs off, which is
-	 * the card's own footprint on the board.
-	 *
-	 * The cell is also where the board's vanishing point stands, one to a card and centered on it, so
-	 * a card turning over turns toward the reader looking at that card and not toward the middle of
-	 * the screen.
-	 */
 	.hand > li {
 		position: relative;
 		container-type: inline-size;
 		perspective: var(--play-card-depth);
-		/* Rows lean off each other, one to the left and the next to the right by the same amount, so no
-		   two cards line up down the board and the deal reads as a hand pushed across a table rather
-		   than as a grid. Which row a card is in is worked out from its place in the deal and how many
-		   are dealt across, and the offset is drawn rather than laid out, so nothing about the grid
-		   moves. */
 		--play-card-row: round(down, calc(var(--order) / var(--play-card-columns)), 1);
 		--play-card-lean: calc(mod(var(--play-card-row), 2) * 2 - 1);
 		translate: calc(var(--play-card-lean) * var(--play-card-stagger)) 0;
-		/* Later cards lie over earlier ones, and whichever is lifted lies over the lot. */
 		z-index: var(--order);
 	}
 
-	/*
-	 * How many cards the board is dealing across, which CSS has no way to ask the grid for.
-	 *
-	 * These are the widths `auto-fill` itself changes its answer at, worked out from the one rule
-	 * above it: a row holds as many tracks of --play-card-min plus a gap as the board has room for,
-	 * and --play-card-min is the clamp on the line that sets it. They are read against the board, the
-	 * same container the deal is, so the two are asking about the same width.
-	 *
-	 * Only the stagger reads this. If a threshold ever falls a hair from where the grid puts it, one
-	 * row of one board leans the other way at one width, which is a decoration disagreeing with
-	 * itself and never a layout breaking. The deal itself is still the grid's own answer.
-	 */
+	/* Number of card columns. The breakpoints match where `auto-fill` adds a column. */
 	.hand {
 		--play-card-columns: 1;
 	}
@@ -338,19 +212,12 @@
 		}
 	}
 
-	/* A lifted card clears the whole deal and still keeps its place among the other lifted ones, so
-	   the one dealt last is the one on top however many are on the board. */
 	.hand > li:has(.card:hover),
 	.hand > li:has(.card:focus-visible),
 	.hand > li:has(.chosen) {
 		z-index: calc(var(--order) + var(--dealt));
 	}
 
-	/*
-	 * The card itself is the stock, which has two printed sides and no printing of its own. It holds
-	 * the proportion, the angle it was dealt at, how far it lies off the board and what it casts on
-	 * it, and its two faces hold everything that is printed.
-	 */
 	.card {
 		position: relative;
 		display: block;
@@ -366,10 +233,6 @@
 			box-shadow var(--motion) var(--ease-in);
 	}
 
-	/*
-	 * Both printed sides fill the stock exactly and neither is ever seen from behind, which is what
-	 * lets one card carry a face and a back without either showing through the other.
-	 */
 	.front,
 	.back {
 		position: absolute;
@@ -378,22 +241,15 @@
 		backface-visibility: hidden;
 	}
 
-	/*
-	 * The face: bone stock printed in the plate's two inks. Every card is dealt the same, and
-	 * everything that says one has been chosen is added to it rather than swapped in.
-	 */
 	.front {
 		display: grid;
 		grid-template-rows: auto 1fr auto;
-		/* The bone margin the printing is held inside. A card dealt small gives some of it back,
-		   because at that size the margin is room the two names need more. */
 		padding: clamp(0.375rem, 7cqi, var(--space-3));
 		background: var(--plate-ink);
 		color: var(--plate-spot-on);
 		transition: background var(--motion) var(--ease-in);
 	}
 
-	/* Under the pointer a card straightens and comes up a little, which is a hand about to take it. */
 	.card:hover,
 	.card:focus-visible {
 		rotate: 0deg;
@@ -401,11 +257,6 @@
 		box-shadow: var(--play-card-shadow-near);
 	}
 
-	/*
-	 * Taken. It lies square and clear of the board, in stock the spot ink has warmed, ringed in that
-	 * same ink and lit from under its own edge. Twice the lift of a hovered card, so which of the two a
-	 * reader is looking at is never in question.
-	 */
 	.card.chosen {
 		rotate: 0deg;
 		translate: 0 calc(var(--play-card-lift) * -1);
@@ -419,29 +270,12 @@
 		background: color-mix(in oklab, var(--plate-ink) 84%, var(--plate-spot));
 	}
 
-	/*
-	 * The back of the deck.
-	 *
-	 * A real back is a margin of bare stock and a field of pattern ruled on it, the same on every card
-	 * in the pack. This one is exactly that, in the plate's own inks and in the plate's own manner:
-	 * flat, registered, and nothing about it hand-made.
-	 *
-	 * It is drawn once for a card that has never been turned over, which costs the board nothing, and
-	 * it is never in the accessible tree, because a reader hearing the card is being told the game and
-	 * a back is not one.
-	 */
+	/* Back face of a card. */
 	.back {
 		background: var(--plate-ink);
 		transform: rotateY(180deg);
 	}
 
-	/*
-	 * The field, held inside the bone margin and ruled in the spot ink.
-	 *
-	 * The lattice is two printed rules crossing at the square, one in each ink, which is how a
-	 * guilloche back is actually made up. Its pitch is measured against the card, so a card dealt
-	 * small carries the same figure at the same scale as one dealt large rather than a coarser one.
-	 */
 	.weave {
 		position: absolute;
 		inset: clamp(3px, 5.5cqi, 8px);
@@ -460,22 +294,6 @@
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--plate-spot) 70%, transparent);
 	}
 
-	/*
-	 * The turn itself: up out of the page, over on the upright axis, and down into where it now lies.
-	 * A card is the one thing on the site a hand physically picks up, so a choice here is a gesture
-	 * rather than a state arriving, and it is the only place on the site anything turns over.
-	 *
-	 * It turns the way a hand turns a card, about the axis standing up the card, so what the turn
-	 * shows halfway through is the back of the deck and never the face printed backwards. It grows as
-	 * it goes, against the vanishing point the cell holds over it, which is what reads as leaving the
-	 * page rather than sliding across it.
-	 *
-	 * Two full half-turns, because it has to come back down the way it went up. The whole thing is
-	 * written against where the card ends up: it starts at the angle it was dealt at and on the board,
-	 * and finishes square, lifted and a whole turn round, which is exactly how a chosen card rests, so
-	 * nothing snaps when the animation hands back. The transition is stood down for the turn so the
-	 * two are never both moving the same card.
-	 */
 	@media (prefers-reduced-motion: no-preference) {
 		.card.landing {
 			animation:
@@ -485,23 +303,12 @@
 			will-change: transform, translate, scale;
 		}
 
-		/* The stock warms as the card comes back round, not while its back is to the reader, so the
-		   spot ink arrives with the face rather than behind it. */
 		.card.landing .front {
 			animation: warm var(--play-card-turn) linear both;
 			transition: none;
 		}
 	}
 
-	/*
-	 * The toss. Away from the board fast and settling at the top, which is the shape a thing thrown
-	 * actually makes, then falling and slowing into where it comes to rest. It straightens on the way
-	 * up, because a hand squares a card as it takes it and not after it has put it down.
-	 *
-	 * Written apart from the turn because the two are one gesture with two different rhythms: a toss
-	 * is front-loaded and a turn is even, and one curve over both makes the card show its back before
-	 * it has left the board.
-	 */
 	@keyframes lift {
 		0% {
 			rotate: var(--tilt);
@@ -520,14 +327,6 @@
 		}
 	}
 
-	/*
-	 * The turn: two half-turns about the axis standing up the card, so what the reader is shown
-	 * halfway round is the back of the deck.
-	 *
-	 * It holds a beat at the back, at the top of the toss, because that beat is the whole reason a
-	 * back is worth printing, and then carries on the way it was going rather than unwinding, which
-	 * is what tells a turn from a wobble.
-	 */
 	@keyframes turn {
 		0% {
 			transform: rotateY(0deg);
@@ -574,34 +373,18 @@
 		letter-spacing: -0.02em;
 	}
 
-	/*
-	 * The side written out, under the tricode that stands for it.
-	 *
-	 * A tricode is what a card indexes itself by, and a reader who does not already know that DEN is
-	 * Denver cannot find their game by one, so the name is printed on every card at every width.
-	 *
-	 * It is set in the card's own ink at full strength rather than in a tint of it, and measured
-	 * against the card a step larger than the rest of the small printing, because it is the one thing
-	 * on a card a reader is scanning for. What keeps it under the tricode is weight and size, which
-	 * is how an index is ranked on a real card, not how faintly it was printed.
-	 */
 	.name {
 		font-size: clamp(0.625rem, 10cqi, 0.875rem);
 		font-weight: 500;
-		/* Set tight, because a name is two lines on a card dealt small and both of them have to stand
-		   inside the room the index has. */
 		line-height: 1.1;
 		text-wrap: balance;
 	}
 
-	/* Held off the corner the mark is drawn in, so a side with a long name wraps rather than running
-	   under the X. The tricode is short enough never to need it. */
 	.index.end .name {
 		max-width: 70%;
 		text-align: end;
 	}
 
-	/* The one word on the card that is not a tricode, so it drops out of the index's weight. */
 	.joiner {
 		font-size: 0.6em;
 		font-weight: 500;
@@ -614,8 +397,7 @@
 		fill: currentColor;
 	}
 
-	/* Hearts and diamonds print in the plate's spot ink. It clears 3:1 against bone and not 4.5:1, so
-	   it colors the pip and never a letter: every word on a card is printed in the one dark ink. */
+	/* The highlight color has 3:1 contrast on the card face but not 4.5:1, so it is used for the suit icons and never for text. */
 	.card.red .pip,
 	.card.red .watermark {
 		color: var(--plate-spot);
@@ -629,7 +411,6 @@
 		text-align: center;
 	}
 
-	/* The suit printed large and faint behind the face, which is what a card's own face carries. */
 	.watermark {
 		position: absolute;
 		width: 62cqi;
@@ -647,8 +428,6 @@
 		white-space: nowrap;
 	}
 
-	/* The room the printing leaves: the corner opposite neither index. It is measured against the
-	   card, so the mark is the same size on a card dealt small as on one dealt large. */
 	.marked {
 		position: absolute;
 		bottom: 3%;
@@ -658,15 +437,6 @@
 		--plane-pencil: var(--pencil-deep);
 	}
 
-	/*
-	 * Written on the board under the card rather than across its face, in the room the lift leaves,
-	 * because a card's face is printed and the printing is what a reader takes the game off. It lies
-	 * on the board rather than on the card, so a card turning over turns and the tag under it does
-	 * not, and a card carrying one is exactly the same card as one that is not.
-	 *
-	 * Color is never the only marker of the chosen card: it lifts, it straightens, it is ringed, it
-	 * carries this, and it carries aria-current.
-	 */
 	.tags {
 		position: absolute;
 		inset: 100% 0 auto 0;

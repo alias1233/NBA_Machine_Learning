@@ -1,8 +1,4 @@
-"""
-Collecting finished box scores.
-
-Player rows come from the data source. Team rows are totals of the player rows already stored.
-"""
+"""Collects box scores for finished games."""
 
 from datetime import date, timedelta
 from typing import Iterable
@@ -15,14 +11,13 @@ from nba_ml.sources.base import DataSource, SourceDataError
 from nba_ml.stores import player_games, team_games
 
 DEFAULT_UPDATE_LOOKBACK_DAYS = 1
-"""Days before the newest stored game to refetch during an update."""
 
 AGREEING_ROWS = "AGREEING_ROWS"
-"""How many of a team's player rows carry one set of labels, which is what decides the team's."""
+"""Temporary column counting the player rows that share the same game labels."""
 
 
 def require_resumable_player_archive():
-    """Refuse to mistake an emptied archive for a new one."""
+    """Raises an error if the player game database exists but is empty."""
 
     if player_games.FILEPATH.exists() and player_games.latest_game_date() is None:
         raise RuntimeError(
@@ -33,8 +28,6 @@ def require_resumable_player_archive():
 
 
 def _validate_player_game_rows(rows: pd.DataFrame, season_year: int, season_type: SeasonType):
-    """Reject source rows that SQLite would otherwise accept and feature building would later skip."""
-
     phase = season_type.value.lower().replace("_", " ")
     if not isinstance(rows, pd.DataFrame):
         raise SourceDataError(f"{season_year} {phase} player games are not a table of rows.")
@@ -71,7 +64,7 @@ def _seasons_to_collect(
     date_from: date | None,
     date_to: date | None
     ) -> list[int]:
-    """The requested source seasons that the project keeps."""
+    """Returns the requested seasons that the source has and the project collects."""
 
     available = source.seasons(date_from, date_to)
     requested = available if requested is None else requested
@@ -89,15 +82,7 @@ def collect_player_games(
     date_to: date | None = None,
     print_debug: bool = True
     ) -> int:
-    """
-    Writes finished player box scores to the store and returns how many rows were written.
-
-    Args:
-        seasons defaults to every season the source covers that could hold a game in the dates given.
-        season_types defaults to all of them.
-        date_from and date_to keep the run to games played inside them, which is what a scheduled
-        update asks for.
-    """
+    """Fetches finished player box scores, stores them, and returns the number of rows written."""
 
     if date_to is not None and date_to < season.PLAYER_GAME_COLLECTION_START_DATE:
         return 0
@@ -134,7 +119,7 @@ def collect_team_games(
     date_to: date | None = None,
     print_debug: bool = True
     ) -> int:
-    """Builds one team row per game from the player rows already stored."""
+    """Builds team game rows by summing the stored player rows. Returns the number of rows written."""
 
     players = (
         player_games.get_all_player_game_data()
@@ -184,10 +169,7 @@ def collect_team_games(
         team_games.TURNOVERS.category_name,
         team_games.PERSONAL_FOULS.category_name
     ]
-    # A team row is summed over the key it is stored under and nothing else. Old archives label a
-    # handful of games inconsistently between one team's own players, and grouping by the label as
-    # well would split that team's box score in two and store whichever half was written last. The
-    # label most of its players carry is the team's, and an empty one is a label like any other.
+    # Some old games have inconsistent labels within a team, so use the most common one.
     described = (
         players.groupby(identifiers + labels, sort=False, dropna=False).size()
         .reset_index(name=AGREEING_ROWS)
@@ -203,16 +185,11 @@ def collect_team_games(
     return written
 
 def update_player_games(source: DataSource, print_debug: bool = True) -> int:
-    """
-    Collects every player box score played since the newest one already stored, which is what an
-    hourly job runs. Collects everything when the store is empty.
-    """
+    """Collects player box scores from the latest stored game date onwards."""
 
     return collect_player_games(source, date_from=player_games.latest_game_date(), print_debug=print_debug)
 
 def update_team_games(print_debug: bool = True) -> int:
-    """The same as update_player_games, for the team store. See team_rebuild_start_date."""
-
     return collect_team_games(date_from=team_rebuild_start_date(), print_debug=print_debug)
 
 def collect_games(
@@ -223,7 +200,7 @@ def collect_games(
     date_to: date | None = None,
     print_debug: bool = True
     ) -> int:
-    """Fetches player rows, then builds team rows from the stored result."""
+    """Collects player rows, then builds the team rows from them."""
 
     seasons = None if seasons is None else tuple(seasons)
     season_types = None if season_types is None else tuple(season_types)
@@ -237,25 +214,13 @@ def update_start_date(
     latest_game_date: date | None,
     lookback_days: int = DEFAULT_UPDATE_LOOKBACK_DAYS
     ) -> date | None:
-    """The first date one store needs for an incremental update."""
-
     if lookback_days < 0:
         raise ValueError("lookback_days cannot be negative.")
 
     return None if latest_game_date is None else latest_game_date - timedelta(days=lookback_days)
 
 def team_rebuild_start_date(lookback_days: int = 0) -> date | None:
-    """
-    How far back a rebuild of the team store has to reach to leave no stored game without a team row.
-
-    Normally this is the overlap behind the newest team row, because player rows arrive newest first
-    and team rows follow them. A backfill breaks that. It writes games older than anything the team
-    store holds, so starting from the team store's own newest row steps straight over them. A player
-    row whose game has no team row is dropped where the two frames meet, which would leave those
-    games in the archive, out of every model, and reported by nothing.
-
-    Returns None only where neither store holds anything, which rebuilds the lot.
-    """
+    """Returns the date to rebuild team rows from so that every stored game gets one."""
 
     starts = [
         start for start in (
@@ -272,15 +237,11 @@ def update_games(
     lookback_days: int = DEFAULT_UPDATE_LOOKBACK_DAYS,
     print_debug: bool = True
     ) -> int:
-    """
-    Updates the player store from its own newest row, then the team store from whatever it is short
-    of. See team_rebuild_start_date for why the two are not asked the same question.
-    """
+    """Collects new player rows, then rebuilds any missing team rows."""
 
     player_date_from = update_start_date(player_games.latest_game_date(), lookback_days)
     player_count = collect_player_games(source, date_from=player_date_from, print_debug=print_debug)
 
-    # Asked after the player rows are written, so the games this run just stored are among the ones
-    # it looks for.
+    # Computed after the player rows are stored so the new games are included.
     team_count = collect_team_games(date_from=team_rebuild_start_date(lookback_days), print_debug=print_debug)
     return player_count + team_count

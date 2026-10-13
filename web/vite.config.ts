@@ -11,7 +11,6 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// Served by Node behind Caddy on one server. See docs/ARCHITECTURE.md.
 			adapter: adapter()
 		})
 	],

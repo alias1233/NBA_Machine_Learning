@@ -1,4 +1,4 @@
-// @ts-expect-error The site intentionally carries no Node type package for this Node-only test.
+// @ts-expect-error Node types are not installed. This test only runs in Node.
 import { readdirSync } from 'node:fs';
 
 import { familyPath, MODEL_FAMILIES } from './models.ts';
@@ -41,8 +41,6 @@ check(
 	[]
 );
 
-// A family added without dating its page is a family missing from the sitemap, which is the one
-// failure here that nothing else on the site would report.
 check(
 	'every model family is offered',
 	MODEL_FAMILIES.map(familyPath).filter((path) => datesOf(path) === undefined),
@@ -55,18 +53,9 @@ check(
 	[]
 );
 
-// ----------------------------------------------------------------------------
 // WHAT IS INDEXED AND WHAT IS NOT
-// ----------------------------------------------------------------------------
 
-/**
- * The pages the site keeps out of the index. Today there are none.
- *
- * Written here rather than read off the entries, so that an entry flipped to `indexed: false` by
- * accident fails here rather than going unnoticed until a search result quietly disappears months
- * later. A page that genuinely should be held out is added to this list in the same change that
- * sets its flag.
- */
+/** Pages that should not be indexed. */
 const NOT_INDEXED: string[] = [];
 
 check(
@@ -81,28 +70,15 @@ check(
 	Object.keys(PAGES).filter((path) => !NOT_INDEXED.includes(path))
 );
 
-// A sitemap only advertises. A page left out of one is still crawled, and still indexed if anything
-// links to it, so the directive printed on the page is the half that decides. This holds it to the
-// same entry the sitemap was built from, in both directions.
 check(
 	'every page tells a crawler what its entry says',
 	Object.keys(PAGES).map((path) => robotsDirective(path).startsWith('index, follow')),
 	Object.keys(PAGES).map((path) => isIndexed(path))
 );
 
-// ----------------------------------------------------------------------------
 // EVERY RENDERED PAGE IS ACCOUNTED FOR
-// ----------------------------------------------------------------------------
 
-/**
- * The path of every route that renders a page, read off the routes themselves.
- *
- * A directory holding a `+page.svelte` is a page a reader can open. A directory holding only a
- * `+page.server.ts` is a redirect or an endpoint and is not one. Reading the tree rather than
- * listing the routes here is what makes a page added without an entry in pages.ts a failure: that
- * entry is the only place saying whether the page belongs in the sitemap and what it tells a
- * crawler.
- */
+/** Returns the path of every route that renders a page, found by walking the routes folder. */
 const renderedPaths = (dir: URL, path: string): string[] => {
 	const entries: { name: string; isDirectory: () => boolean }[] = readdirSync(dir, {
 		withFileTypes: true

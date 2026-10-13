@@ -1,5 +1,3 @@
-<!-- One model family in a shaped home-page frame. It starts hollow and fills with the block plane on
-     hover or keyboard focus. -->
 <script lang="ts">
 	import ModelRoll from '$lib/components/ModelRoll.svelte';
 	import { familyModelsPath, familyPath } from '$lib/models';
@@ -8,7 +6,7 @@
 
 	type Props = {
 		family: ListedFamily;
-		/** A touch keeps its frame filled until the reader taps somewhere else. */
+		/** True after a tap on this family. It stays highlighted until the user taps somewhere else. */
 		touchActive?: boolean;
 	};
 
@@ -29,9 +27,7 @@
 {#snippet familyContent(masked: boolean)}
 	<div class:masked-content={masked} class:block-plane={masked} class="family-content">
 		<div class="said">
-			<!-- The fill copy is the same words a second time. It is hidden from a screen reader, but a
-			     crawler reads the DOM, so only the visible copy is a heading and the fill takes the
-			     heading's size off the type role instead. -->
+			<!-- The masked copy repeats the text, so only the visible copy is a heading. -->
 			{#if masked}
 				<p class="type-h2">{family.title}</p>
 			{:else}
@@ -83,7 +79,6 @@
 	data-plate={family.slug}
 	style:--frame-clip={`url(#family-frame-${family.slug})`}
 >
-	<!-- The normalized path lets the HTML fill retain the SVG frame's exact shape at every size. -->
 	<svg class="frame-clip" aria-hidden="true">
 		<defs>
 			<clipPath id={`family-frame-${family.slug}`} clipPathUnits="objectBoundingBox">
@@ -94,7 +89,6 @@
 		</defs>
 	</svg>
 
-	<!-- A flipped press cut. The step at the upper-right leaves the page showing through the frame. -->
 	<svg class="frame" viewBox="0 0 520 1100" preserveAspectRatio="none" aria-hidden="true">
 		<path
 			d="M9 9h256c11 0 21 5 28 14l22 29c6 8 16 12 26 12h170c5 0 9 4 9 9v1018c0 5-4 9-9 9H9c-5 0-9-4-9-9V18c0-5 4-9 9-9Z"
@@ -104,8 +98,6 @@
 
 	{@render familyContent(false)}
 
-	<!-- The visual copy is clipped by the same moving fill as its block ground, so its ink changes
-	     exactly where the contrast changes. -->
 	<div class="masked-fill" aria-hidden="true">
 		{@render familyContent(true)}
 	</div>
@@ -162,8 +154,6 @@
 		pointer-events: none;
 	}
 
-	/* The paper and the whole ink family come from .block-plane in app.css. Only the fill's own
-	   geometry is here. */
 	.masked-content {
 		position: absolute;
 		inset: 0;
@@ -228,11 +218,6 @@
 		font-size: var(--type-small);
 	}
 
-	/*
-	 * The models the family holds. The count is a printed label above the slot rather than a label on
-	 * a rule, because the slot's own top edge is the rule, and it is one line tall on every sheet, so
-	 * the slots are cut on one line straight across the board.
-	 */
 	.index {
 		display: flex;
 		container-type: inline-size;
@@ -302,7 +287,6 @@
 		text-underline-offset: 2px;
 	}
 
-	/* The visible layer carries the focus ring too, because it sits over the real control while filled. */
 	.family:has(.family-content:not(.masked-content) .button:focus-visible) .masked-content .button,
 	.family:has(.family-content:not(.masked-content) .text-link:focus-visible) .masked-content .text-link,
 	.family:has(.family-content:not(.masked-content) :global(.roll:focus-visible))
@@ -311,8 +295,6 @@
 		outline-offset: 2px;
 	}
 
-	/* The two ways into a family, side by side while there is room for both and stacked where there
-	   is not. */
 	.ways {
 		display: flex;
 		flex-wrap: wrap;
@@ -326,8 +308,6 @@
 		}
 	}
 
-	/* Every family remains one tab. Its models roll within the available middle register on phones
-	   and smaller screens instead of making a longer tab for a larger family. */
 	@media (width < 64rem), (orientation: portrait) {
 		.family {
 			height: var(--models-frame-min-height);

@@ -1,14 +1,4 @@
-"""
-Filling the seasons in front of the data source's floor from an older archive.
-
-Both archives here hold the same made up league, and every identifier in the older one differs.
-Working out which player is which without being told is the whole job, so most of what follows
-checks that a career reads as one career afterwards and that nothing collides.
-
-The cutoff is moved into the middle of the fake season, so games before 2024-10-30 stand for the
-seasons only the older archive reaches and the six games from it onwards stand for the overlap the
-matching is done in. See nba_ml/data_collection/legacy_archive.py.
-"""
+"""Tests for importing older seasons from a legacy archive."""
 
 from datetime import date
 
@@ -25,7 +15,7 @@ from nba_ml.stores import player_games, players, team_games, teams
 import fake_data
 
 CUTOFF = date(2024, 10, 30)
-"""Stands for the first date the data source itself covers."""
+"""First date covered by the data source in these tests."""
 
 OLDER_GAMES = tuple(game for game in fake_data.SEASON_GAMES if game.day < CUTOFF)
 SHARED_GAMES = tuple(game for game in fake_data.SEASON_GAMES if game.day >= CUTOFF)
@@ -33,16 +23,11 @@ SHARED_GAMES = tuple(game for game in fake_data.SEASON_GAMES if game.day >= CUTO
 RETIRED = frozenset(
     player.id for player in fake_data.ALL_PLAYERS if player.id % 100 == fake_data.PLAYERS_PER_TEAM - 1
 )
-"""
-Whose place in the older era was held by somebody else.
-
-Each team's last place belonged to a player who had stopped playing by the cutoff, so four players
-exist only in the older archive and nothing after it names them. Everybody else played both eras.
-"""
+"""Players whose older games use a retired ID that never appears after the cutoff."""
 
 
 def legacy_rows(older=OLDER_GAMES, shared=SHARED_GAMES) -> pd.DataFrame:
-    """Everything the older archive holds: its own era under its own ids, then the shared games."""
+    """Returns every legacy archive row: the older games, then the games both archives have."""
 
     return pd.concat(
         [
@@ -54,7 +39,7 @@ def legacy_rows(older=OLDER_GAMES, shared=SHARED_GAMES) -> pd.DataFrame:
 
 
 def collected_archive():
-    """What the data source itself has collected, which is only the games from the cutoff on."""
+    """Stores what the data source would have collected: only the games from the cutoff onwards."""
 
     teams.store(fake_data.teams_frame())
     players.store(fake_data.player_info_frame())
@@ -72,13 +57,8 @@ def imported(rows: pd.DataFrame | None = None, **arguments) -> legacy_archive.Im
     return legacy_archive.import_games(directory, until=CUTOFF, print_debug=False, **arguments)
 
 
-# WHO IS WHO: #
+# PLAYER MATCHING: #
 def test_a_player_is_recognised_by_the_games_both_archives_hold():
-    """
-    The point of the whole command. A player who was already collected keeps the identifier they
-    were collected under, so the games in front of the cutoff join onto the career they belong to.
-    """
-
     report = imported()
 
     stored = player_games.get_all_player_game_data()
@@ -115,11 +95,6 @@ def test_two_legacy_players_never_collapse_onto_one_identifier():
 
 
 def test_a_player_seen_in_too_few_shared_games_is_named_as_a_career_split_in_two():
-    """
-    Three agreeing games is the floor, and each player here plays exactly three shared games. Ask
-    for more and nobody is recognised, which the report has to say plainly rather than swallow.
-    """
-
     report = imported(minimum_matching_games=len(SHARED_GAMES))
 
     assert report.joined_players == 0
@@ -136,7 +111,7 @@ def test_an_import_is_refused_before_anything_is_collected_from_the_source():
         legacy_archive.import_games(directory, until=CUTOFF, print_debug=False)
 
 
-# WHAT IS WRITTEN: #
+# IMPORTED ROWS: #
 def test_only_the_games_in_front_of_the_cutoff_are_imported():
     report = imported()
 
@@ -212,7 +187,7 @@ def test_importing_twice_leaves_the_same_archive():
     assert len(player_games.get_all_player_game_data()) == rows
 
 
-# WHAT IS LEFT OUT: #
+# SKIPPED GAMES: #
 def test_preseason_is_left_out_and_play_in_is_filed_as_the_regular_season():
     play_in, preseason = OLDER_GAMES[:1], OLDER_GAMES[1:2]
     rows = pd.concat(
@@ -278,10 +253,8 @@ def test_a_player_who_did_not_appear_does_not_reject_the_game_around_them():
     assert (game_ids == oldest).sum() == fake_data.PLAYERS_PER_TEAM * 2 - 1
 
 
-# WHAT COMES AFTER: #
+# AFTER THE IMPORT: #
 def test_the_information_of_a_player_of_the_older_era_is_imported():
-    """A build drops every game of a player it knows nothing about, so these rows have to arrive."""
-
     report = imported()
 
     described = players.stored_player_ids()
@@ -293,11 +266,6 @@ def test_the_information_of_a_player_of_the_older_era_is_imported():
 
 
 def test_career_years_are_reread_from_the_archive_the_import_leaves_behind():
-    """
-    The provider publishes no debut year, so collection reads one off a player's own games. Filling
-    the archive with older seasons moves it, and every held player has to be told.
-    """
-
     players.store(fake_data.player_info_frame().assign(FROM_YEAR=None, TO_YEAR=None))
     imported()
 
@@ -309,8 +277,6 @@ def test_career_years_are_reread_from_the_archive_the_import_leaves_behind():
 
 
 def test_an_imported_game_is_read_as_part_of_the_career_it_belongs_to():
-    """What the import is for. A sequence now reaches back past the date the provider starts at."""
-
     imported()
     team_id = fake_data.TEAMS[0].id
     player = fake_data.ALL_PLAYERS[0]

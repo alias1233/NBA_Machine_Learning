@@ -1,10 +1,3 @@
-# The whole site on one server: TLS at the edge, the site, the service, and the jobs that feed it.
-# Only caddy is reachable from the internet. The deployment steps are in the root README.
-#
-# Run from this directory:
-#   docker compose up -d --build      the three long running services
-#   docker compose run --rm jobs      collect and rebuild the features, which is what cron runs
-
 name: nba-ml
 
 x-logging: &logging
@@ -13,7 +6,6 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
-# api and jobs are one image run two ways, so the build is written once and both share it.
 x-python: &python
   build:
     context: ../python
@@ -22,9 +14,6 @@ x-python: &python
   environment: &python-environment
     NBA_ML_DATA_DIR: /data
     NBA_ML_BACKUP_DIR: /backups
-    # Per process, and this image runs one worker. The unbuilt cap is what runs together while no
-    # whole-league build is published, when each request builds the league itself and holds more
-    # than this container is allowed. See nba_ml/api/limits.py.
     NBA_ML_MAX_RUNNING_PREDICTIONS: ${NBA_ML_MAX_RUNNING_PREDICTIONS:-4}
     NBA_ML_MAX_RUNNING_UNBUILT_PREDICTIONS: ${NBA_ML_MAX_RUNNING_UNBUILT_PREDICTIONS:-1}
     NBA_ML_MAX_WAITING_PREDICTIONS: ${NBA_ML_MAX_WAITING_PREDICTIONS:-8}
@@ -35,8 +24,6 @@ x-python: &python
 
 services:
   caddy:
-    # Pinned by digest, so the same commit cannot rebuild on a different runtime later. The tag is
-    # left beside it to say what the digest is. Move both together.
     image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: unless-stopped
     mem_limit: 256m
@@ -50,17 +37,11 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # The access log, next to the cron log the README already says to read.
       - ./logs:/var/log/caddy
-      # The certificates it obtains, which must outlive the container or the next start asks for
-      # new ones and meets the certificate authority's rate limit.
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       web:
-        # Waited for, so a deployment does not answer while the site behind it is still starting.
-        # Not required, so a site that never comes up cannot keep the edge down with it: without
-        # this, one bad build stops TLS, /health and every error page too.
         condition: service_healthy
         required: false
 
@@ -72,22 +53,15 @@ services:
     mem_limit: 512m
     logging: *logging
     environment:
-      # The service is on the internal network only, and the site is the only thing that calls it.
       NBA_API_URL: http://api:8000
-      # SvelteKit checks a form post against this, and behind a proxy it cannot work it out itself.
       ORIGIN: https://${DOMAIN:?set DOMAIN in deploy/.env}
     expose:
       - "3000"
     healthcheck:
-      # The site's own path, which reaches no further than this process, so a wedged Node server is
-      # told apart from a service that cannot answer. Node rather than curl, which this image has no
-      # reason to carry.
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 15s
-      # Probes every second until the first one passes. Without it the first probe waits a whole
-      # interval, and since caddy waits on this the domain would be down for that long on a deploy.
       start_interval: 1s
       retries: 3
     depends_on:
@@ -101,12 +75,10 @@ services:
     expose:
       - "8000"
     healthcheck:
-      # Answers while every prediction slot is busy, which is the point of not capping it.
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
       start_period: 30s
-      # See the web service. This one is first in the chain, so every service waits on it.
       start_interval: 1s
       retries: 3
 
@@ -116,12 +88,10 @@ services:
     environment:
       <<: *python-environment
       BALL_DONT_LIE_KEY: ${BALL_DONT_LIE_KEY:?set BALL_DONT_LIE_KEY in deploy/.env}
-    # Kept out of `docker compose up` and started by cron instead, as a container that exits and
-    # gives its memory back. It shares the api image, so `up --build` has already built it.
+    # Started by cron rather than by `docker compose up`.
     profiles:
       - jobs
     restart: "no"
-    # A host cron job starts this only when the stored schedule says box scores can have finalized.
     command: ["nba-update-serving"]
 
 volumes:

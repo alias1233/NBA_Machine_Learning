@@ -1,12 +1,3 @@
-<!--
-	What the site is, and nothing about any one model.
-
-	No model is explained here and no accuracy figure appears here. A reader who wants either should
-	go to the family's own page, so this page does not grow a section every time a family is added.
-
-	Reading a prediction is the annotated answer block rather than a passage, because the block is
-	what a reader has to learn and it teaches itself once it is labeled.
--->
 <script lang="ts">
 	import AnnotatedAnswer from '$lib/components/AnnotatedAnswer.svelte';
 	import EditorialMeta from '$lib/components/EditorialMeta.svelte';
@@ -22,7 +13,6 @@
 
 	let { data } = $props();
 
-	/** Site-wide questions belong here so every prediction page can point to one answer. */
 	const QUESTIONS = [
 		{
 			question: 'Why is an upcoming NBA game missing from the Upcoming Games section?',
@@ -55,8 +45,7 @@
 		},
 	];
 
-	// The anchors are fixed. Every answer block on the site links to #reading, so that one in
-	// particular can never be renamed.
+	// Every prediction result links to #reading, so do not rename that anchor.
 	const SECTIONS = [
 		['what', 'What it predicts'],
 		['reading', 'Reading a prediction'],

@@ -1,4 +1,4 @@
-// @ts-expect-error The site intentionally carries no Node type package for this Node-only test.
+// @ts-expect-error Node types are not installed. This test only runs in Node.
 import { readFileSync } from 'node:fs';
 
 import { SITE_ORIGIN } from './site.ts';
@@ -11,15 +11,7 @@ function check(what: string, actual: unknown, expected: unknown) {
 	console.log(`ok   ${what}`);
 }
 
-/**
- * What every allowed crawler group is refused, in the order the file writes it.
- *
- * A model page's query string is a prediction, which is a page per combination and none of them
- * worth indexing. The proxy routes under `/api/` are the browser's way to the service and nothing
- * links to them, so a crawler reaching one only costs the service a call. The two health routes
- * answer anyone, have no title between them, and are read by the container and the proxy rather
- * than by a reader.
- */
+/** Disallow rules every allowed crawler group must have, in file order. */
 const BLOCKED = [
 	'Disallow: /models/*?',
 	'Disallow: /api/',
@@ -27,11 +19,7 @@ const BLOCKED = [
 	'Disallow: /healthz'
 ];
 
-/**
- * What a parser reads as a crawler's name: letters, digits, underscore and hyphen, or the
- * catch-all. A space, a dot or a slash ends the name there, so a value carrying one is a group
- * named something other than what the file appears to say.
- */
+/** Pattern for a valid crawler name. */
 const PRODUCT_TOKEN = /^(\*|[A-Za-z0-9_-]+)$/;
 
 const policy: string = readFileSync(new URL('../../static/robots.txt', import.meta.url), 'utf8');
@@ -54,8 +42,6 @@ for (const line of allowLines) {
 	);
 }
 
-// A value with a space, a slash or a version in it is read as far as its first odd character and
-// no further, so a group named that way is one whose name the file and the crawler disagree on.
 const userAgents = lines.flatMap((line: string) =>
 	line.startsWith('User-agent:') ? [line.slice('User-agent:'.length).trim()] : []
 );
@@ -68,8 +54,6 @@ check(
 	[]
 );
 
-// A group is separated from the next by an empty line. A line holding one space is not one, and a
-// parser is free to read the two groups it separates as one.
 check(
 	'nothing in the policy is a line of whitespace',
 	rawLines.flatMap((line: string, index: number) =>
@@ -90,8 +74,6 @@ check(
 	['Disallow: /api/']
 );
 
-// The domain is written here and in site.ts, and a sitemap advertising a name the pages do not
-// claim as their canonical one is a name search engines are asked to index and never shown.
 check(
 	'the sitemap line names the origin the pages are built with',
 	lines.filter((line: string) => line.startsWith('Sitemap:')),

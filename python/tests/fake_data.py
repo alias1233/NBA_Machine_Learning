@@ -1,13 +1,4 @@
-"""
-A made up league, written the way the stores hold real data.
-
-One place builds these rows, so every test describes the same games and a column renamed in a store
-breaks here rather than in each test. Nothing in this module reaches the network.
-
-The league is four teams playing twelve games over two and a half weeks. The dates are chosen so
-that a team plays on back to back days, has a long gap, and wins and loses, because those are what
-the schedule and season columns are read off.
-"""
+"""A small fake league used as test data, in the same format as the stores."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -35,7 +26,7 @@ TEAMS = (
 ABBREVIATIONS = {team.id: team.abbreviation for team in TEAMS}
 
 def teams_frame() -> pd.DataFrame:
-    """The four teams as the team store holds them."""
+    """Returns the four teams in the team store's format."""
 
     return pd.DataFrame([
         {
@@ -48,21 +39,16 @@ def teams_frame() -> pd.DataFrame:
 
 SEASON_YEAR = 2024
 SEASON_DIGITS = "24"
-"""How the two year old season is written inside a game id, which is where its phase is written too."""
+"""The season's two digits as they appear in a game ID."""
 
 def game_id(number: int, season_type: SeasonType = SeasonType.REGULAR_SEASON) -> int:
-    """
-    A game id shaped like a real one: the phase first, then the season, then the game.
-
-    Real ids are stored as numbers, so the leading zeros a service writes are gone and the phase is
-    the first character. Everything reading a phase off an id depends on that.
-    """
+    """Returns a game ID in the real format: season type prefix, season digits, then game number."""
 
     return int(f"{season.GAME_ID_PREFIXES[season_type]}{SEASON_DIGITS}{number:05d}")
 
 @dataclass(frozen=True)
 class PlayedGame():
-    """One finished game, described by the two things a box score is worked out from."""
+    """A finished game, defined by its teams and final score."""
 
     number: int
     day: date
@@ -89,10 +75,10 @@ SEASON_GAMES = (
     PlayedGame(11, date(2024, 11, 5), 3, 1, 95, 102),
     PlayedGame(12, date(2024, 11, 5), 4, 2, 103, 109)
 )
-"""Six games for each of the four teams. Every team wins some and loses some."""
+"""Six games for each of the four teams."""
 
 NEXT_GAME_DATE = date(2024, 11, 8)
-"""A date after every game above, which is what a game still to be played is dated."""
+"""A date after every game above, used for upcoming games."""
 
 def games_of(team_id: int, games: Sequence[PlayedGame] = SEASON_GAMES) -> list[PlayedGame]:
     return [game for game in games if team_id in (game.home_team_id, game.away_team_id)]
@@ -104,19 +90,14 @@ def opponent_in(game: PlayedGame, team_id: int) -> int:
     return game.away_team_id if team_id == game.home_team_id else game.home_team_id
 
 def matchup(team_id: int, opponent_team_id: int, home: bool) -> str:
-    """How the raw data writes which side of a game a row belongs to."""
+    """Returns the matchup string in the raw data format, e.g. ANC vs. BRK or ANC @ BRK."""
 
     side = team_columns.HOME if home else team_columns.AWAY
 
     return f"{ABBREVIATIONS[team_id]} {team_columns.HOME_OR_AWAY_ENCODING[side]} {ABBREVIATIONS[opponent_team_id]}"
 
 def _made_shots(points: int) -> tuple[int, int, int]:
-    """
-    Field goals, three pointers and free throws adding up to exactly the given points.
-
-    Points are the number a test is written against, so the shots behind them are worked out rather
-    than chosen, which is the reverse of what the pipeline does with them.
-    """
+    """Returns field goals, three pointers and free throws that add up to the given points."""
 
     three_pointers = points // 12
     free_throws = (points - three_pointers) % 2
@@ -125,7 +106,7 @@ def _made_shots(points: int) -> tuple[int, int, int]:
     return (field_goals, three_pointers, free_throws)
 
 def _box_score(points: int, opponent_points: int) -> dict:
-    """The columns both the player store and the team store hold, filled from a points total."""
+    """Returns the box score columns shared by the player and team stores, generated from a points total."""
 
     field_goals, three_pointers, free_throws = _made_shots(points)
 
@@ -137,7 +118,7 @@ def _box_score(points: int, opponent_points: int) -> dict:
         team_games.THREE_POINTERS_ATTEMPTED.category_name: three_pointers + 20,
         team_games.FREE_THROWS_MADE.category_name: free_throws,
         team_games.FREE_THROWS_ATTEMPTED.category_name: free_throws + 5,
-        # Varied with the score so no rolling column is built over a constant.
+        # These vary with the score so rolling columns aren't constant.
         team_games.OFFENSIVE_REBOUNDS.category_name: 8 + points % 5,
         team_games.DEFENSIVE_REBOUNDS.category_name: 30 + points % 7,
         team_games.ASSISTS.category_name: 20 + points % 9,
@@ -148,7 +129,7 @@ def _box_score(points: int, opponent_points: int) -> dict:
     }
 
 def team_game_rows(game: PlayedGame) -> list[dict]:
-    """Both sides of one game, as the team game store holds them."""
+    """Returns both teams' rows for a game in the team game store's format."""
 
     def row(team_id: int, opponent_team_id: int, points: int, opponent_points: int) -> dict:
         return {
@@ -171,11 +152,11 @@ def team_game_rows(game: PlayedGame) -> list[dict]:
 def team_game_frame(games: Sequence[PlayedGame] = SEASON_GAMES) -> pd.DataFrame:
     return pd.DataFrame([row for game in games for row in team_game_rows(game)])
 
-# THE PLAYERS: #
+# PLAYERS: #
 PLAYERS_PER_TEAM = 3
 
 def player_id(team_id: int, number: int) -> int:
-    """A player id that says which team the player is on, so a test can read one at a glance."""
+    """Returns a player ID that encodes the team: team ID * 100 + number."""
 
     return team_id * 100 + number
 
@@ -189,12 +170,7 @@ ALL_PLAYERS = tuple(
 )
 
 def player_info_frame(players_to_describe: Sequence[Player] = ALL_PLAYERS) -> pd.DataFrame:
-    """
-    One row per player, written the way a data service publishes one.
-
-    Height arrives as feet and inches, and a player who was never drafted arrives with a word where
-    a number goes, so both are here rather than only the tidy case.
-    """
+    """Returns one player info row per player, in the format a data source returns."""
 
     return pd.DataFrame([
         {
@@ -214,12 +190,7 @@ def player_info_frame(players_to_describe: Sequence[Player] = ALL_PLAYERS) -> pd
     ])
 
 def player_points(a_player_id: int, team_points: int) -> int:
-    """
-    How a team's points are split between its players.
-
-    The first player takes the largest share, so the roster columns have a core player to lose and
-    the players are not interchangeable.
-    """
+    """Returns the player's share of the team's points."""
 
     shares = (5, 3, 2)
     number = a_player_id % 100
@@ -227,7 +198,7 @@ def player_points(a_player_id: int, team_points: int) -> int:
     return round(team_points * shares[number] / sum(shares))
 
 def player_game_rows(game: PlayedGame) -> list[dict]:
-    """Every player of both teams in one game, as the player game store holds them."""
+    """Returns the rows of every player in a game, in the player game store's format."""
 
     def rows(team_id: int, opponent_team_id: int, points: int, opponent_points: int) -> list[dict]:
         return [
@@ -240,8 +211,6 @@ def player_game_rows(game: PlayedGame) -> list[dict]:
                 player_games.MATCHUP.category_name: matchup(
                     team_id, opponent_team_id, home=team_id == game.home_team_id
                 ),
-                # Everyone plays more than the core cutoff, so the roster is stable until a test
-                # takes somebody out of it.
                 player_games.MINUTES_PLAYED.category_name: 30,
                 player_games.PLUS_MINUS.category_name: points - opponent_points,
                 **_box_score(player_points(player.id, points), 0)
@@ -258,20 +227,17 @@ def player_game_rows(game: PlayedGame) -> list[dict]:
 def player_game_frame(games: Sequence[PlayedGame] = SEASON_GAMES) -> pd.DataFrame:
     return pd.DataFrame([row for game in games for row in player_game_rows(game)])
 
-# THE OLDER ARCHIVE: #
-# The same league as above, written the way a data directory collected through a different service
-# holds it. Every identifier differs and every box score line agrees, which is the situation the
-# legacy import has to work out on its own. See nba_ml/data_collection/legacy_archive.py.
+# LEGACY ARCHIVE: #
 LEGACY_TEAM_IDS = {team.id: 900 + team.id for team in TEAMS}
 LEGACY_PLAYER_IDS = {player.id: 50_000 + player.id for player in ALL_PLAYERS}
 LEGACY_GAME_NUMBER_OFFSET = 500
-"""Keeps the phase in the first character of a legacy game id while changing the game it names."""
+"""Added to the game number so legacy game IDs differ from current ones but keep the same prefix."""
 
 RETIRED_PLAYER_IDS = {player.id: 60_000 + player.id for player in ALL_PLAYERS}
-"""A second identifier per player, standing for somebody who stopped playing before the cutoff."""
+"""A second set of legacy IDs, used for players who retired before the cutoff."""
 
 def legacy_teams_frame() -> pd.DataFrame:
-    """The four teams under the older archive's ids, keeping the tricode that identifies them."""
+    """Returns the four teams with legacy IDs and the same abbreviations."""
 
     frame = teams_frame()
     frame[teams_store.TEAM_ID.category_name] = frame[teams_store.TEAM_ID.category_name].map(LEGACY_TEAM_IDS)
@@ -283,13 +249,7 @@ def legacy_player_game_frame(
     retired: Collection[int] = (),
     season_type: SeasonType = SeasonType.REGULAR_SEASON
     ) -> pd.DataFrame:
-    """
-    The given games under the older archive's ids, with the season phase left empty as it left it.
-
-    Args:
-        retired names the players to write under a second identifier, standing for a career that
-        ended before the current archive begins.
-    """
+    """Returns the given games with legacy IDs and an empty season type."""
 
     rows = player_game_frame(games)
     player_ids = {
@@ -306,7 +266,7 @@ def legacy_player_game_frame(
     return rows
 
 def legacy_player_info_frame(described: Sequence[Player] = ALL_PLAYERS) -> pd.DataFrame:
-    """One row per player under both of the older archive's identifiers for them."""
+    """Returns player info rows for each player under both sets of legacy IDs."""
 
     return pd.concat(
         [
@@ -334,7 +294,7 @@ def write_legacy_archive(
     player_rows: pd.DataFrame,
     described: Sequence[Player] = ALL_PLAYERS
     ) -> Path:
-    """A data directory holding the three tables an import reads, and nothing else."""
+    """Writes a legacy data directory with the three tables the import needs."""
 
     _write_table(directory, teams_store, legacy_teams_frame())
     _write_table(directory, player_games, player_rows)
@@ -342,7 +302,7 @@ def write_legacy_archive(
 
     return directory
 
-# THE SCHEDULE: #
+# SCHEDULE: #
 def scheduled_game(
     game: PlayedGame,
     status: GameStatus = GameStatus.FINAL,
@@ -355,15 +315,9 @@ def scheduled_game(
         tipoff=tipoff
     )
 
-# THE SOURCE: #
+# DATA SOURCE: #
 class FakeSource(DataSource):
-    """
-    A data source answering out of the league above rather than out of a service.
-
-    It behaves like a real one where that is what a test is about: it honours the season, phase and
-    date a collector asks for, and it can be told to fail, which is what a service refusing a season
-    looks like from here.
-    """
+    """A data source that returns the fake league above instead of calling an API."""
 
     name = "fake"
     oldest_season = SEASON_YEAR
@@ -386,7 +340,7 @@ class FakeSource(DataSource):
         self.rostered = None if rosters is None else list(rosters)
         self.failing_seasons = set(failing_seasons)
         self.requests: list[str] = []
-        """What was asked for, in order, so a test can check a collector asked for the right thing."""
+        """Log of the requests made, in order, so tests can check what was fetched."""
 
     def teams(self) -> list[Team]:
         self.requests.append("teams")
@@ -438,7 +392,7 @@ class FakeSource(DataSource):
         )
 
     def rosters(self) -> list[RosterEntry] | None:
-        """None unless a test named a snapshot, which is a source with no roster feed."""
+        """Returns None unless the test provided rosters, like a source with no roster data."""
 
         self.requests.append("rosters")
 
@@ -454,15 +408,7 @@ def roster_entries(
     moved: dict[int, int] | None = None,
     left_out: Collection[int] = ()
     ) -> list[RosterEntry]:
-    """
-    Every player on the team their id says they are on, as a collected snapshot holds them.
-
-    Args:
-        hurt names the players the injury report rules out.
-        moved names the players now on a different team, as player id to team id.
-        left_out names the players the snapshot says nothing about at all, which is a service that
-        simply has not listed somebody rather than a player who has been dropped.
-    """
+    """Returns a roster entry for every player, with options for injured, traded and missing players."""
 
     moved = moved or {}
 

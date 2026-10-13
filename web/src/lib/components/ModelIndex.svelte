@@ -1,23 +1,3 @@
-<!--
-	The models a family holds, printed as an index.
-
-	Every model is on the page at once and nothing is fetched, because the figures are the only
-	content on this site that nobody else has and a figure fetched after the page has been sent
-	reaches neither a search engine nor a reader with no scripting. The service sends each model's
-	scored file with its card, the page is rendered around them, and folding a row open shows what
-	that model measured on games it never saw while it was fitted.
-
-	A row is a `<details>`, so the whole index is one column: a run of rows that grow in place reads
-	as an index being opened, where two runs side by side would leave a hole beside whichever row was
-	opened. The row's own heading carries the model's headline figure, so a reader comparing a family
-	can scan the column without opening anything.
-
-	Every figure is read against the baseline beside it, and the panel says which of the two won it: a
-	drawn check against the better of the pair, in the same green a chart reads an over in, and the word
-	in the row's own heading for anybody who cannot see the mark. Which direction counts as better is
-	the model's own to say, because on some of these figures a smaller number is the good one. A measure
-	the baseline could not be scored on has no winner, and neither does a tie.
--->
 <script lang="ts">
 	import { figure, winner } from '$lib/model-evaluation';
 	import type { ScoredModel } from '$lib/types';
@@ -34,7 +14,6 @@
 <ul class="index">
 	{#each models as model (model.name)}
 		{@const scored = model.evaluation}
-		<!-- The model's own first figure, which is the one it leads with wherever it is read. -->
 		{@const headline = scored?.metrics[0] ?? null}
 
 		<li>
@@ -65,8 +44,6 @@
 					{#if !scored}
 						<p class="small muted">This model has not been scored yet.</p>
 					{:else}
-						<!-- Held out is spelled out rather than named, because it is the whole reason the
-						     figures below mean anything and the reader is meeting the idea for the first time. -->
 						<p class="small muted">
 							Scored on {scored.samples.toLocaleString()} games from {day(scored.first_game)} to {day(scored.last_game)}.
 						</p>
@@ -85,8 +62,6 @@
 									<tr>
 										<th scope="row">
 											{metric.label}
-											<!-- Said in the row's own heading, so the winner is carried by words as well as by
-											     the mark beside the figure. -->
 										{#if better}
 											<span class="visually-hidden">
 												{better === 'model' ? 'The model is better here.' : 'The baseline is better here.'}
@@ -99,8 +74,6 @@
 												{#if better === 'model'}{@render check()}{/if}
 											</span>
 										</td>
-										<!-- Words rather than a dash, because a reader should never have to read a
-										     punctuation mark to learn that nothing was scored here. -->
 										<td>
 											{#if metric.floor === null}
 												Not scored
@@ -122,7 +95,6 @@
 	{/each}
 </ul>
 
-<!-- Drawn rather than typed, in the one stroke weight every mark on this site is drawn in. -->
 {#snippet check()}
 	<svg class="check" viewBox="0 0 24 24" aria-hidden="true">
 		<path d="M4.5 13 10 18.5 19.5 6" />
@@ -130,7 +102,6 @@
 {/snippet}
 
 <style>
-	/* An index, not a grid: one column of rows, with a rule between. */
 	.index {
 		margin: 0;
 		padding: 0;
@@ -142,8 +113,6 @@
 		border-bottom: var(--rule-panel);
 	}
 
-	/* The name and what it answers, then the model's headline figure, then the mark saying which way
-	   the row is going. The whole heading is the control, so it holds the row's own padding. */
 	.entry > summary {
 		display: flex;
 		align-items: center;
@@ -171,7 +140,6 @@
 		min-width: 0;
 	}
 
-	/* The figure the model leads with, so a family can be read down without opening a row. */
 	.state {
 		flex: none;
 	}
@@ -200,8 +168,6 @@
 		rotate: 180deg;
 	}
 
-	/* Set in from the heading above it, and capped, because a table of three columns read across a
-	   76rem page is a line nobody can track back. */
 	.measured {
 		display: flex;
 		flex-direction: column;
@@ -223,8 +189,6 @@
 		text-align: start;
 	}
 
-	/* A figure and, where it won, the mark that says so. The mark hangs off the end of the figure
-	   rather than in a column of its own, so a row stays as wide as its two numbers. */
 	.read {
 		display: inline-flex;
 		align-items: center;
@@ -232,8 +196,6 @@
 		white-space: nowrap;
 	}
 
-	/* The better of the pair, marked the way the site marks an over: green, and never green alone. The
-	   figure also takes full-strength ink and the row says which side won it in words. */
 	.read.won {
 		color: var(--over);
 		font-weight: 600;
@@ -249,7 +211,6 @@
 		stroke-linejoin: round;
 	}
 
-	/* The headline figure is the first thing to go where a row has no room for all three. */
 	@media (width < 30rem) {
 		.headline .micro {
 			display: none;

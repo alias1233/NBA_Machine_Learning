@@ -1,20 +1,3 @@
-/**
- * The team statistics page.
- *
- * The whole request lives in the URL, so a prediction renders on the server and a link to one is
- * shareable. A half-filled URL is a valid page: it renders the parameters and no result.
- *
- * A request names one of the games on the board and one of its two sides, because the answer belongs
- * to that side and would be a different number for the other one. The game is named by its id alone,
- * because the schedule is the only source of a game.
- *
- * Both sides' rosters are read as well. A team's row carries what the side it faces has available,
- * so who is missing from either team changes the answer.
- *
- * A model is offered only if it has a trained file and answers in a shape this page has a reading
- * for. A reader is never shown a stat that cannot answer.
- */
-
 import { isHttpError } from '@sveltejs/kit';
 
 import { DRAWN_KINDS } from '$lib/odds';
@@ -44,9 +27,6 @@ export const load: PageServerLoad = async ({ url }) => {
 	let models: Model[] = [];
 	let games: ScheduledGame[] = [];
 
-	// The family's standing listing, asked for alongside everything else. It is not the same set as
-	// the models a prediction can be run with: one that is not trained yet is still worth reading
-	// about, and losing the figures must not take the form down with them.
 	const listing = getScoredModels(FAMILY).catch(() => []);
 
 	try {
@@ -58,8 +38,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		);
 		games = upcoming;
 	} catch {
-		// Nothing on this page works without the service. With no published model the page is its
-		// own empty state, which is what the reader sees.
+		// If the service is down, the page shows its empty state.
 	}
 
 	const asked = models.find(({ name }) => name === parameters.get('model'));
@@ -68,16 +47,12 @@ export const load: PageServerLoad = async ({ url }) => {
 	const gameId = readGameId(parameters);
 	const selectedGame = games.find((game) => game.id === gameId) ?? null;
 
-	// Only one of the game's two sides is an answer to which team, so a side left over from another
-	// game is dropped rather than sent.
 	const named = parameters.get('team') ?? '';
 	const sides = selectedGame
 		? [selectedGame.away_team.abbreviation, selectedGame.home_team.abbreviation]
 		: [];
 	const team = sides.includes(named) ? named : '';
 
-	// The rosters are read first because they carry the lineup each side is expected to field, which
-	// is what the page opens on where the reader has not named one of their own.
 	const rosters = selectedGame === null ? [] : await getRosters(selectedGame.id).catch(() => []);
 	const expected = expectedScenarios(rosters, selectedGame);
 	const scenarios = await readGameScenarios(parameters, expected);

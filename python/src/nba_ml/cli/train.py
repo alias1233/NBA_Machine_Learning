@@ -1,13 +1,4 @@
-"""
-Training models, of any family.
-
-Which models to fit is an argument and the family each belongs to decides how, so adding a model to a
-family's specifications is all it takes to train it. One run fits one named model, or every model that
-has not been trained since a given day.
-
-The trainers are listed here rather than in models/families.py because a trainer pulls in the whole
-training loop and matplotlib, and the service reads that list.
-"""
+"""Command for training models."""
 
 import argparse
 import traceback
@@ -31,28 +22,15 @@ TRAINERS: dict[str, Callable[..., Any]] = {
     team_stat_specifications.MODEL_CATEGORY: team_stat_training.train,
     game_stat_specifications.MODEL_CATEGORY: game_stat_training.train
 }
-"""
-What fits a model of each family, keyed by model category.
-
-A trainer takes a specification and the keyword arguments below. A family missing from here has no
-training module yet.
-"""
 
 RESCORERS: dict[str, Callable[..., Any]] = {
     player_stat_specifications.MODEL_CATEGORY: player_stat_training.rescore,
     team_stat_specifications.MODEL_CATEGORY: team_stat_training.rescore,
     game_stat_specifications.MODEL_CATEGORY: game_stat_training.rescore
 }
-"""What rescored models of each family, keyed by model category."""
 
 def models_trained_before(day: datetime) -> list[ModelSpecification]:
-    """
-    Every model whose saved file was written before this day, in the order the families list them.
-
-    A model with no file, or with one that can no longer answer what its specification promises, is
-    included however old it is. Those are the models nothing can serve, so they are the ones a
-    retraining run is usually after. Pass a day far in the past to get exactly those and nothing else.
-    """
+    """Returns the models trained before the given date, plus any without a usable saved file."""
 
     stale = []
 
@@ -66,8 +44,6 @@ def models_trained_before(day: datetime) -> list[ModelSpecification]:
     return stale
 
 def _selected_models(arguments: argparse.Namespace) -> list[ModelSpecification]:
-    """The models this run fits or rescores, in the order it handles them."""
-
     if arguments.rescore:
         if arguments.model is not None:
             found = families.find_model(arguments.model)
@@ -89,8 +65,6 @@ def _selected_models(arguments: argparse.Namespace) -> list[ModelSpecification]:
             if specification.model_category in TRAINERS:
                 selected.append(specification)
             else:
-                # Skipped rather than fatal, so one family without a training module yet does not
-                # stop the families that have one.
                 print(
                     f"Skipping {specification.name}, because the "
                     f"{specification.model_category} family has no training module yet."
@@ -240,8 +214,7 @@ def main():
         default_split = classifier_training.default_evaluation_split()
 
         try:
-            # Worked out once, so every model of a batch is scored on exactly the same games even where
-            # the run crosses midnight.
+            # Built once so every model in the batch is evaluated on the same games.
             evaluation_split = replace(
                 default_split,
                 start_date=arguments.evaluation_start or default_split.start_date,
@@ -267,8 +240,6 @@ def main():
                 assert evaluation_split is not None
                 _train_one(specification, arguments, evaluation_split)
         except Exception:
-            # A batch carries on, because one family failing is no reason to leave the rest unfitted.
-            # The traceback is printed rather than swallowed, and the run still ends in a failure.
             traceback.print_exc()
             failed.append(specification.name)
 

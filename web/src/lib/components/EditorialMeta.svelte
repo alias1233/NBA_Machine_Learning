@@ -1,10 +1,9 @@
-<!-- When a page went up and when its words last changed, printed at the foot of what they are about. -->
 <script lang="ts">
 	import { datesOf } from '$lib/pages';
 	import { longDate } from '$lib/site';
 
 	type Props = {
-		/** The page these dates belong to. Its entry in lib/pages.ts holds them. */
+		/** Path of the page these dates are for. */
 		path: string;
 	};
 

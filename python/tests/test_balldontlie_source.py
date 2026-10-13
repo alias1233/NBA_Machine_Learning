@@ -1,4 +1,4 @@
-"""BALLDONTLIE's ALL-STAR contract, without network access."""
+"""Tests for the BALLDONTLIE source, using fake responses instead of the network."""
 
 from datetime import date
 from pathlib import Path
@@ -379,11 +379,6 @@ def test_play_in_is_collected_with_regular_season_and_unsupported_phases_make_no
 
 
 def test_an_update_asks_the_service_for_its_date_range_rather_than_a_whole_season():
-    """
-    The hourly job wants one day. Filtering a whole season's game list here instead would be a
-    dozen pages of it every hour, on a service paced at sixty requests a minute.
-    """
-
     session = Session(
         Response({"data": [{"id": 7, "date": "2024-10-22", "postseason": False}], "meta": {}}),
         Response({"data": [stat(10, 1, "20", 5, 1, 4), stat(20, 2, "30", 4, 2, -4)], "meta": {}}),
@@ -400,8 +395,6 @@ def test_an_update_asks_the_service_for_its_date_range_rather_than_a_whole_seaso
 
 
 def test_the_two_phases_of_one_season_read_one_game_list():
-    """Both ask the same question, and the answer is the most expensive page in a collection run."""
-
     session = Session(
         Response({"data": [{"id": 7, "date": "2024-10-22", "postseason": False}], "meta": {}}),
         Response({"data": [stat(10, 1, "20", 5, 1, 4), stat(20, 2, "30", 4, 2, -4)], "meta": {}}),
@@ -441,8 +434,6 @@ def test_rate_limit_reset_header_is_an_epoch_time(monkeypatch):
 
 
 def test_an_unreadable_rate_limit_header_falls_back_and_is_capped(monkeypatch):
-    """Nothing watches an hourly job, so a header it cannot read must not park it for an afternoon."""
-
     monkeypatch.setattr(balldontlie_source.time, "time", lambda: 1000)
     source = BallDontLieSource(0, api_key="key", session=Session())
 
@@ -455,13 +446,6 @@ def test_an_unreadable_rate_limit_header_falls_back_and_is_capped(monkeypatch):
 
 
 def test_a_listing_the_service_will_not_answer_for_is_not_held_as_an_empty_one(monkeypatch):
-    """
-    Both listings are held for the rest of the run, so a failed one has to stop it.
-
-    Holding an empty team list would write every matchup that run collects with a number in place of
-    the opponent's tricode, and the run would carry on as though nothing had happened.
-    """
-
     monkeypatch.setattr(balldontlie_source.time, "sleep", lambda _: None)
     session = Session(*[Response({}, status=500) for _ in range(BallDontLieSource.retries)])
     source = BallDontLieSource(0, api_key="key", session=session)
@@ -473,11 +457,6 @@ def test_a_listing_the_service_will_not_answer_for_is_not_held_as_an_empty_one(m
 
 
 def test_a_player_the_service_does_not_know_is_answered_rather_than_stopping_the_run():
-    """
-    A run sweeps every player who has a stored game, and an archive can hold one this service never
-    issued an identifier for. That is an answer of nobody, not a reason to stop collecting.
-    """
-
     session = Session(Response({}, status=404))
     source = BallDontLieSource(0, api_key="key", session=session)
 
@@ -515,11 +494,6 @@ def test_non_rate_limit_client_errors_are_fatal_without_retrying():
 
 
 def test_rosters_read_the_active_list_and_lay_the_injury_report_over_it():
-    """
-    Neither fetch is enough alone: the active list says who is rostered and nothing about fitness,
-    and the report says who is hurt without naming everybody who is not.
-    """
-
     active = [
         {"id": 10, "team": {"id": 1}},
         {"id": 11, "team": {"id": 2}}
@@ -541,7 +515,7 @@ def test_rosters_read_the_active_list_and_lay_the_injury_report_over_it():
 
     assert held[10].team_id == 1 and held[10].playing
     assert held[11].team_id == 2 and not held[11].playing
-    # Named only by the report, and placed by the team the report itself gives them.
+    # Player 12 is only in the injury report, so their team comes from the report.
     assert held[12].team_id == 1 and not held[12].playing
 
 
@@ -559,8 +533,6 @@ def test_an_injured_player_on_no_roster_and_no_team_is_dropped():
 
 
 def test_a_roster_listing_the_service_will_not_answer_for_stops_the_run():
-    """An empty roster table would read as a league with nobody on it, so nothing is written."""
-
     source = BallDontLieSource(0, api_key="key", session=Session(Response({}, status=500)))
     source.retries = 1
 
@@ -569,8 +541,6 @@ def test_a_roster_listing_the_service_will_not_answer_for_stops_the_run():
 
 
 def test_nba_api_publishes_no_roster_feed():
-    """nba.com carries none, so an archive collected through it predicts as it always did."""
-
     assert NBAApiSource().rosters() is None
 
 
@@ -654,8 +624,6 @@ def test_scheduled_jobs_are_locked_and_skip_non_game_days():
     assert "/var/lock" not in crontab
     assert "/var/log" not in crontab
 
-    # Losing the race is written down rather than disappearing, and only the hourly job gives up on
-    # the spot: a daily job that walked away would leave the day without a refresh or a draw.
     assert all('|| echo "Skipped' in job for job in jobs)
     assert len([job for job in jobs if "flock -E 99 -n" in job]) == 1
     assert len([job for job in jobs if "flock -E 99 -w" in job]) == 3

@@ -1,13 +1,3 @@
-/**
- * Checks how the board answers what a reader types into it.
- *
- * The search is the one thing standing between a reader and the game they came to predict, so what
- * matters here is that naming both sides finds the one game between them, that a tricode works as
- * well as a name because a card prints both, and that an empty field is never a filter.
- *
- * Run with `npm test`. Node reads the TypeScript directly, so there is nothing to install.
- */
-
 import { gamesMatching } from './games.ts';
 
 import type { ScheduledGame } from './types.ts';

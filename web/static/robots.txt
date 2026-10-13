@@ -2,21 +2,6 @@
 # robots.txt
 #
 # The crawler lists are sourced from the ai-robots-txt/ai.robots.txt project as of August 2026.
-#
-# Written so that no parser has to guess: every value is a crawler's bare name, every comment is
-# on a line of its own, and every group is separated by an empty line. RFC 9309 permits looser
-# than this and Google's parser accepts looser than this. A stricter one need not.
-#
-# Every allowed group refuses the same four things, in the same order:
-#
-#   /models/*?   a model page carrying a query string, which is a prediction rather than a page.
-#                Every one of them names the bare model page as its canonical URL.
-#   /api/        the browser's proxy to the prediction service. Nothing links to it, and a crawler
-#                reaching one only costs the service a call.
-#   /health      the prediction service's own readiness, which answers 200 to anyone.
-#   /healthz     the site process's readiness. Plain text with no title.
-#
-# web/src/lib/robots.test.ts holds every allowed group to that list.
 # ============================================================================
 
 
@@ -58,7 +43,7 @@ User-agent: PetalBot
 User-agent: LinerBot
 # Exa search
 User-agent: ExaSearchBot
-# iAsk answer engine, which publishes itself as iaskspider/2.0
+# iAsk answer engine
 User-agent: iaskspider
 Allow: /
 Disallow: /models/*?
@@ -103,7 +88,7 @@ User-agent: YiyanBot
 User-agent: kagi-fetcher
 # Gemini API "URL context" tool
 User-agent: GoogleAgent-URLContext
-# a reader adds a page as a NotebookLM source
+# a user adds a page as a NotebookLM source
 User-agent: Google-NotebookLM
 # same, alternate UA string
 User-agent: NotebookLM
@@ -130,7 +115,7 @@ User-agent: Claude-Code
 User-agent: Google-Gemini-CLI
 # Gemini's Deep Research feature
 User-agent: Gemini-Deep-Research
-# Google-hosted agents acting on a reader's request
+# Google-hosted agents acting on a user's request
 User-agent: Google-Agent
 # Google's agentic browser
 User-agent: GoogleAgent-Mariner
@@ -213,8 +198,7 @@ User-agent: LAIONDownloader
 User-agent: laion-huggingface-processor
 User-agent: img2dataset
 User-agent: ImagesiftBot
-# Other AI training / data-scraping crawlers. A name published with a space or a version after it
-# is written here as the token a parser reads, which still matches the crawler.
+# Other AI training / data-scraping crawlers
 User-agent: aiHitBot
 User-agent: Cotoyogi
 User-agent: Crawlspace
@@ -306,7 +290,6 @@ User-agent: Crawl4AI
 User-agent: Datenbank
 User-agent: GeistHaus-PageFetcher
 User-agent: HenkBot
-# iAsk's documented spider is allowed in section 1. This is a name it has never published under.
 User-agent: iAskBot
 User-agent: imageSpider
 User-agent: LCC
@@ -326,8 +309,6 @@ Disallow: /
 # SECTION 9 -- STANDARD WEB SEARCH ENGINES (ALLOWED)
 # ============================================================================
 
-# Named rather than left to the group below, which allows it on the same terms. Naming it is what
-# lets Bing Webmaster Tools' robots tester confirm these rules against the name Bing crawls under.
 User-agent: bingbot
 Allow: /
 Disallow: /models/*?

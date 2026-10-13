@@ -1,28 +1,3 @@
-<!--
-	Finds a player by name and reports the one chosen.
-
-	Given rosters it opens on them, because with a game chosen that is who the reader almost always
-	wants. Typing searches the whole league instead, so a player who has just joined a team and is on
-	no roster yet is still reachable. The list says which of the two it is showing, and a roster ends
-	on the line that says what to do about a name that is not on it, because that is where a reader
-	looks when they cannot find somebody rather than under the field.
-
-	The prediction service is not reachable from a browser, so the lookup goes through this site's own
-	/api/players route. What happens to a chosen player is the caller's business: the main picker
-	keeps the name in the box, and a picker taking several players empties it and adds a pill.
-
-	The list opens the moment it is asked for, whether or not it has anybody to show yet. While a
-	roster or a search is on its way it holds pulsing rows of the size the names will take.
-
-	A finger works the list the way it works the page. Putting one down outside the list starts a
-	scroll as often as it dismisses it, so the list is only put away where a finger is lifted about
-	where it landed, and an entry is taken on that lift rather than on the click the browser makes of
-	it afterwards.
-
-	A box holding words carries a Clear control at its right edge, so changing who is predicted is one
-	press rather than a held backspace. It takes the words and nothing else, because the picker was
-	answered by an entry and that answer stands until another entry replaces it.
--->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 
@@ -33,16 +8,16 @@
 	import type { Player, Roster } from '$lib/types';
 
 	type Props = {
-		/** Unique on the page. It ties the field, its label and its listbox together. */
+		/** Must be unique on the page. */
 		id: string;
 		label: string;
-		/** Who the box names to begin with. */
+		/** Player shown in the box at the start. */
 		initial?: Player | null;
-		/** Offered before anything is typed. Empty means the box opens only on a search. */
+		/** Players suggested before anything is typed. If empty, the list only opens for a search. */
 		rosters?: Roster[];
-		/** True while the rosters above are still coming, which is what the list waits on. */
+		/** True while the rosters are still loading. */
 		loadingRosters?: boolean;
-		/** Empties the box after a choice, which is what a picker taking several players wants. */
+		/** Clears the box after a player is chosen. */
 		clearOnChoose?: boolean;
 		onchoose: (player: Player) => void;
 	};
@@ -60,13 +35,11 @@
 	const TYPING_DELAY = 200;
 	const SHORTEST_SEARCH = 2;
 
-	/** How many names the list stands in for while it waits for them. */
+	/** Number of placeholder rows shown while names load. */
 	const RESERVED_ROWS = 5;
 
-	/** What the list calls a search, which is the whole league rather than the game's own teams. */
 	const LEAGUE = 'Across the league';
 
-	// Deliberately the initial value only. Once the box is on screen the reader owns it.
 	// svelte-ignore state_referenced_locally
 	let text = $state(initial?.name ?? '');
 	let results = $state<Player[]>([]);
@@ -76,10 +49,10 @@
 	let box = $state<HTMLInputElement>();
 	let field = $state<HTMLDivElement>();
 
-	/** Measured rather than reserved, so the words never run under the Clear control beside them. */
+	/** Measured width of the Clear button, so the text does not run under it. */
 	let clearWidth = $state(0);
 
-	/** Puts the reader in the box. The page is moved by whoever called, not by the focus. */
+	/** Focuses the search box. */
 	export function focus() {
 		box?.focus({ preventScroll: true });
 	}
@@ -88,13 +61,7 @@
 		text = '';
 	}
 
-	/**
-	 * Empties the box and leaves the reader in it with the list open.
-	 *
-	 * A search already on its way is dropped, because its answers are to words that are no longer
-	 * there. Opening is set here rather than left to the focus, since a box that already had focus
-	 * fires no focus event.
-	 */
+	/** Clears the box, keeps it focused and opens the list. */
 	function clearAndFocus() {
 		clearTimeout(timer);
 		inFlight?.abort();
@@ -113,10 +80,8 @@
 
 	const searchable = $derived(text.trim().length >= SHORTEST_SEARCH);
 
-	/** What the listbox is showing, and the flat position of each entry for the arrow keys. */
+	/** Groups shown in the list. Each entry has a flat index for arrow key navigation. */
 	const shown = $derived.by(() => {
-		// One roster names itself in the field above the list, so a heading over it would say the
-		// team's name twice. Two need telling apart, and a search is neither of them.
 		const groups = searchable
 			? [{ label: LEAGUE, players: results }]
 			: rosters.map((roster) => ({
@@ -134,13 +99,13 @@
 
 	const options = $derived(shown.flatMap((group) => group.entries.map(({ player }) => player)));
 
-	/** Whether the names the list is going to hold are still on their way. */
+	/** True while the names for the list are still loading. */
 	const waiting = $derived(searchable ? searching : loadingRosters);
 
 	async function search(term: string) {
 		inFlight?.abort();
 
-		// The service refuses a search shorter than this, so the rosters are what is left to show.
+		// The service rejects shorter searches, so the rosters are shown.
 		if (term.trim().length < SHORTEST_SEARCH) {
 			results = [];
 			active = -1;
@@ -175,8 +140,7 @@
 	}
 
 	function choose(player: Player) {
-		// A press landing after the list has closed is the tail of one already taken. A touch takes an
-		// entry the moment it is lifted, and the click the browser makes of it arrives afterwards.
+		// Ignores a click after the list has closed. It comes from a touch that was already handled.
 		if (!open) return;
 
 		text = clearOnChoose ? '' : player.name;
@@ -197,7 +161,6 @@
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			event.preventDefault();
 
-			// The first arrow on a closed box opens it rather than moving anything.
 			if (!open) {
 				open = true;
 				return;
@@ -206,8 +169,6 @@
 			const step = event.key === 'ArrowDown' ? 1 : -1;
 			active = (active + step + options.length) % options.length;
 		} else if (event.key === 'Enter' && open) {
-			// The marked entry, or the first match for a reader who typed the name and carried on.
-			// A roster the box merely opened on was not asked for, so nothing is taken from it.
 			const taken = active >= 0 ? options[active] : searchable ? options[0] : null;
 			if (taken === null) return;
 
@@ -216,32 +177,18 @@
 		}
 	}
 
-	/**
-	 * The list closes when the reader goes somewhere else, and taking an entry is not that.
-	 *
-	 * A tap on an entry takes focus off the box and names nothing that took it, because an option is
-	 * not focusable, so closing on blur alone would pull the list out from under the tap before it
-	 * became a choice. A press outside the field is what closes it in that case.
-	 */
+	/** Closes the list when focus moves to something outside the field. */
 	function onFocusOut(event: FocusEvent) {
 		const next = event.relatedTarget;
 
 		if (next instanceof Node && !field?.contains(next)) open = false;
 	}
 
-	/**
-	 * A press outside the field closes the list, and a scroll is not one.
-	 *
-	 * A mouse press is a press the moment it goes down. A finger is not: putting one on the page is
-	 * as often the start of a scroll as it is a dismissal, and closing on that alone took the list
-	 * away from every reader who tried to scroll it into view. So a touch closes the list only where
-	 * it is lifted roughly where it landed. A scroll is canceled rather than lifted, and one that
-	 * travels is a drag rather than a press either way.
-	 */
+	/** Closes the list on a click or tap outside the field. A scroll does not close it. */
 	$effect(() => {
 		if (!open) return;
 
-		/** Where a finger went down outside the field, until it becomes a press or a scroll. */
+		/** Where a touch started outside the field. Cleared once it turns out to be a tap or a scroll. */
 		let from: { x: number; y: number } | null = null;
 
 		const outside = (event: PointerEvent) => !field?.contains(event.target as Node);
@@ -301,14 +248,11 @@
 		onfocus={() => (open = options.length > 0 || waiting)}
 	/>
 
-	<!-- Inside the box it empties, and only while there is something to empty. -->
 	{#if text !== ''}
 		<FieldClear empties="player search" bind:width={clearWidth} onclear={clearAndFocus} />
 	{/if}
 
 	{#if open}
-		<!-- It floats, so it fades where it stands. Its height flows, so names arriving under a
-		     reader who is already looking at the list do not throw it open in one frame. -->
 		<div class="floating panel" transition:appear use:flowingHeight>
 			<ul
 				id="{id}-options"
@@ -329,20 +273,7 @@
 						{/if}
 
 						{#each group.entries as entry (entry.player.id)}
-							<!--
-								The input keeps focus and owns the keyboard, so the option only handles pointers.
-								A mouse press is refused so the box keeps focus, and a touch press is not,
-								because a prevented one never becomes a tap.
-
-								A finger takes the entry the moment it is lifted off it. The click a browser
-								makes of a tap is dispatched after the box has given up focus, which on a phone
-								hides the keyboard and moves the page out from under the finger, so by then the
-								click can land on anything or on nothing. Lifting is unambiguous: a swipe that
-								scrolls the list is canceled rather than lifted, so it takes nobody.
-
-								The click is still handled, because that is what assistive technology and a
-								mouse send. Whichever of the two arrives second finds the list closed.
-							-->
+							<!-- The input keeps focus and handles the keyboard, so options only handle pointer events. -->
 							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<li
 								id="{id}-option-{entry.position}"
@@ -358,8 +289,6 @@
 						{/each}
 					{/each}
 
-					<!-- Where a roster runs out, which is exactly where a reader who cannot find their
-					     player is looking. It is not an option, so it is not reachable by arrow key. -->
 					{#if !searchable}
 						<li class="hint muted small" role="presentation">
 							Somebody missing? Type a name to search the whole league.
@@ -376,7 +305,6 @@
 		position: relative;
 	}
 
-	/* Floats above the page, so it is the one other thing besides the models menu that is raised. */
 	.floating {
 		position: absolute;
 		z-index: var(--layer-floating);
@@ -389,14 +317,6 @@
 		box-shadow: var(--shadow);
 	}
 
-	/*
-	 * The list is what runs out of room, so it is what scrolls. The panel around it flows to whatever
-	 * height that settles at.
-	 *
-	 * It is given the room a whole roster needs, because a list showing five of eighteen names reads
-	 * as a short list rather than as a long one the reader has to scroll. The screen is the other
-	 * ceiling, so a list on a phone never runs past the bottom of it.
-	 */
 	ul {
 		margin: 0;
 		padding: 0;
@@ -421,7 +341,6 @@
 		cursor: default;
 	}
 
-	/* Set off from the names above it by a rule, because it is about the list rather than in it. */
 	li.hint {
 		align-items: start;
 		margin-top: var(--space-1);
@@ -430,15 +349,12 @@
 		border-radius: 0;
 	}
 
-	/* Given its size, because a name it is standing in for has none to take. It is what says the
-	   list is still on its way rather than one with nobody in it. */
 	.waiting {
 		width: 100%;
 		max-width: calc(var(--space-8) * 2);
 		height: var(--type-body);
 	}
 
-	/* Names which side of the game a run of players is, so the two rosters read as two lists. */
 	li.group {
 		min-height: var(--space-6);
 	}

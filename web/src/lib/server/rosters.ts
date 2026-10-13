@@ -1,29 +1,16 @@
-/**
- * Reading a roster out of a page's address bar, on the server.
- *
- * A URL that does not name the reader's own roster is answered with the one the chosen game
- * expects, so a link with nothing but a game in it still predicts the lineup that will take the
- * floor. Once the reader has pressed the button the URL says so, and from then on it is read
- * exactly as it stands, empty fields included. See `ROSTER_PARAMETER` in `$lib/rosters`.
- *
- * The ids in the URL are named back into players, so a shared link opens with its pills already
- * drawn rather than with a row of numbers. A name that cannot be resolved is dropped rather than
- * failing the page, because a link outliving a player is not a reason to show nothing.
- */
-
 import { expectedOf, isReadersRoster, joinedParameter, outParameter, rosterOf } from '$lib/rosters';
 import { getPlayer } from '$lib/server/api';
 
 import type { RosterSide } from '$lib/rosters';
 import type { Player, Roster, ScheduledGame, Scenario } from '$lib/types';
 
-/** One side's roster change, as players, which is what the roster controls draw. */
+/** One team's lineup changes as players, which is what the roster controls show. */
 export type NamedScenario = {
 	out: Player[];
 	joined: Player[];
 };
 
-/** Both sides of a game, which is what a team or game prediction names. */
+/** Lineup changes for both teams, as used by team and game predictions. */
 export type GameScenarios = {
 	home: NamedScenario;
 	away: NamedScenario;
@@ -44,11 +31,7 @@ async function namePlayers(ids: number[]): Promise<Player[]> {
 	return found.filter((player): player is Player => player !== null);
 }
 
-/**
- * What one side's roster parameters name, or what its game expects where they name nothing.
- *
- * A page about one team leaves the side off.
- */
+/** Gets one team's lineup changes from the query parameters. Returns the expected ones if the user has not set a roster. */
 export async function readScenario(
 	parameters: URLSearchParams,
 	expected: NamedScenario,
@@ -64,7 +47,7 @@ export async function readScenario(
 	return { out, joined };
 }
 
-/** The lineup change each side of a chosen game expects, which is what a page opens on. */
+/** Returns the expected lineup changes for both teams, which a page starts with. */
 export function expectedScenarios(rosters: Roster[], game: ScheduledGame | null): GameScenarios {
 	if (game === null) return { home: EMPTY, away: EMPTY };
 
@@ -74,7 +57,7 @@ export function expectedScenarios(rosters: Roster[], game: ScheduledGame | null)
 	};
 }
 
-/** Both sides at once, which is what a team or game prediction names. */
+/** Gets the lineup changes for both teams from the query parameters. */
 export async function readGameScenarios(
 	parameters: URLSearchParams,
 	expected: GameScenarios
@@ -87,7 +70,7 @@ export async function readGameScenarios(
 	return { home, away };
 }
 
-/** The same change written the way the prediction service asks for one. */
+/** Converts lineup changes into the format the prediction service expects. */
 export const scenarioRequest = ({ out, joined }: NamedScenario): Scenario => ({
 	without: out.map(({ id }) => id),
 	returning: joined.map(({ id }) => id)
@@ -97,15 +80,10 @@ const samePlayers = (chosen: Player[], expected: Player[]) =>
 	chosen.length === expected.length &&
 	chosen.every((player) => expected.some(({ id }) => id === player.id));
 
-/**
- * Whether the reader moved away from the lineup the page suggested.
- *
- * This is what an answer says beside its figure, so it must not fire for the expected lineup
- * itself. A prediction made for whoever will actually play is the ordinary one, not a what-if.
- */
+/** Returns true if the chosen lineup differs from the expected one. */
 export const isChanged = (chosen: NamedScenario, expected: NamedScenario) =>
 	!samePlayers(chosen.out, expected.out) || !samePlayers(chosen.joined, expected.joined);
 
-/** The same, over both sides of a game. */
+/** Same check, for both teams in a game. */
 export const isGameChanged = (chosen: GameScenarios, expected: GameScenarios) =>
 	isChanged(chosen.home, expected.home) || isChanged(chosen.away, expected.away);

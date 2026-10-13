@@ -1,14 +1,4 @@
-"""
-Reading the schedule, and putting mock games on it.
-
-Collecting the schedule is `nba-collect schedule`. This command is the other half: seeing which
-upcoming games can be predicted and why, and adding games by hand so that the whole path can be
-exercised out of season, when the real schedule has nothing on it.
-
-A mock game is stored beside the real ones and is treated exactly like one, including by the
-readiness rule in nba_ml/upcoming.py. It carries a flag, so `clear-mock` removes every one of them
-in a single step and leaves the collected schedule untouched.
-"""
+"""Command for listing upcoming games and adding mock games to the schedule."""
 
 import argparse
 from datetime import date, timedelta

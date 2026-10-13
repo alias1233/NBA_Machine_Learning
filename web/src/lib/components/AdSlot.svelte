@@ -1,7 +1,3 @@
-<!--
-	One ad slot. It reserves a fixed height so that nothing shifts when the ad arrives, and renders
-	nothing at all while ads are switched off.
--->
 <script lang="ts">
 	import { ADS_ENABLED, AD_SLOTS } from '$lib/ads';
 

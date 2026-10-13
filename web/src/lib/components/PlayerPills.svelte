@@ -1,9 +1,3 @@
-<!--
-	The players a picker has been given, each as a removable pill.
-
-	The hidden inputs are what put the choice in the URL when the form is submitted, so a prediction
-	made with a changed roster is still a shareable link.
--->
 <script lang="ts">
 	import { flowingHeight } from '$lib/motion';
 
@@ -11,7 +5,7 @@
 
 	type Props = {
 		players: Player[];
-		/** The query parameter each chosen id is submitted as. */
+		/** Query parameter each selected player id is submitted under. */
 		name: string;
 		onremove: (player: Player) => void;
 	};
@@ -23,8 +17,6 @@
 	<input type="hidden" {name} value={player.id} />
 {/each}
 
-<!-- Held at the height of the list, so a pill added to one already open flows the same way the first
-     one arriving does. Empty it takes no height at all. -->
 <div class="pills" use:flowingHeight>
 	<ul>
 		{#each players as player (player.id)}
@@ -65,7 +57,6 @@
 		border-radius: var(--radius-full);
 	}
 
-	/* The cross sits beside the player's name, which is the text label it belongs to. */
 	button {
 		display: flex;
 		align-items: center;
@@ -81,8 +72,6 @@
 		transition: color var(--motion-fast) var(--ease-in);
 	}
 
-	/* Emphasis rather than accent, because a remove control is not one of the marks the accent is
-	   allowed. */
 	button:hover {
 		color: var(--ink);
 	}

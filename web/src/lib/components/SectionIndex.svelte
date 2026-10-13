@@ -1,35 +1,18 @@
-<!--
-	What a page holds, listed.
-
-	An explaining page is long and a reader usually came for one part of it, so the parts are named
-	and the one they are reading is marked as they go. Wide, the list stands beside the sections in
-	the column the text does not use and follows the reader down. Narrow, there is no column to stand
-	in and a run of links across the top is out of reach the moment the reader is into the page, so
-	it is a tab in the bottom corner instead: it follows the screen, it opens the list above itself,
-	and it stays open until the reader closes it, so the page can be scrolled with it standing.
-
-	The anchors are the sections' own, so every entry is a link to somewhere already on the page and
-	travels to it rather than jumping.
--->
 <script lang="ts">
 	type Props = {
-		/** Each section's anchor and its heading, in the order the page sets them. */
+		/** Anchor and heading of each section, in page order. */
 		sections: string[][];
 		label: string;
 	};
 
 	let { sections, label }: Props = $props();
 
-	/** The section the reader is in, which is the last one to have passed the reading line. */
+	/** Anchor of the section the user is in. It is the last one to pass the reading line. */
 	let current = $state('');
 
 	let open = $state(false);
 
-	/**
-	 * How far down the screen a section counts as the one being read. A third of it, rather than the
-	 * top edge, because a heading standing at the very top of the screen is one the reader has only
-	 * just reached, and because a section landed on from the list starts above this line.
-	 */
+	/** Divides the screen height to place the reading line, here one third of the way down. */
 	const READING_LINE = 3;
 
 	$effect(() => {
@@ -39,8 +22,7 @@
 			const line = window.innerHeight / READING_LINE;
 			const foot = document.documentElement.scrollHeight - window.innerHeight;
 
-			// The last section is often shorter than the screen, so nothing below it can ever bring it
-			// past the line. The bottom of the page is that section by definition.
+			// The last section may be too short to reach the line, so it is selected at the bottom of the page.
 			if (window.scrollY >= foot - 1) {
 				current = anchors[anchors.length - 1] ?? '';
 				return;
@@ -73,8 +55,6 @@
 	<ul class="entries" id="section-index">
 		{#each sections as [anchor, heading] (anchor)}
 			<li>
-				<!-- Marked as a place on the page rather than as the page itself, which is what the header
-				     does for the section of the home page it points at. -->
 				<a
 					class="small"
 					href="#{anchor}"
@@ -87,8 +67,6 @@
 		{/each}
 	</ul>
 
-	<!-- Only ever drawn where the list has no column to stand in. It says what it opens rather than
-	     carrying a symbol alone, because it is the one way to the rest of a long page. -->
 	<button
 		type="button"
 		class="toggle"
@@ -112,8 +90,6 @@
 		list-style: none;
 	}
 
-	/* Room for the mark on the section being read, held open by every entry, so nothing moves as the
-	   reader passes from one to the next. */
 	.entries li {
 		display: flex;
 		border-inline-start: var(--rule-accent);
@@ -139,8 +115,6 @@
 		color: var(--plane-accent);
 	}
 
-	/* The section being read, in the accent and set heavier, with the rule beside it. Never color
-	   alone. */
 	.entries a[aria-current] {
 		color: var(--plane-accent);
 		font-weight: 600;
@@ -158,12 +132,7 @@
 		transition: rotate var(--motion) var(--ease-in);
 	}
 
-	/*
-	 * Narrow: a tab in the bottom corner of the screen with the list opening above it. It is the one
-	 * thing on the site that follows the screen, because it is the only way into a long page once the
-	 * top of it is gone. The layer takes no presses of its own, so the page under the room the list
-	 * would take is worked on as though nothing were there.
-	 */
+	/* Narrow screens. A tab in the bottom corner, with the list opening above it. */
 	@media (width < 64rem) {
 		.index {
 			position: fixed;
@@ -177,8 +146,6 @@
 			pointer-events: none;
 		}
 
-		/* A list standing over the page, so it is on the page's own paper and carries the one shadow.
-		   Closed, it is not drawn and cannot be reached by a press or by the keyboard. */
 		.entries {
 			flex-direction: column;
 			visibility: hidden;
@@ -220,7 +187,6 @@
 			color: var(--plane-accent);
 		}
 
-		/* Pointing up at the list it opens, and back down at the tab once the list is standing. */
 		.mark {
 			rotate: 180deg;
 		}
@@ -230,8 +196,6 @@
 		}
 	}
 
-	/* Portrait, the tab and the list it opens carry no ground of their own and the page reads through
-	   them. Their rule, their shadow and their ink are unchanged. */
 	@media (orientation: portrait) and (width < 64rem) {
 		.entries,
 		.toggle {
@@ -239,11 +203,7 @@
 		}
 	}
 
-	/*
-	 * Wide: the column beside the reading, following the reader down it. The hairline runs the whole
-	 * list and the entry being read covers its own stretch of it in the accent, so the mark is part
-	 * of the same line rather than a second one beside it.
-	 */
+	/* Wide screens. A column beside the content. */
 	@media (min-width: 64rem) {
 		.index {
 			position: sticky;

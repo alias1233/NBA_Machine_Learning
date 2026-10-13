@@ -1,11 +1,4 @@
-"""
-Publishing the whole league's features, and reading them back.
-
-The service answers out of what the last build job wrote, so publishing has to survive a job that
-dies half way through. A build is written under a working name, moved into place whole, and only
-then pointed at. These tests check that a reader never picks up a half written build and always
-picks up the newest finished one.
-"""
+"""Tests for publishing and loading feature builds."""
 
 from datetime import date, datetime
 
@@ -65,8 +58,6 @@ def test_the_newest_build_is_the_one_that_is_read():
     assert read.version == "20260812-100000"
 
 def test_a_build_left_half_written_by_a_failed_job_is_ignored():
-    """A directory still under its working name is what a job that died looks like."""
-
     feature_store.publish(BUILD, _build("2026-08-12T09:00:00"))
 
     working = paths.feature_build_directory(BUILD) / (feature_store.WORKING_PREFIX + "20260812-110000")
@@ -80,8 +71,6 @@ def test_a_build_left_half_written_by_a_failed_job_is_ignored():
     assert read.version == "20260812-090000"
 
 def test_whether_a_build_is_published_is_answered_without_reading_one():
-    """The prediction cap asks this on the event loop, so it must not load anything."""
-
     assert not feature_store.is_published(BUILD)
 
     feature_store.publish(BUILD, _build())
@@ -98,8 +87,6 @@ def test_a_half_written_build_does_not_count_as_published():
     assert not feature_store.is_published(BUILD)
 
 def test_a_build_left_half_written_by_a_failed_job_is_removed_by_the_next_publish():
-    """Nothing else prunes them, so repeated failures would otherwise fill the server disk."""
-
     working = paths.feature_build_directory(BUILD) / (feature_store.WORKING_PREFIX + "20260812-110000")
     working.mkdir(parents=True)
     (working / feature_store.SEQUENCES_FILE).write_bytes(b"")
@@ -109,8 +96,6 @@ def test_a_build_left_half_written_by_a_failed_job_is_removed_by_the_next_publis
     assert not working.exists()
 
 def test_only_the_newest_builds_are_kept():
-    """The one being served has to survive the next job, whether it succeeds or fails."""
-
     for hour in range(9, 13):
         feature_store.publish(BUILD, _build(f"2026-08-12T{hour:02d}:00:00"))
 
@@ -129,19 +114,12 @@ def test_a_model_reads_its_own_columns_out_of_a_build_made_for_every_model():
     np.testing.assert_array_equal(subject.sequence_values[:, 0], build.subjects[1].sequence_values[:, 2])
 
 def test_a_build_made_before_a_column_existed_says_so_rather_than_answering():
-    """
-    The failure this exists to make loud. Reading a missing column as whatever sits in its place
-    would answer with numbers about the wrong thing.
-    """
-
     build = _build()
 
     with pytest.raises(ValueError, match="STEALS"):
         build.column_positions(["POINTS", "STEALS"])
 
 def test_only_the_games_before_the_predicted_one_are_read():
-    """A game played on the day being predicted counts as after it, not before."""
-
     subject = _subject(4, first_day="2024-10-22")
 
     assert subject.before(date(2024, 10, 22)).game_count == 0

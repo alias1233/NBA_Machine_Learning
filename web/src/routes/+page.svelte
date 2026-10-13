@@ -1,30 +1,3 @@
-<!--
-	The home page: the hero, then the Models section under it.
-
-	The hero is one screen of printed plate with two sheets of paper lying on it, and it shows the
-	day's sample predictions rather than describing what the site does. Nothing there predicts: the
-	samples were drawn by a job this morning and are read off a file. See ShowcasePlate.svelte and
-	python/src/nba_ml/showcase.py.
-
-	The Models section is the site's index and the one thing the hero leads to. It reads directly on
-	the reader's own page. Each family is held by its own block-paper frame, so the page stays visible
-	between the three choices and the frames themselves are the objects in the section.
-
-	A wide landscape device holds the three frames side by side at the same height. A smaller screen
-	lets the grid break into fewer columns, so every family remains readable and usable.
-
-	A family is not a picture, it is the models in it, so each frame prints them by name with what
-	each one answers. See FamilySheet.svelte.
-
-	What is not a family, which today is only the line saying more are coming, stands below the frames.
-
-	Everything under the hero is one sheet of page, and it is one object rather than a run of sections
-	because the hero stands still while the page travels over it. See .over-plate below.
-
-	At the foot of that sheet the site says what a reader can do here, in its own standing prose. That
-	is the only text on this page written for this page, so it is what a search engine has to read the
-	page as being about. See SiteBrief.svelte.
--->
 <script lang="ts">
 	import AdSlot from '$lib/components/AdSlot.svelte';
 	import FamilySheet from '$lib/components/FamilySheet.svelte';
@@ -69,9 +42,6 @@
 	}
 </script>
 
-<!-- The site and the thing it is, stated here and nowhere else. Every other page refers to the site
-     by its `@id` rather than describing it again, and Google reads a site's name off its home page
-     alone, so this is the one page that says it. See lib/seo.ts. -->
 <PageMetadata
 	description={PRIVATE_SITE_DESCRIPTION}
 	path="/"
@@ -95,15 +65,10 @@
 				<h2 class="page-title type-h1">Models</h2>
 			</div>
 
-			<!-- A dead service leaves this list empty too, and telling a reader nothing is published would
-			     name the wrong cause. The footer says the same thing at the same moment. -->
 			{#if data.families.length === 0}
 				{#if data.health}
 					<Notice>No model is published yet.</Notice>
 				{:else}
-					<!-- Names the cause but not the recovery. The hero above and the footer below both already
-					     tell the reader to come back, and three of that on one screen is two too many. It still
-					     stands alone for somebody who arrived straight at this section. -->
 					<Notice>No model can be listed while the prediction service is not answering.</Notice>
 				{/if}
 			{:else}
@@ -124,14 +89,7 @@
 </div>
 
 <style>
-	/*
-	 * The page, and everything printed on it, as one sheet lying over the hero.
-	 *
-	 * The hero stands still while the reader scrolls, which makes it a positioned object, and a
-	 * section under it that is not one would be painted over by it rather than covering it. So the
-	 * whole page below the hero is one positioned sheet carrying the page tone, and anything added to
-	 * it later travels over the plate without having to know any of this.
-	 */
+	/* Positioned so this section paints over the sticky hero and not under it. */
 	.over-plate {
 		position: relative;
 		display: flex;
@@ -146,8 +104,6 @@
 		padding-block: var(--space-6) var(--space-5);
 	}
 
-	/* The listing's first piece of paper. Its page edge stays square while the far edge takes the
-	   fold of a folder tab. */
 	.models-tab {
 		position: absolute;
 		inset-block-end: 100%;
@@ -199,22 +155,9 @@
 		gap: var(--space-3);
 	}
 
-	/*
-	 * Landscape, the whole section is one screen, starting at the top edge it lands on. The
-	 * frames take whatever the heading and the line under it leave, so every family stays in sight
-	 * and every way into it can be pressed without a scroll.
-	 *
-	 * Orientation rather than width, because what decides this is whether the device has height to
-	 * spend or scroll to save, which is the same question the stacked bricks answer the other way.
-	 * The smallest screen is what it is measured against, so a phone's browser bars coming back
-	 * cannot push the foot of the board off the bottom.
-	 */
 	@media (min-width: 64rem) and (orientation: landscape) {
 		.models {
-			/* Held closer to the hero than a section on paper usually is, because here the room above
-			   the heading is room off the board, and the board is what has to fit. */
 			padding-block: var(--space-5);
-			/* A whole screen, because .lands-flush puts the section's top edge on the top of it. */
 			min-height: 100svh;
 		}
 

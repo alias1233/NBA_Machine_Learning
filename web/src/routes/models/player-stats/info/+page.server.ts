@@ -1,4 +1,4 @@
-/** The family's models are listed on its own page now. Kept so an indexed link still lands. */
+/** The model list moved to the family page. The redirect keeps indexed links working. */
 
 import { redirect } from '@sveltejs/kit';
 

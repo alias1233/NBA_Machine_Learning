@@ -1,17 +1,3 @@
-<!--
-	An answer that is a chance per named category.
-
-	The categories have no order, so there is no line to read against and nothing to drag. Every
-	category is drawn, which makes this the whole answer rather than a view of one, so nothing sits
-	behind it either.
-
-	A category's name and its chance share a line above a bar of the full width, so the bars are the
-	same size whatever the figures over them are. Bars are neutral, the same as a chart with no line
-	set, because nothing here splits them.
-
-	`Reading` is the surface and owns the swap from the reserved space to the answer, so this holds
-	only the two things being swapped.
--->
 <script lang="ts">
 	import Reading from '$lib/components/Reading.svelte';
 	import { sentenceCase } from '$lib/models';
@@ -20,16 +6,16 @@
 	import type { CategoryAnswer } from '$lib/odds';
 
 	type Props = {
-		/** The finished answer, or null while one is being worked out. */
+		/** The prediction result, or null while it is loading. */
 		categories: CategoryAnswer | null;
 		loading: boolean;
-		/** Draw the bars when a client-delivered answer arrives. */
+		/** Animates the bars when a result arrives on the client. */
 		animateBars?: boolean;
 	};
 
 	let { categories, loading, animateBars = false }: Props = $props();
 
-	/** What a yes or no answer takes, which is every model answering this way today. */
+	/** Number of placeholder rows. A yes or no result has two. */
 	const RESERVED_ROWS = 2;
 
 	const rows = $derived.by(() => {
@@ -83,8 +69,6 @@
 		gap: var(--space-5);
 	}
 
-	/* The name takes what it needs and the figure sits at the far end of the same line, so the bar
-	   under them is the full width in every row however long a figure runs. */
 	.row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
@@ -102,14 +86,11 @@
 		background: var(--surface-sunken);
 	}
 
-	/* No radius. A rounded bar misreports its own length. */
 	.bar {
 		height: 100%;
 		background: var(--chart-neutral);
-		/* Its width never changes after arrival: there is no line to drag here. */
 	}
 
-	/* The notable category prints first, then the row that qualifies it. */
 	.drawing .bar {
 		animation-name: run;
 		animation-duration: var(--motion);
@@ -127,7 +108,6 @@
 		}
 	}
 
-	/* Given its width, because a name it is standing in for has none to take. */
 	.reserved.name {
 		grid-column: 1 / -1;
 		width: calc(var(--space-8) * 1.5);

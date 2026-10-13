@@ -1,10 +1,3 @@
-/**
- * Both sides of an upcoming game, for the browser.
- *
- * Choosing a game card changes parameters without navigating, so the player lists it switches to,
- * and the lineup change each side expects, have to be fetched rather than loaded.
- */
-
 import { json } from '@sveltejs/kit';
 
 import { getRosters } from '$lib/server/api';

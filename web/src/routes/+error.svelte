@@ -1,8 +1,3 @@
-<!--
-	Covers 404 and everything else. A heading, one line, and a link home.
-
-	The reader is never shown a status code or the name of a service that failed.
--->
 <script lang="ts">
 	import { page } from '$app/state';
 	import PlateBand from '$lib/components/PlateBand.svelte';

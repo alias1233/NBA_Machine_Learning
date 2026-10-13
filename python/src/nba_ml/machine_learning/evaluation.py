@@ -7,13 +7,9 @@ from pathlib import Path
 
 from .trainer import MetricFunction
 
-# Matplotlib and the calibration curve are pulled in inside the two functions that draw, the way
-# trainer.graph_loss_progress does. The names below are read by the service to describe a saved
-# score, and it has no business loading a plotting stack to do that.
+# Matplotlib is imported inside the plotting functions so the API never has to load it.
 
-# What a scored figure is called. These names are written into a saved evaluation file and read back
-# by anything reporting one, so they are identifiers rather than wording. What a reader is shown is
-# decided in nba_ml/models/metrics.py, which can be reworded without retraining anything.
+# Metric keys used in saved evaluation files.
 LOSS = "loss"
 CROSS_ENTROPY = "cross_entropy"
 ACCURACY = "accuracy"
@@ -31,44 +27,29 @@ HIGHEST_PROBABILITY_RMSE = "highest_probability_rmse"
 CENTRAL_INTERVAL_CALIBRATION_ERROR = "central_interval_calibration_error"
 
 CENTRAL_INTERVAL = 0.8
-"""
-How much of an answer the covered middle holds, for the coverage figure below.
-
-Eight tenths leaves a tenth in each tail, which is wide enough that a season of games says something
-about it and narrow enough that a model claiming more certainty than it has is caught.
-"""
+"""Size of the central prediction interval used for the interval calibration metric."""
 
 @dataclass(frozen=True)
 class ValueScale():
-    """
-    The number line a set of classes sits on, which is what turns a class back into a statistic.
-
-    A class need not be one value. Where it covers a run of them, class_values holds the middle of
-    that run, so every figure below is read in the units a reader knows however wide a class is.
-    """
+    """Maps a model's classes to the numeric values they cover."""
 
     class_values: np.ndarray
-    """What each position stands for, shaped (classes,)."""
+    """The value each class represents. Shape: (classes,)."""
 
     actual_values: np.ndarray
-    """What actually happened, as recorded, shaped (samples,)."""
+    """The actual value of each sample. Shape: (samples,)."""
 
     first_value: float
-    """The lowest value the first class covers."""
+    """Lowest value covered by the first class."""
 
     value_step: int
-    """How many whole numbers one class covers."""
+    """Number of integers each class covers."""
 
     impossible_value: int | None = None
-    """A whole number the statistic cannot take, which is therefore not on the line at all."""
+    """An integer the stat can never be, e.g. a point differential of 0."""
 
     def lines(self, classes: int) -> np.ndarray:
-        """
-        Every whole number the range holds, which is every line a model can be asked about.
-
-        A value that cannot happen is not one of them, so the numbers above it shift down onto the
-        ones the model does answer with and every class still covers value_step of them.
-        """
+        """Returns every integer in the model's range. Each one is a possible over/under line."""
 
         lines = self.first_value + np.arange(classes * self.value_step)
 
@@ -78,17 +59,11 @@ class ValueScale():
         return np.where(lines >= self.impossible_value, lines + 1, lines)
 
     def spread_over_values(self, predicted_probabilities: np.ndarray) -> np.ndarray:
-        """
-        The answer read as a probability per whole number rather than per class.
-
-        A class covering a run of numbers claims nothing about where inside it the outcome sits, so
-        it is read as spread evenly across them. That is how the site reads one, which is what makes
-        every figure worked out from this comparable between models whose classes differ in width.
-        """
+        """Converts class probabilities to a probability per integer, split evenly within each class."""
 
         return np.repeat(predicted_probabilities, self.value_step, axis=1) / self.value_step
 
-# Metrics scored during training, on batches of logits still held as tensors.
+# Metrics computed during training on batches of logits.
 
 def _accuracy(predictions: torch.Tensor, actuals: torch.Tensor) -> float:
     return (predictions.argmax(dim=1) == actuals).float().mean().item()
@@ -99,16 +74,7 @@ def _true_class_probability(predictions: torch.Tensor, actuals: torch.Tensor) ->
     return probabilities[torch.arange(len(actuals), device=probabilities.device), actuals].mean().item()
 
 def get_ordinal_classification_metrics(class_values: np.ndarray) -> dict[str, MetricFunction]:
-    """
-    The metrics worth watching per epoch for a model that predicts a distribution over ordered
-    values. Accuracy alone hides how far off a wrong prediction was, so the mean absolute error of
-    the distribution's expected value is tracked beside it.
-
-    Args:
-        class_values is what each position stands for, so the error reads in the statistic's own
-        units rather than in classes. What happened is read as the middle of the class it fell in,
-        which is all the labels carry. The finished model is scored against the recorded value.
-    """
+    """Returns the per-epoch metrics for models that predict a distribution over ordered values."""
 
     values = torch.as_tensor(class_values, dtype=torch.float32)
 
@@ -124,19 +90,14 @@ def get_ordinal_classification_metrics(class_values: np.ndarray) -> dict[str, Me
     }
 
 def get_classification_metrics() -> dict[str, MetricFunction]:
-    """
-    The metrics worth watching per epoch for a model choosing between categories that have no order.
-
-    Accuracy says almost nothing about a rare outcome, because always answering no scores well, so
-    the probability the model gave to what actually happened is tracked beside it.
-    """
+    """Returns the per-epoch metrics for models that predict unordered categories."""
 
     return {
         "acc": _accuracy,
         "p(true)": _true_class_probability
     }
 
-# Metrics scored after training, on the full set of predictions held as arrays.
+# Metrics computed after training on the full set of predictions.
 
 def calculate_mae_and_rmse_error(
     predictions: np.ndarray,
@@ -152,10 +113,7 @@ def calculate_brier_score(
     predicted_probabilities: np.ndarray,
     actuals: np.ndarray
     ) -> float:
-    """
-    The mean squared distance between the predicted distribution and the outcome that happened.
-    Lower is better, and unlike accuracy it rewards being confident only when that is warranted.
-    """
+    """Returns the mean squared error between the predicted probabilities and the one-hot outcome."""
 
     one_hot_actuals = np.zeros_like(predicted_probabilities)
     one_hot_actuals[np.arange(len(actuals)), actuals] = 1.0
@@ -166,14 +124,7 @@ def calculate_ranked_probability_score(
     predicted_probabilities: np.ndarray,
     actuals: np.ndarray
     ) -> float:
-    """
-    The Brier score's ordered cousin, scored on running totals instead of single classes, so
-    putting probability one class away from the outcome costs less than putting it ten away.
-
-    Counted in classes, and normalized by how many there are. That makes it a fair reading of how
-    well a model orders its own classes, and not a way to compare two models whose classes cover
-    different amounts of ground. Use the line score for that.
-    """
+    """Like the Brier score, but computed on cumulative probabilities so the class order matters."""
 
     n_classes = predicted_probabilities.shape[1]
 
@@ -186,22 +137,12 @@ def calculate_line_ranked_probability_score(
     predicted_probabilities: np.ndarray,
     values: ValueScale
     ) -> float:
-    """
-    How wrong the chance of going over is, added up over every whole number line the range holds.
-
-    This is the one figure that compares two models whose classes cover different amounts of ground.
-    A class covering three points is read as spread evenly over those three, which is how the site
-    reads one, so both models are asked the same question at every line: what are the odds here.
-
-    Added up rather than averaged, because a line out in the tail scores almost nothing either way.
-    Averaging would hand a quiet reward to whichever model was given the wider range, since the extra
-    lines are the easy ones. Lower is better.
-    """
+    """Ranked probability score computed over every integer line instead of every class."""
 
     classes = predicted_probabilities.shape[1]
     lines = values.lines(classes)
 
-    # The chance of landing at or below each line, against whether it actually did.
+    # Predicted probability of finishing at or below each line, compared with what happened.
     predicted_cumulative = np.cumsum(values.spread_over_values(predicted_probabilities), axis=1)
     happened = (values.actual_values[:, None] <= lines).astype(np.float64)
 
@@ -212,13 +153,7 @@ def calculate_central_interval_calibration_error(
     values: ValueScale,
     interval: float = CENTRAL_INTERVAL
     ) -> float:
-    """
-    The gap between outcomes landing inside each selected middle interval and the probability those
-    intervals held on average.
-
-    The inclusive bounds of a discrete interval can hold more or less than `interval`, so observed
-    coverage is calibrated against the probability mass the selected bounds actually contain.
-    """
+    """Returns the difference between how often the central interval contained the result and its predicted probability."""
 
     classes = predicted_probabilities.shape[1]
     lines = values.lines(classes)
@@ -242,12 +177,7 @@ def calculate_central_interval_calibration_error(
     return abs(float(np.mean(inside)) - float(np.mean(expected)))
 
 def class_prior(outputs: np.ndarray, classes: int) -> np.ndarray:
-    """
-    How often each class happened, which is the best answer a model that reads nothing can give.
-
-    Scoring this on the same games gives every figure below a floor to be read against, so a reader
-    is told what the model is worth rather than only what it scored.
-    """
+    """Returns the frequency of each class, used as a baseline prediction."""
 
     counts = np.bincount(np.asarray(outputs, dtype=np.int64), minlength=classes).astype(np.float64)
     total = counts.sum()
@@ -317,14 +247,7 @@ def expected_calibration_error_classwise(
     return total_ece / n_classes
 
 OCCURRENCES_PER_BIN = 5
-"""
-How often an outcome has to have happened, per bin, before a reliability diagram of it means
-anything.
-
-An outcome at the far end of a range happens a handful of times or never. Its curve is then drawn
-from almost no events, on an axis scaled to the noise floor, and reads as wild miscalibration when
-the model is doing nothing wrong. Those outcomes are left out rather than drawn.
-"""
+"""Minimum occurrences per bin for an outcome to get a reliability diagram."""
 
 def plot_calibration(
         predicted_probabilities: np.ndarray,
@@ -335,16 +258,7 @@ def plot_calibration(
         rows_columns: int = 3,
         save_graph_directory_path: Path | None = None
         ):
-    """
-    Plots one reliability diagram per outcome, which shows whether a predicted probability happens as
-    often as it claims.
-
-    Args:
-        predicted_probabilities is shaped (samples, classes) and actuals holds one class per sample.
-        class_labels names what each position stands for, so a graph is titled with the outcome
-        rather than with its position, which are not the same wherever a range does not start at zero.
-        rows_columns is how many graphs fit across and down one page.
-    """
+    """Plots one reliability diagram per outcome."""
 
     import matplotlib.pyplot as plt
     from sklearn.calibration import calibration_curve
@@ -426,13 +340,7 @@ def calculate_classification_ordinal_errors(
         predicted_probabilities: np.ndarray,
         values: ValueScale
     ) -> dict[str, float]:
-    """
-    Scores the predicted distributions two ways: by the single class each one favours, and by the
-    average value each one implies. The second is the fairer measure of a distribution.
-
-    Both are measured in the statistic's own units, against what was recorded rather than against
-    the class it fell in, so a model whose classes are buckets pays for the ground a bucket covers.
-    """
+    """Returns error metrics for the most likely value and the expected value of each prediction."""
 
     highest_probability_mae, highest_probability_rmse = calculate_mae_and_rmse_error(
         values.class_values[np.argmax(predicted_probabilities, axis=1)],
@@ -450,8 +358,6 @@ def calculate_classification_ordinal_errors(
         HIGHEST_PROBABILITY_RMSE: float(highest_probability_rmse[0]),
         EXPECTED_VALUE_MAE: float(expected_value_mae[0]),
         EXPECTED_VALUE_RMSE: float(expected_value_rmse[0]),
-        # The average miss is pulled up by the games nothing could have called. The middle one says
-        # what an ordinary answer is worth, which is the reading a person actually wants.
         EXPECTED_VALUE_MEDIAN_ERROR: float(np.median(np.abs(expected_values - values.actual_values)))
     }
 
@@ -464,22 +370,13 @@ def _plot_predicted_distributions(
         output_size: int,
         save_graph_directory_path: Path | None
     ):
-    """
-    Draws a handful of finished distributions, each against the outcomes it is over.
-
-    Args:
-        values is the number line the classes sit on, or None when the positions are named
-        categories. A category set has no number line, so nothing is averaged across one and no
-        expected value is marked.
-    """
+    """Plots a random sample of predicted distributions."""
 
     import matplotlib.pyplot as plt
 
     sample_size = min(output_size, len(predicted_probabilities))
     indices = np.random.choice(len(predicted_probabilities), size=sample_size, replace=False)
 
-    # Bars sit at the value they stand for, so a range that does not start at zero, or whose classes
-    # are wider than one, is drawn as the values a reader knows rather than as positions in an array.
     positions = (
         np.arange(predicted_probabilities.shape[1]) if values is None else values.class_values
     )
@@ -541,24 +438,7 @@ def score_classification(
         actuals: np.ndarray,
         values: ValueScale | None = None
     ) -> dict[str, float]:
-    """
-    Every figure a set of finished answers can be scored on, keyed by the names at the top of this
-    module.
-
-    The figures that need no number line are worked out over positions in the array, which is where
-    the model answers. Everything else is read in the statistic's own units, because a report is read
-    by somebody who knows the statistic and not the array.
-
-    Nothing here knows where the answers came from, so the same call scores a trained model and the
-    floor it is read against.
-
-    Args:
-        predicted_probabilities is shaped (samples, classes) and already normalized. actuals holds
-        the class that happened.
-        values is the number line the classes sit on, or None when the positions are named
-        categories rather than a run of values. Several of the figures read the positions as a line,
-        so they are only scored when there is one.
-    """
+    """Returns every evaluation metric for the predictions, keyed by the metric keys above."""
 
     metrics: dict[str, float] = {
         ACCURACY: float(np.mean(np.argmax(predicted_probabilities, axis=1) == actuals)),
@@ -572,7 +452,7 @@ def score_classification(
         )
     }
 
-    # These read the classes as a line, so none of them says anything about named categories.
+    # These metrics need ordered numeric classes, so they are skipped for category outputs.
     if values is not None:
         metrics[RANKED_PROBABILITY_SCORE] = calculate_ranked_probability_score(
             predicted_probabilities, actuals
@@ -596,15 +476,7 @@ def graph_classification(
         output_size: int = 5,
         save_graph_directory_path: Path | None = None
     ):
-    """
-    Draws a handful of finished answers and one reliability diagram per outcome.
-
-    Args:
-        class_labels names what each position stands for, so a graph is titled with the outcome
-        rather than with its position, which are not the same wherever a range does not start at
-        zero.
-        save_graph_directory_path saves the graphs there instead of showing them.
-    """
+    """Plots a sample of predicted distributions and a reliability diagram for each outcome."""
 
     _plot_predicted_distributions(
         predicted_probabilities,

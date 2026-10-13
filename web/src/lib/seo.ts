@@ -15,15 +15,7 @@ type FaqQuestion = {
 	answer: string[];
 };
 
-/**
- * What a page tells a crawler to do with it, read off its entry in pages.ts.
- *
- * An indexed page asks for the whole preview: a full-size image, an untrimmed snippet, and an
- * untrimmed video preview, which is what a search result for a page of writing should be allowed to
- * show. A page that is not indexed says so here rather than only by being left out of the sitemap,
- * because a sitemap advertises and this directive decides. `follow` on that page keeps the links it
- * carries back into the site worth as much as any other link on the site.
- */
+/** Returns the robots meta directive for a page. */
 export const robotsDirective = (path: string): string =>
 	isIndexed(path)
 		? 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
@@ -38,13 +30,7 @@ export const authorSchema = (): JsonLd => ({
 	url: absoluteUrl('/about#author')
 });
 
-/**
- * The site itself, which is the entity every page names as the thing it is part of.
- *
- * This is where the name printed beside a search result comes from, and Google reads it from the
- * home page alone, so the home page is the only page that states it. `url` is the home page's own
- * canonical link rather than the bare origin, so the two agree character for character.
- */
+/** Returns the WebSite schema. Other schemas reference it as the site they are part of. */
 export const webSiteSchema = (): JsonLd => ({
 	'@type': 'WebSite',
 	'@id': absoluteUrl('/#website'),
@@ -74,7 +60,6 @@ export const webPageSchema = ({ name, description, path }: Page): JsonLd => ({
 	isPartOf: { '@id': absoluteUrl('/#website') }
 });
 
-/** Dated from the page's own entry in pages.ts, so the schema cannot outlive what it describes. */
 export const articleSchema = ({ name, description, path }: Page): JsonLd => {
 	const dates = datesOf(path);
 
@@ -99,7 +84,7 @@ export const faqSchema = (questions: FaqQuestion[]): JsonLd => ({
 	}))
 });
 
-/** JSON-LD is data, not HTML. Escaping `<` keeps an untrusted string from closing its script tag. */
+/** Serializes JSON-LD. Escapes `<` so a string cannot close the script tag. */
 export const jsonLd = (schema: JsonLd | JsonLd[]) =>
 	JSON.stringify(
 		Array.isArray(schema)

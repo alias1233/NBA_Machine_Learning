@@ -12,7 +12,7 @@ MEMORY.md
 PRODUCT.md
 DESIGN.md
 
-# Deployment secrets, and everything the containers write
+# Deployment secrets and container data
 deploy/.env
 deploy/data/
 deploy/backups/

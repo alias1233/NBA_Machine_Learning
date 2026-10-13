@@ -33,10 +33,7 @@ def one_cycle_scheduler_factory(
     warmup_fraction: float = 0.3,
     final_divisor: float = 1000.0
     ) -> SchedulerFactory:
-    """
-    The default schedule. It starts at the optimizer's learning rate, warms up to that rate times
-    peak_multiplier, then anneals down to a small fraction of where it started.
-    """
+    """Returns the default scheduler factory. OneCycleLR warms up to a peak learning rate, then anneals down."""
 
     def build(optimizer: torch.optim.Optimizer, total_steps: int) -> LRScheduler:
         return OneCycleLR(
@@ -53,7 +50,7 @@ def one_cycle_scheduler_factory(
 
 @dataclass
 class TrainingConfiguration():
-    """Every knob of a training run, grouped so that a run can be logged and reproduced as a unit."""
+    """Settings for a training run."""
 
     epochs: int
     batch_size: int = 256
@@ -64,10 +61,10 @@ class TrainingConfiguration():
     """The smallest drop in validation loss that counts as progress."""
 
     evaluation_interval: int = 1
-    """How many epochs pass between validation evaluations. The last epoch is always evaluated."""
+    """Number of epochs between validation evaluations. The last epoch is always evaluated."""
 
     log_interval: int = 1
-    """How many evaluations pass between printed lines. Zero silences the per epoch logging."""
+    """Number of evaluations between log lines. Zero turns off per-epoch logging."""
 
     max_gradient_norm: float | None = None
     """If set, gradients are clipped to this norm, which keeps recurrent models stable."""
@@ -75,7 +72,7 @@ class TrainingConfiguration():
     device: torch.device = torch.device("cpu")
     scheduler_factory: SchedulerFactory = field(default_factory=one_cycle_scheduler_factory)
     scheduler_steps_per_batch: bool = True
-    """OneCycleLR and friends advance once per batch. Plateau schedules advance once per evaluation."""
+    """True for schedulers that step every batch, like OneCycleLR. False for ones that step every evaluation."""
 
     data_loader_workers: int = 0
 
@@ -83,7 +80,7 @@ class TrainingConfiguration():
 class EpochResult():
     epoch: int
     training_loss: float
-    """Measured while training, so dropout and batch normalization inflate it against the validation loss."""
+    """Measured in training mode, so dropout and batch norm make it higher than the validation loss."""
 
     validation_loss: float
     learning_rate: float
@@ -94,7 +91,7 @@ class EpochResult():
 
 @dataclass
 class TrainingRun():
-    """The record of one call to train, held together so it can be graphed and reported."""
+    """Results of one call to train."""
 
     epoch_results: list[EpochResult]
     best_epoch: int
@@ -120,13 +117,7 @@ class TrainingRun():
         return {}
 
 class EarlyStopper():
-    """
-    Ends training when progress slows or reverses, and holds the best weights reached so far.
-
-    Args:
-        patience is how many evaluations may pass without progress before training ends.
-        min_delta is the smallest drop in loss that counts as progress.
-    """
+    """Stops training when validation loss stops improving, and keeps the best weights seen so far."""
 
     def __init__(
         self,
@@ -149,8 +140,7 @@ class EarlyStopper():
         ) -> bool:
         """Called after each validation evaluation. Returns False to end training early."""
 
-        # The best weights track the true minimum, while patience tracks the last loss that
-        # improved by more than min_delta. Sharing one threshold lets a worse model be kept.
+        # Best weights follow the lowest loss. Patience only resets on an improvement larger than min_delta.
         if validation_loss < self.best_loss:
             self.best_loss = validation_loss
             self.best_epoch = epoch
@@ -180,7 +170,7 @@ def _split_batch(
         batch: list[torch.Tensor],
         device: torch.device
     ) -> tuple[list[torch.Tensor], torch.Tensor]:
-    """A batch holds the model's inputs followed by the target."""
+    """Moves a batch to the device and splits it into (inputs, target). The target is the last tensor."""
 
     tensors = [tensor.to(device, non_blocking=True) for tensor in batch]
 
@@ -212,12 +202,7 @@ def _evaluate(
         device: torch.device,
         metrics: dict[str, MetricFunction] | None = None
     ) -> tuple[float, dict[str, float]]:
-    """
-    Evaluates the mean loss and the mean of every metric per sample over the whole loader.
-
-    Returns:
-        (mean loss, metric name to mean value)
-    """
+    """Returns the mean loss and the mean of every metric over the whole loader."""
 
     metrics = metrics or {}
 
@@ -283,16 +268,7 @@ def train(
     collate_fn: Callable | None = None,
     metrics: dict[str, MetricFunction] | None = None
     ) -> TrainingRun:
-    """
-    Each dataset must yield the model's inputs followed by the target, and the model is called with
-    those inputs.
-
-    Args:
-        metrics are scored on the validation set after every evaluation and reported alongside the loss.
-
-    Returns:
-        The record of the run, with the model left holding its best weights.
-    """
+    """Trains a model. Each dataset item must be the model's inputs followed by the target."""
 
     if configuration.epochs < 1:
         raise ValueError(f"epochs must be at least 1, got {configuration.epochs}.")
@@ -302,11 +278,10 @@ def train(
 
     model = model.to(device)
     if isinstance(loss_function, nn.Module):
-        # Losses such as the Gaussian smoothed one carry buffers that must sit beside the logits.
+        # Some losses have buffers that need to be on the same device as the logits.
         loss_function = loss_function.to(device)
 
-    # A final batch of one sample makes batch normalization fail, and a short final batch skews
-    # the epoch loss. Only fall back to keeping it when dropping it would leave nothing to train on.
+    # Drop the last batch, since a batch with one sample breaks batch normalization.
     training_loader = _build_loader(training_dataset, configuration, True, collate_fn, drop_last=True)
     if len(training_loader) == 0:
         training_loader = _build_loader(training_dataset, configuration, True, collate_fn)
@@ -441,9 +416,7 @@ def predict(
     device: torch.device = torch.device("cpu"),
     collate_fn: Callable | None = None
     ) -> torch.Tensor:
-    """
-    Runs the model over every sample of the dataset in order and returns the predictions on the cpu.
-    """
+    """Runs the model over every sample in order and returns the predictions on the cpu."""
 
     loader = DataLoader(
         dataset,
@@ -467,9 +440,7 @@ def graph_loss_progress(
     training_run: TrainingRun,
     save_graph_directory_path: Path | None = None
     ):
-    """
-    Plots the loss curves and the learning rate schedule of a finished run.
-    """
+    """Plots the loss curves and learning rate schedule of a training run."""
 
     import matplotlib.pyplot as plt
 

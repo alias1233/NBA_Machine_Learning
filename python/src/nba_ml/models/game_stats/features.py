@@ -1,17 +1,4 @@
-"""
-Turning engineered team game rows into the samples a game statistics model reads.
-
-A game statistic belongs to the game rather than to either side, so a game is one sample and not two.
-Both sides still have to be read, so the sample reads both teams' past games and is anchored on the
-home team's row. That is what makes a positive point differential the home team's margin, and it is
-the only place in this family that says which side is which.
-
-Reading the home row means home or away is the same for every sample, so it is left off the game
-being predicted. It stays inside the sequences, where a team's past games are a mix of both.
-
-The rows themselves, and the columns on them, are built in feature_engineering/team_game_rows.py and
-shared with team statistics.
-"""
+"""Builds training and inference samples for the game stats models."""
 
 from datetime import datetime
 from typing import Mapping
@@ -33,20 +20,10 @@ from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.stores import team_games as team_game_store
 
 SEQUENCES_READ = 2
-"""
-The home team's past games and the away team's, in that order.
-
-Both sides decide a game, and neither was named, so both are read. A saved model has to agree with
-this to be loadable, because a model fit on two histories cannot answer from one.
-"""
+"""Number of sequences per sample: the home team's past games, then the away team's."""
 
 def build_feature_set(target: TargetValue) -> FeatureSet:
-    """
-    Resolves the columns a model predicting the given value reads.
-
-    Home or away comes off the game being predicted, because every sample is read off a home row and
-    a column that never changes is capacity spent on nothing.
-    """
+    """Returns the feature set for a model predicting the given target."""
 
     return team_game_rows.build_feature_set(target, dropped_static_columns=(team_columns.HOME_OR_AWAY,))
 
@@ -63,14 +40,7 @@ def get_all_labeled_data(
         SequenceInputSamples,
         SequenceInputSamples
         ]:
-    """
-    Builds every labeled sample the league holds, split into training, validation and test.
-
-    One sample per game, read off the home team's row and reading both teams' games.
-
-    Returns:
-        (games of every team, training samples, validation samples, test samples)
-    """
+    """Builds every labeled sample, one per game, taken from the home team's row."""
 
     if print_debug:
         print("Querying data from databases...")
@@ -113,7 +83,7 @@ def _read_team(
     team_id: int,
     target_game: Game
     ) -> tuple[GameHistory, int]:
-    """One side of the predicted game, ready to be read, or a refusal naming the team it cannot."""
+    """Returns the team's history and the target game's index. Raises PredictionRefused if the team has too few games."""
 
     found = team_game_rows.find_target_game(histories, team_id, target_game)
 
@@ -132,19 +102,7 @@ def get_inference_data(
     rosters: Mapping[int, RosterScenario],
     print_debug: bool = False
     ) -> tuple[GameSequences, SequenceInputSamples]:
-    """
-    Builds the input for one prediction: both teams' games, and the single sample over them.
-
-    The home team comes first, which is what makes the answer the home team's way round.
-
-    Rest and break length come from the gap between the target game's date and each team's last
-    recorded game. That is only their real rest while the database is current, so collect before
-    predicting.
-
-    Args:
-        rosters is who each side is playing without or with, keyed by team id. Neither side is named
-        in the answer, so both are read.
-    """
+    """Builds the input for one prediction from both teams' past games, home team first."""
 
     if print_debug:
         print("Querying data from databases...")

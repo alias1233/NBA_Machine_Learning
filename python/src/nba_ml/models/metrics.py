@@ -1,18 +1,4 @@
-"""
-What a scored model recorded, and how a reader is told about it.
-
-A training run writes one of these files beside the model it fitted. The service reads it back and
-puts it on the family Info page, so a visitor sees measured figures rather than claims. The file is
-plain JSON, so nothing has to load PyTorch to read it and publishing a model still copies files.
-
-Two things are deliberately kept apart. The **file** holds only identifiers and numbers, which is
-what a run can honestly record. The **wording** is in the catalogue below, so rewriting how a figure
-is explained is a code change rather than a retraining run.
-
-Which figures a model publishes is the model's own choice. Accuracy says nothing about a triple
-double, because always answering no scores 99.5%, and an average miss says nothing about a yes or no
-answer at all. A model names the figures worth reading and nothing else reaches the site.
-"""
+"""Evaluation metrics: their labels and descriptions, and the saved evaluation of a model."""
 
 import json
 from dataclasses import dataclass, field
@@ -25,32 +11,32 @@ from nba_ml.machine_learning import evaluation
 from nba_ml.models.outputs import CategoryDistribution, IntegerDistribution, ModelOutput
 
 class MetricUnit(StrEnum):
-    """What a figure is measured in, which is all a caller needs to write it down."""
+    """The unit of a metric."""
 
     VALUE = "value"
-    """In the statistic's own units, such as points. What the model predicts names them."""
+    """In the units of the predicted stat, such as points."""
 
     PROBABILITY = "probability"
-    """Between zero and one, read as a percentage."""
+    """A value between 0 and 1, shown as a percentage."""
 
     SCORE = "score"
-    """A number with no units, meaningful only against the floor beside it."""
+    """A unitless number that only means something next to the baseline."""
 
 @dataclass(frozen=True)
 class Metric():
-    """One figure a model can be scored on, in the words a reader sees."""
+    """A metric a model can be evaluated on, with the text shown for it on the site."""
 
     key: str
-    """How the figure is named in a saved evaluation file. See machine_learning/evaluation.py."""
+    """The metric's key in a saved evaluation file."""
 
     label: str
     description: str
-    """One sentence saying what the figure means, written for somebody who has not read the code."""
+    """Short explanation of what the metric means."""
 
     unit: MetricUnit
     higher_is_better: bool
     ideal: float | None = None
-    """The value this figure should reach, when closer is better than simply higher or lower."""
+    """Target value for metrics where closer to it is better."""
 
 ALL_METRICS: dict[str, Metric] = {
     metric.key: metric
@@ -186,13 +172,7 @@ ORDERED_ANSWER_METRICS = (
     evaluation.ACCURACY,
     evaluation.CALIBRATION_ERROR
 )
-"""
-What a model answering over a run of whole numbers publishes, headline first.
-
-The average miss leads, because it is the only one of these a reader needs nothing explained to
-understand. Exact answers come late on purpose: a model over sixty outcomes is right outright about
-one game in seven and that reads as a failure until the average miss beside it says otherwise.
-"""
+"""Default metrics for integer distribution models, most important first."""
 
 CATEGORY_ANSWER_METRICS = (
     evaluation.ACCURACY,
@@ -200,15 +180,10 @@ CATEGORY_ANSWER_METRICS = (
     evaluation.BRIER_SCORE,
     evaluation.CALIBRATION_ERROR
 )
-"""What a model answering with named categories publishes, headline first."""
+"""Default metrics for category models, most important first."""
 
 def default_published_metrics(output: ModelOutput) -> tuple[str, ...]:
-    """
-    The figures worth showing for an answer of this shape, which a model may replace with its own.
-
-    A shape this does not know publishes nothing rather than a figure that does not apply to it, so
-    adding an answer shape cannot put a meaningless number on the site.
-    """
+    """Returns the default metrics for the given output type."""
 
     if isinstance(output, IntegerDistribution):
         return ORDERED_ANSWER_METRICS
@@ -219,37 +194,27 @@ def default_published_metrics(output: ModelOutput) -> tuple[str, ...]:
     return ()
 
 TEST_SPLIT_LABEL = "test"
-"""Which split a figure was scored on. Only a held-out one is worth publishing."""
+"""Label for metrics computed on the test split."""
 
 @dataclass(frozen=True)
 class ModelEvaluation():
-    """
-    One model's finished score, as it is written to disk.
-
-    Everything here is what the run measured. Nothing here is wording, so the site can be rewritten
-    without a model being fitted again.
-    """
+    """A model's evaluation results, as saved to disk."""
 
     model: str
     scored_on: str
-    """Which split produced these figures. See TEST_SPLIT_LABEL."""
+    """The split the metrics were computed on."""
 
     samples: int
     first_game: str
     last_game: str
-    """The stretch of calendar the scored games cover, written as dates."""
+    """first_game and last_game are the date range of the evaluated games."""
 
     evaluated: str
-    """When the run scored the model, so a stale figure can be spotted."""
+    """When the model was evaluated."""
 
     metrics: dict[str, float]
     floor: dict[str, float] = field(default_factory=dict)
-    """
-    The same figures scored on an answer that reads nothing.
-
-    It is the season's own spread of outcomes, repeated for every game. A model has to beat this to
-    be worth having, so it is what turns a figure into a claim a reader can check.
-    """
+    """The same metrics for the baseline prediction."""
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
@@ -261,13 +226,7 @@ def write(file_path: Path, model_evaluation: ModelEvaluation) -> Path:
     return file_path
 
 def read(file_path: Path) -> ModelEvaluation | None:
-    """
-    What a run recorded for one model, or None where there is nothing readable.
-
-    A missing or unreadable file is not an error. A model can be published before it is scored, and
-    a file written by older code may hold fields this no longer expects, so a caller is told there
-    is no score rather than handed a broken one.
-    """
+    """Returns the saved evaluation, or None if the file is missing or invalid."""
 
     try:
         held = json.loads(file_path.read_text(encoding="utf-8"))
@@ -277,12 +236,7 @@ def read(file_path: Path) -> ModelEvaluation | None:
         return None
 
 def dates_covered(game_dates: np.ndarray | None) -> tuple[str, str]:
-    """
-    The first and last day a set of scored games covers, written as plain dates.
-
-    Both splits now span the same stretch of calendar, so this is what proves it rather than a claim
-    that they do.
-    """
+    """Returns the first and last game date as strings, or empty strings if there are no games."""
 
     if game_dates is None or len(game_dates) == 0:
         return ("", "")
@@ -292,7 +246,7 @@ def dates_covered(game_dates: np.ndarray | None) -> tuple[str, str]:
     return (str(days.min()), str(days.max()))
 
 def label_of(key: str) -> str:
-    """What a figure is called, falling back to its own name where nothing describes it."""
+    """Returns the metric's label, or its key with spaces if it has no definition."""
 
     described = ALL_METRICS.get(key)
 

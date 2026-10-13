@@ -1,18 +1,9 @@
-"""
-Where collected data is held, and how it is read back.
-
-One module per table, owning its columns, its writes and its queries, and knowing nothing about
-where the rows came from. Everything downstream of collection reads from here, including the search
-that turns a typed name into an id, so nothing has to ask a data service who someone is.
-"""
+"""SQLite stores for the collected data."""
 
 import unicodedata
 
 def searchable(name: str) -> str:
-    """
-    A name reduced to what someone would type: lower case and without accents, so searching for
-    Luka Doncic finds Luka Dončić.
-    """
+    """Returns the name in lowercase with accents removed, for search matching."""
 
     return "".join(
         character

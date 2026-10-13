@@ -1,17 +1,3 @@
-<!--
-	The questions a reader arrives with, one panel each.
-
-	Every answer is in the document whether its panel is folded open or not. The page publishes the
-	same questions and answers as structured data, so an answer the document did not contain would be
-	describing content that is not there, and a search engine reads that as a claim rather than as an
-	answer.
-
-	A closed panel shows its question and nothing else. Pressing one opens its answer and closes
-	whichever was open, because two open answers are harder to read past than one, which the panels
-	do between themselves by sharing a name.
-
-	The question is the control's label, so the mark beside it says only which way the panel is going.
--->
 <script lang="ts">
 	type Question = {
 		question: string;
@@ -20,7 +6,7 @@
 
 	type Props = {
 		questions: Question[];
-		/** Names the group, so two of these on one page fold independently. */
+		/** Name for the details group, so two FAQs on one page open and close separately. */
 		name: string;
 	};
 
@@ -58,9 +44,6 @@
 		list-style: none;
 	}
 
-	/* The panel carries no padding of its own, because the question and its answer each need their
-	   own, and the accent arrives on the top edge, which is what a container that does something
-	   looks like on the rest of the site. */
 	.questions > li {
 		padding: 0;
 		transition: border-top-color var(--motion-fast) var(--ease-in);
@@ -71,7 +54,6 @@
 		border-top-color: var(--plane-accent);
 	}
 
-	/* The whole question is the control. */
 	summary {
 		display: flex;
 		align-items: center;

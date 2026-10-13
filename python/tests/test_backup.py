@@ -1,10 +1,4 @@
-"""
-The nightly archive of what the server cannot rebuild.
-
-Two things it has to get right. A database has to arrive whole and readable, since a backup that
-cannot be opened is worse than none, and old archives have to go, since nothing else on the server
-removes them.
-"""
+"""Tests for the backup command."""
 
 import sqlite3
 import tarfile
@@ -24,7 +18,7 @@ def collected_league():
     team_games.store(fake_data.team_game_frame())
 
 def published_model_file():
-    """Stands in for a trained model, which is a file the server is never able to make itself."""
+    """Creates fake model files in place of a trained model."""
 
     model_file = paths.model_file("player_stats", "points")
     model_file.parent.mkdir(parents=True, exist_ok=True)
@@ -53,8 +47,6 @@ def test_an_archive_holds_the_databases_and_the_model_files():
     assert source_identity.MARKER.name in held
 
 def test_a_backed_up_database_opens_and_holds_the_rows_it_held(tmp_path):
-    """A copy read as bytes mid write would open and be short. This one is taken through SQLite."""
-
     with tarfile.open(backup.back_up()) as archive:
         archive.extractall(tmp_path, filter="data")
 
@@ -65,8 +57,6 @@ def test_a_backed_up_database_opens_and_holds_the_rows_it_held(tmp_path):
     assert held == len(fake_data.SEASON_GAMES) * 2
 
 def test_only_the_newest_archives_are_left():
-    """An archive is named after the day it was taken, so the newest names are the ones to keep."""
-
     paths.BACKUP_DIRECTORY.mkdir(parents=True, exist_ok=True)
     older = ["20200101-000000", "20200102-000000", "20200103-000000"]
 
@@ -79,8 +69,6 @@ def test_only_the_newest_archives_are_left():
     assert left == {f"{backup.ARCHIVE_PREFIX}{older[-1]}{backup.ARCHIVE_SUFFIX}", written.name}
 
 def test_an_archive_left_half_written_by_a_failed_run_is_removed():
-    """Nothing else prunes them, so repeated failures would otherwise fill the server disk."""
-
     paths.BACKUP_DIRECTORY.mkdir(parents=True, exist_ok=True)
     half_written = paths.BACKUP_DIRECTORY / (
         f"{backup.ARCHIVE_PREFIX}20200101-000000{backup.ARCHIVE_SUFFIX}{backup.WORKING_SUFFIX}"

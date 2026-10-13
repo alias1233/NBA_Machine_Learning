@@ -1,4 +1,4 @@
-"""Compatibility with game rows collected before season phase was stored explicitly."""
+"""Tests that game rows collected before the season type was stored still work."""
 
 from nba_ml.entities import Game, RosterScenario
 from nba_ml.models.player_stats import features as player_features

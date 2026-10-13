@@ -1,33 +1,14 @@
-"""
-What any game row holds, whoever it is about, plus the two helpers every column builder uses.
-
-The rest of the builders are grouped by what they describe: player_columns.py, team_columns.py,
-schedule_columns.py and season_columns.py. Everything they share sits here, so nothing in that ring
-imports another member of it.
-
-Every builder takes column names rather than assuming them, so the same code builds a player frame
-and a team frame. None of them decides which columns a model wants.
-"""
+"""Columns shared by player and team game rows, plus small helpers."""
 
 import numpy as np
 import pandas as pd
 from typing import Any
 
 BUILT_COLUMN_TYPE = np.float32
-"""
-What a column this package builds is kept as.
-
-Every finished build is handed to a model as 32 bit floats, so a built column kept any wider is
-memory spent on precision that is thrown away at the end, and these frames are the largest thing the
-pipeline holds. Pandas works a rolling window out in 64 bits whatever it is given, so this is the
-width a result is kept at rather than the width it is worked out at.
-
-The columns read straight off a store keep the type they were stored as, because an id has to stay
-exact and a box score count already costs nothing.
-"""
+"""Data type used for every engineered column."""
 
 def encode_equality_as_integer(column: pd.Series, value: Any) -> pd.Series:
-    """One where the value matches, zero everywhere else."""
+    """Returns 1 where the column equals the value and 0 elsewhere."""
 
     return (column == value).astype(int)
 
@@ -39,10 +20,7 @@ def column_or_grouped_column(
     column_name: str,
     group_by_column: str | list[str] | None
     ):
-    """
-    Returns the column, grouped when a group column is given, so diff and shift stay inside one
-    group instead of reading whatever row happens to sit above.
-    """
+    """Returns the column, grouped by group_by_column if one is given."""
 
     if group_by_column is None:
         return dataframe[column_name]
@@ -82,7 +60,7 @@ def add_differences_columns(
     dataframe: pd.DataFrame,
     stat_columns: list[tuple[str, str]]
 ) -> pd.DataFrame:
-    """Adds one column per pair, holding the first column minus the second."""
+    """Adds a column for each pair with the first column minus the second."""
 
     for minuend_column, subtrahend_column in stat_columns:
         dataframe[minuend_column + DIFFERENCE_INFIX + subtrahend_column] = (

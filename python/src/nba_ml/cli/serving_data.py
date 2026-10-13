@@ -1,4 +1,4 @@
-"""Package the small, verified data release a prediction server needs."""
+"""Command for packing and loading the data a prediction server needs."""
 
 import argparse
 import json
@@ -34,7 +34,6 @@ PLAYER_ID_COLUMNS = {
     player_games.FILEPATH.name: player_games.PLAYER_ID.category_name,
     players.FILEPATH.name: players.PLAYER_ID.category_name
 }
-"""What each table calls the player a row belongs to. The two tables do not agree on the name."""
 
 
 def _integrity_check(database_file: Path):
@@ -72,13 +71,6 @@ def _player_ids(database_file: Path) -> set[int]:
 
 
 def _narrow_to_players(database_file: Path, player_ids: set[int]) -> int:
-    """
-    Drops the players who have no game inside the packaged window.
-
-    The archive a developer trains on reaches back decades further than the window a server serves,
-    so without this a visitor could search up a player the server holds not one game of.
-    """
-
     table, _ = DATABASE_TABLES[database_file.name]
     kept = ",".join(str(int(player_id)) for player_id in player_ids) or "NULL"
     with closing(sqlite3.connect(database_file)) as database:
@@ -104,7 +96,7 @@ def _model_files() -> list[Path]:
 
 
 def pack(archive: Path, window_start_date: date | None = None) -> Path:
-    """Write an archive with models and the raw rows needed to rebuild the serving cache."""
+    """Writes an archive with the models and the raw rows needed to rebuild the feature cache."""
 
     if archive.exists():
         raise FileExistsError(f"Refusing to overwrite existing serving archive {archive}.")
@@ -217,8 +209,6 @@ def _verify_loaded_data(directory: Path):
         if oldest is not None and season.from_date_string(oldest).date() < window_start_date:
             raise RuntimeError(f"Serving archive holds a game before its stated window in {filename}.")
 
-    # A feature build drops every game of a player it holds no information about, so a package
-    # missing one would quietly serve less than it carries.
     described = _player_ids(directory / DATABASES / players.FILEPATH.name)
     unknown = _player_ids(directory / DATABASES / player_games.FILEPATH.name) - described
     if unknown:
@@ -237,7 +227,7 @@ def _verify_loaded_data(directory: Path):
 
 
 def load(archive: Path, data_directory: Path = paths.DATA_DIRECTORY) -> Path:
-    """Verify and install a serving archive into an empty data directory."""
+    """Verifies a serving archive and installs it into an empty data directory."""
 
     if not archive.exists():
         raise FileNotFoundError(f"Serving archive does not exist: {archive}.")

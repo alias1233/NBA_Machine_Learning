@@ -1,23 +1,6 @@
-/**
- * A scheduled game dealt as a playing card.
- *
- * Which suit a game is printed with, and how far off square it lies on the board, both come from the
- * game's own id. So a card is the same card on the server and in the browser, on every render, and
- * for every reader, and nothing about the board moves when the page hydrates.
- *
- * None of it means anything. It is what makes a night of games read as a hand dealt on a board
- * rather than as a grid of identical tiles, and the facts a reader needs are printed on the card in
- * the two corner indices, exactly where a playing card prints its own.
- */
-
 export type Suit = 'spade' | 'heart' | 'diamond' | 'club';
 
-/**
- * The four suits, drawn rather than typed.
- *
- * Each is a filled path on a 24 by 24 box, so one holds at a corner index and at watermark size
- * without a second asset and without a font that has to be loaded to show a shape.
- */
+/** SVG path for each suit, on a 24 by 24 viewBox. */
 export const SUIT_PATH: Record<Suit, string> = {
 	spade:
 		'M12 2.7 20.1 10.8a5 5 0 0 1-7 7.1L12 16.8l-1.1 1.1a5 5 0 1 1-7-7.1Z' +
@@ -33,10 +16,9 @@ export const SUIT_PATH: Record<Suit, string> = {
 
 const SUITS: Suit[] = ['spade', 'heart', 'diamond', 'club'];
 
-/** Red suits print in the plate's spot ink, black ones in the ink that reads on top of it. */
 export const isRed = (suit: Suit) => suit === 'heart' || suit === 'diamond';
 
-/** FNV-1a, which spreads an id well enough for four buckets and a tilt and costs one pass. */
+/** FNV-1a hash of an id. */
 function hash(id: string): number {
 	let value = 0x811c9dc5;
 
@@ -48,15 +30,14 @@ function hash(id: string): number {
 	return value >>> 0;
 }
 
-/** How far a dealt card lies off square, in degrees either way. */
+/** Maximum tilt of a card, in degrees in either direction. */
 const TILT = 2.5;
 
-/** How far the tilt is stepped, which is what stops a row reading as one alternating angle. */
 const TILT_STEPS = 21;
 
 export type Deal = {
 	suit: Suit;
-	/** Degrees, negative or positive, to be written straight into a rotation. */
+	/** Degrees, negative or positive. */
 	tilt: number;
 };
 

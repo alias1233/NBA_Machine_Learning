@@ -1,13 +1,3 @@
-/**
- * Checks the words `models.ts` reads off a model.
- *
- * A game statistic names no team, so what the site writes beside a figure is the only thing saying
- * which of the two sides an answer is about. Getting it wrong reads as a working answer about the
- * other team.
- *
- * Run with `npm test`. Node reads the TypeScript directly, so there is nothing to install.
- */
-
 import {
 	answerSentence,
 	familyModelsPath,
@@ -81,7 +71,6 @@ check(
 check('categories naming no side keep the model\'s own words', namedCategories(model({}), sides), null);
 check('and so do they before both teams are named', namedCategories(wins, null), null);
 
-// What each page announces to a screen reader, which is whatever its block leads with.
 const distribution: Answer = {
 	kind: 'integer_distribution',
 	distribution: {

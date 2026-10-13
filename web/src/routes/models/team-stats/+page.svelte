@@ -1,23 +1,3 @@
-<!--
-	The team statistics page.
-
-	A request names one of the games on the board and one of its two sides, so choosing a card fills
-	the game and puts the reader on its two sides, which is the one thing left to say. The two sides
-	are printed as the choice itself rather than folded into a list, because a game has exactly two
-	of them and a list that has to be opened is a control standing in front of a choice that fits.
-
-	Both teams' rosters are the reader's to change, not only the named team's. A team's row carries
-	what the side it faces has available, so a defense missing its best player changes what the named
-	team is expected to do. Each side opens already filled in with who is expected to take the floor,
-	so a reader who changes nothing is still answered about the game that will actually be played.
-
-	Nothing is asked before it can be answered. Which side to predict means nothing without a game, so
-	it arrives with one, and so do the two rosters.
-
-	The form is the reader's pending request and the URL is the answered one. Choosing a card or a
-	field changes the form, and only the button copies it into the URL, which is what runs a
-	prediction.
--->
 <script lang="ts">
 	import { tick } from 'svelte';
 
@@ -58,10 +38,7 @@
 	const TITLE = 'Team stat models';
 	const PATH = '/models/team-stats';
 
-	/**
-	 * The pending request. It starts as the answered one and is the reader's until the button copies
-	 * it back into the URL. afterNavigate re-seeds it whenever a new answer lands.
-	 */
+	/** Initial form values, taken from the request in the URL. */
 	const seed = () => ({
 		game: data.selectedGame?.id ?? null,
 		model: data.model,
@@ -79,26 +56,23 @@
 	let submitButton = $state<HTMLElement>();
 	let teamChoice = $state<{ focus: () => void }>();
 
-	// Bookkeeping, not state: which game the player lists on the page belong to.
+	// Not reactive. Id of the game the loaded rosters are for.
 	// svelte-ignore state_referenced_locally
 	let rostersFor = data.selectedGame?.id ?? null;
 
-	/** The card under the reader's pointer, which the head above the fields writes out in full. */
+	/** The game being hovered or focused. */
 	let previewed = $state<ScheduledGame | null>(null);
 
-	/** The game the form names, which is the one card standing lifted off the board. */
+	/** The game selected in the form. */
 	const chosen = $derived(data.games.find((game) => game.id === form.game) ?? null);
 
-	/** The two sides of the chosen game, away first, which is the order the board deals them. */
+	/** The two teams in the selected game, away team first. */
 	const sides = $derived(chosen === null ? [] : [chosen.away_team, chosen.home_team]);
 
-	/** The same two, each knowing which side of the game it is, which names its roster parameters. */
+	/** The same two teams, each with its side of the game. */
 	const rosterSides = $derived(sidesOf(chosen));
 
-	/**
-	 * A chosen game brings both rosters with it. Nothing navigates, so they are fetched rather than
-	 * loaded, and the Out list of each side opens on the players it just brought.
-	 */
+	/** Fetches both rosters when a game is selected, because selecting a game does not navigate. */
 	$effect(() => {
 		const game = chosen;
 
@@ -120,8 +94,6 @@
 			if (!live) return;
 
 			rosters = loaded;
-			// A roster arrives with the lineup its side expects, and the fields open on that, exactly
-			// as they would on a name the reader had chosen.
 			form.rosters = {
 				home: expectedOf(rosterOf(loaded, game.home_team.abbreviation)),
 				away: expectedOf(rosterOf(loaded, game.away_team.abbreviation))
@@ -133,13 +105,7 @@
 		};
 	});
 
-	/**
-	 * Every roster change, dropped. A new game has two different sides, so none of it still stands,
-	 * and the lineups it expects are not known until its rosters arrive.
-	 *
-	 * The mark saying the roster is the reader's own goes with them. Without that, the new game
-	 * would open on empty fields rather than on who is expected to play in it.
-	 */
+	/** Clears all roster changes, because a new game has different teams. */
 	function clearRosters() {
 		form.rosters = { home: { out: [], joined: [] }, away: { out: [], joined: [] } };
 
@@ -157,12 +123,12 @@
 
 	const predicting = $derived(navigating.to?.route.id === PATH);
 
-	/** Which parameter is still missing, in at most twelve words. Empty once none are. */
+	/** Message for the first missing input. Empty when nothing is missing. */
 	const missing = $derived(
 		chosen === null ? 'Pick a game first.' : form.team === '' ? 'Pick a team first.' : ''
 	);
 
-	/** How an answer names itself: the team and the stat, then the game. */
+	/** Builds the headings for a result. The team and the stat, then the game. */
 	function describe(modelName: string, team: string, game: ScheduledGame | null) {
 		const named = data.models.find(({ name }) => name === modelName);
 		const stat = named ? predictsPhrase(named.predicts) : '';
@@ -181,29 +147,24 @@
 
 	const reached = $derived(describe(data.model, data.team, data.selectedGame));
 
-	/** The block before anything has been asked. It never pretends to be an answer that failed. */
+	/** Result block contents before any prediction is made. */
 	const EMPTY = {
 		stat: '',
 		heading: 'No answer yet',
 		subheading: 'Pick a game and a team, then run the prediction.'
 	};
 
-	// While one is being worked out the block names what was asked for, not the last answer.
 	const shown = $derived(
 		predicting ? describe(form.model, form.team, chosen) : data.prediction ? reached : EMPTY
 	);
 
-	// The loader only offers models the site has a reading for, so this is null while loading and
-	// never because an answer arrived in a shape the block cannot draw.
 	const answer = $derived(data.prediction ? readAnswer(data.prediction) : null);
 
-	// The shape the block draws. It comes from the chosen model rather than from the answer, so the
-	// space an answer will take is reserved before it lands.
 	const asked = $derived(
 		data.models.find(({ name }) => name === (predicting ? form.model : data.model)) ?? null
 	);
 
-	/** The one sentence an answer is announced with, which is whatever its block leads with. */
+	/** Sentence announced to screen readers when a result arrives. */
 	const announcement = $derived(
 		answer ? `${reached.heading}. ${answerSentence(answer, reached.stat)}` : ''
 	);
@@ -211,31 +172,22 @@
 	const gameHref = (game: ScheduledGame) =>
 		buildGameHref(game, { model: form.model, team: form.team });
 
-	// The URL is rewritten in place, which runs no load, so the answer beside it keeps standing until
-	// the button asks for a new one.
 	async function chooseGame(game: ScheduledGame) {
-		// A game is what the whole request is about, so the page is put on the questions it opens
-		// rather than on the button at the end of them.
 		shell?.revealControls();
 
 		if (game.id !== form.game) {
-			// A new game has two different sides, so whichever was chosen is no longer one of them.
 			form.game = game.id;
 			form.team = '';
 
-			// The live URL, not page.url, because a shallow write does not refresh page.url and the
-			// next write would put back what the last one replaced, including the team just cleared.
+			// Uses location.href because replaceState does not update page.url.
 			const url = new URL(location.href);
 			url.searchParams.set('game', String(game.id));
 			url.searchParams.delete('team');
 			replaceState(url, page.state);
 		}
 
-		// The two sides arrive with the game, so they are there to put the reader on only once the page
-		// has caught up with the card that opened them.
 		await tick();
 
-		// Which side to answer for is the one thing left to say, so the reader is put on it at once.
 		teamChoice?.focus();
 	}
 
@@ -284,13 +236,8 @@
 		<form class="form-stack" method="GET" onsubmit={(event) => askPrediction(event, shell)}>
 			<div class="form-groups">
 				<div class="field-group flush">
-					<!-- The game is whichever card is lifted off the board, so it is carried rather than
-					     asked for again. -->
 					<input type="hidden" name="game" value={form.game ?? ''} />
 
-					<!-- The answer belongs to one side of the game, so the two sides are the only choices
-					     and neither is picked for the reader. With no game there are no sides, so nothing
-					     is asked: the line under the button is what says why, and it says it once. -->
 					{#if sides.length === 2}
 						<div transition:flow>
 							<TeamChoice
@@ -315,17 +262,8 @@
 					</div>
 				</div>
 
-				<!-- The one thing the schedule does not decide. Both sides are offered, because one
-				     team's row carries what the other has available, so either roster changes the
-				     answer. A change takes effect on the next prediction, with the rest of the form. -->
 				{#if rosters.length > 0}
-					<!-- The mark that says both lists are the reader's own rather than the ones the page
-					     suggested. Without it a reader who cleared every name would be answered with the
-					     suggestions back, because an empty field submits nothing to tell them apart.
-
-					     It waits for the rosters, because until they land the fields are empty for want of
-					     an answer rather than by choice, and a prediction asked for in that moment should
-					     be the expected one. -->
+					<!-- Marks the roster as set by the user, so cleared fields stay cleared. -->
 					<input type="hidden" name={ROSTER_PARAMETER} value={ROSTER_VALUE} />
 				{/if}
 

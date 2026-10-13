@@ -24,8 +24,6 @@ import pytest
 
 
 def test_only_teams_still_playing_are_offered():
-    """The archive holds teams that stopped playing decades ago, and none of them can be predicted."""
-
     league = fake_data.teams_frame()
     league.loc[len(league)] = {
         teams.TEAM_ID.category_name: 99,
@@ -36,7 +34,7 @@ def test_only_teams_still_playing_are_offered():
     teams.store(league)
     team_games.store(fake_data.team_game_frame())
 
-    # Its one game is far enough behind the newest one held that the team reads as gone.
+    # This team's only game is older than ACTIVE_TEAM_WINDOW, so it should not be listed.
     gone = fake_data.team_game_frame().head(1).copy()
     gone[team_games.TEAM_ID.category_name] = 99
     gone[team_games.GAME_ID.category_name] = fake_data.game_id(99)
@@ -56,14 +54,6 @@ def test_no_team_is_offered_when_no_game_is_collected():
 
 
 def test_every_model_is_named_and_explained_wherever_it_is_listed():
-    """
-    A caller listing models needs the words as well as the shapes, so the catalogue carries both.
-
-    The home page lists every family and the models in each, from the one catalogue request the site
-    already makes. Asking the family endpoint instead would be three more requests for two fields the
-    catalogue could have carried. That endpoint stays narrowed to exactly what the family page reads.
-    """
-
     catalogue = [model.model_dump() for model in all_models()]
     info_models = [model.model_dump() for model in family_info_models("player_stats")]
 
@@ -102,13 +92,13 @@ def test_used_metric_explanations_are_offered_once_in_model_order():
 
 
 def _card(family: str, model: str):
-    """One model's Info card, which is where the site reads what it measured."""
+    """Returns one model's entry from the family info endpoint."""
 
     return next(card for card in family_info_models(family) if card.name == model)
 
 
 def _score(specification, **scored: float):
-    """Writes a scored file beside a model, as a finished training run would."""
+    """Writes an evaluation file for a model, like a training run would."""
 
     metrics.write(
         specification.evaluation_file(),
@@ -130,11 +120,6 @@ def test_a_model_with_no_score_is_still_offered_without_figures():
 
 
 def test_a_scored_model_returns_only_the_figures_it_chose_in_its_own_order():
-    """
-    Accuracy on a triple double is 99.5% however bad the model is, so that model leaves it out. What
-    reaches the site is the model's own choice and nothing else.
-    """
-
     _score(
         player_stat_specifications.TRIPLE_DOUBLE_MODEL,
         **{
@@ -156,8 +141,6 @@ def test_a_scored_model_returns_only_the_figures_it_chose_in_its_own_order():
 
 
 def test_a_figure_the_run_did_not_score_is_left_out_rather_than_sent_as_a_blank():
-    """A model fitted before its answer shape gained a figure still describes what it did measure."""
-
     _score(
         player_stat_specifications.POINTS_MODEL,
         **{evaluation.EXPECTED_VALUE_MAE: 4.33, evaluation.ACCURACY: 0.147}
@@ -204,11 +187,6 @@ def test_an_unreadable_score_reads_as_no_score_rather_than_failing_the_page():
 
 
 def test_a_game_roster_change_is_keyed_to_the_side_it_belongs_to():
-    """
-    Both sides of a game can be changed, and getting the two the wrong way round would sit the away
-    team's players out for the home team. Nothing else in the request says which side is which.
-    """
-
     teams.store(fake_data.teams_frame())
 
     home, away = fake_data.TEAMS[0], fake_data.TEAMS[1]
@@ -246,7 +224,7 @@ def test_a_side_no_change_was_named_for_plays_whoever_played_its_last_game():
 
 
 def stored_league():
-    """A whole fake season, plus one game still to be played between the first two teams."""
+    """Stores the fake season plus one upcoming game between the first two teams."""
 
     teams.store(fake_data.teams_frame())
     team_games.store(fake_data.team_game_frame())
@@ -264,8 +242,6 @@ def stored_league():
 
 
 def test_a_games_rosters_are_dealt_away_side_first():
-    """That is the order a matchup is written in, and the order the board deals its cards."""
-
     upcoming = stored_league()
 
     away, home = game_rosters(upcoming.id)
@@ -275,11 +251,6 @@ def test_a_games_rosters_are_dealt_away_side_first():
 
 
 def test_a_roster_offers_everyone_the_snapshot_puts_on_the_team():
-    """
-    A player traded since their last game has no game for their new team, so nothing played would
-    name them. They are still somebody a reader has to be able to sit out.
-    """
-
     upcoming = stored_league()
     moved = fake_data.player_id(fake_data.TEAMS[1].id, 0)
     rosters.store(fake_data.roster_entries(moved={moved: fake_data.TEAMS[0].id}))
@@ -290,14 +261,12 @@ def test_a_roster_offers_everyone_the_snapshot_puts_on_the_team():
 
 
 def on_the_day(monkeypatch):
-    """Puts the clock on the upcoming game, so the year of played games behind it is read."""
+    """Sets today to the date of the upcoming game."""
 
     monkeypatch.setattr(season, "today", lambda: fake_data.NEXT_GAME_DATE)
 
 
 def test_a_roster_is_the_played_games_while_no_snapshot_is_held(monkeypatch):
-    """Which is what every roster was before any of this was collected."""
-
     upcoming = stored_league()
     on_the_day(monkeypatch)
 
@@ -309,13 +278,6 @@ def test_a_roster_is_the_played_games_while_no_snapshot_is_held(monkeypatch):
 
 
 def test_a_roster_drops_a_player_the_snapshot_puts_on_another_team(monkeypatch):
-    """
-    The projected roster, not everyone who has recently played for the team.
-
-    A traded player goes on being what the old team's box scores last said for a whole year, so
-    nothing played would take him out of its picker.
-    """
-
     upcoming = stored_league()
     on_the_day(monkeypatch)
     traded = fake_data.player_id(fake_data.TEAMS[1].id, 0)
@@ -328,12 +290,6 @@ def test_a_roster_drops_a_player_the_snapshot_puts_on_another_team(monkeypatch):
 
 
 def test_a_roster_keeps_a_player_the_snapshot_says_nothing_about(monkeypatch):
-    """
-    A provider that has simply not listed somebody is not a player who has been dropped.
-
-    So the played games go on placing them, which is the same rule the expected lineup follows.
-    """
-
     upcoming = stored_league()
     on_the_day(monkeypatch)
     unlisted = fake_data.player_id(fake_data.TEAMS[0].id, 0)
@@ -356,8 +312,6 @@ def test_a_roster_carries_the_lineup_change_the_snapshot_expects():
 
 
 def test_a_roster_expects_no_change_while_nothing_is_collected():
-    """Which is the empty form every prediction was made with before any roster was collected."""
-
     upcoming = stored_league()
 
     assert all(not side.without and not side.returning for side in game_rosters(upcoming.id))

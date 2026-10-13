@@ -1,14 +1,4 @@
-"""
-The prediction service.
-
-The endpoints here are the ones no model family owns: the teams, the players, the games that can be
-predicted, and the models that exist. They answer for every family from nba_ml/models/families.py,
-so a new family is listed the moment it is added there.
-
-Predicting is family specific, because what a request names differs, so each family brings its own
-router under /predictions/<family>. Adding one is a module beside api/player_stats.py and a line in
-FAMILY_ROUTERS.
-"""
+"""FastAPI app for the prediction API, plus the endpoints shared by all model families."""
 
 from datetime import date, datetime, timedelta
 from typing import Collection
@@ -38,200 +28,121 @@ app = FastAPI(
 
 FAMILY_ROUTERS = [player_stats.router, team_stats.router, game_stats.router]
 
-# Every prediction is capped here rather than in each family, because how many run at once is a
-# property of the server rather than of the model. See nba_ml/api/limits.py.
 for family_router in FAMILY_ROUTERS:
     app.include_router(family_router, dependencies=[Depends(limits.prediction_slot)])
 
-# How far back a team's players are read from, for the players the roster snapshot says nothing
-# about. Long enough that the answer survives an off season.
+# How far back to look for players who played for a team.
 ROSTER_WINDOW = timedelta(days=365)
 
-# How recently a team has to have played to be offered as a side of a game. Measured back from the
-# newest game held rather than from today, so an archive that has fallen behind still names thirty
-# teams instead of none. A year covers an off season, which is the longest gap in the calendar.
+# Teams with no games in this window are left out of /teams.
 ACTIVE_TEAM_WINDOW = timedelta(days=365)
 
-# Answers
+# Response models
 class ScheduledGameResponse(BaseModel):
-    """One upcoming game that can be predicted right now."""
-
     id: int
     date: date
     tipoff: datetime | None
-    """When the game starts, in UTC. Null when the schedule does not name a time."""
+    """Start time in UTC. Null if the schedule has no time for the game yet."""
 
     home_team: TeamResponse
     away_team: TeamResponse
     season_type: SeasonType
     is_mock: bool
-    """Added by hand for testing rather than collected, so a page can say so."""
+    """True for games added manually for testing."""
 
 class RosterResponse(BaseModel):
-    """
-    One side of a game: who can be named for it, and how it is expected to differ from last time.
-
-    The two lists are a RosterScenario already worked out, so a caller can offer them as the roster
-    the reader would otherwise have had to enter by hand and still hand every name back to be
-    changed. Both are empty where nothing collected says who will play. See nba_ml/expected_rosters.py.
-    """
-
     team: TeamResponse
     players: list[PlayerResponse]
-    """The team's projected roster, whether or not each of them played its last game."""
+    """The team's projected roster, including players who missed its last game."""
 
     without: list[PlayerResponse]
-    """Who played the team's last game and is not expected to play this one."""
+    """Players from the team's last game who are not expected to play in this one."""
 
     returning: list[PlayerResponse]
-    """Who is expected to play this one and did not play the last."""
+    """Players expected to play in this game who missed the team's last one."""
 
 class ModelResponse(BaseModel):
     name: str
-    """What to pass as the model in a prediction request."""
+    """The model name to use in a prediction request."""
 
     title: str
-    """What the model is called where it is listed rather than run."""
 
     description: str
-    """One sentence saying what it answers, for a reader who has not opened the family yet."""
 
     family: str
-    """
-    Which group of models this belongs to, which is the page it is predicted on.
-
-    A family is named after what a request has to name to get an answer: a player, a team, or a game.
-    """
 
     predicts: list[str]
-    """What the model answers about, in the words a reader sees."""
 
     output: ModelOutput = Field(discriminator=DISCRIMINATOR)
-    """The shape of an answer, which is what tells a caller how to draw one."""
 
     read_from: GameSide | None
-    """
-    Which side of the game a value above zero belongs to, for an answer with a direction.
-
-    Null where the answer names no side. A caller drawing one says whose number it is, because
-    nothing else in a game statistic's answer marks which of the two teams it is about.
-    """
+    """For signed outputs such as point differential, the team a positive value belongs to."""
 
     category_sides: list[GameSide] | None
-    """
-    Which side of the game each category names, in the order the output lists them.
-
-    Null where no category names one. A name leads with its side's word, so a caller holding the
-    game can put the team playing it in place of that word.
-    """
+    """The team each output category refers to, in the same order as the categories."""
 
     published: bool
-    """Whether a trained file exists, so a caller can offer the model without every request failing."""
+    """True if the model has a trained file that can be loaded."""
 
 class MetricResponse(BaseModel):
-    """One measured figure, with everything a caller needs to compare and write it down."""
-
     key: str
-    """The stable name of the figure, so a caller can single one out without matching on wording."""
 
     label: str
     value: float
     floor: float | None
-    """
-    What answering with the season's own spread of outcomes scores on the same games.
-
-    Null where that floor cannot be scored on this figure. A caller showing one says what it is, so
-    a reader can see what the model is worth rather than only what it scored.
-    """
+    """The same metric for a baseline that predicts the outcome frequencies seen in training."""
 
     unit: metrics.MetricUnit
-    """How to write the number: an amount in the statistic's own units, a probability, or a score."""
 
     higher_is_better: bool
 
     ideal: float | None
-    """The value this figure should reach, where closeness defines the better result."""
+    """Target value for metrics where closer to it is better."""
 
 class MetricDefinitionResponse(BaseModel):
-    """One evaluation figure in the shared glossary a reader is taught from."""
-
     key: str
     label: str
     description: str
 
 class ModelEvaluationResponse(BaseModel):
-    """How one model scored on games it never saw while it was being fitted."""
+    """A model's metrics on held-out games."""
 
     scored_on: str
-    """Which split produced these figures. Only a held-out one is published."""
 
     samples: int
     first_game: date
     last_game: date
-    """The stretch of calendar the scored games cover."""
 
     evaluated: datetime
     metrics: list[MetricResponse]
-    """The figures this model chose to publish, headline first."""
+    """The metrics shown for this model, most important first."""
 
 class InfoModelResponse(BaseModel):
-    """
-    One model in a family's standing listing: the words it prints and the figures under them.
-
-    The same words are on the catalogue, which is what a caller listing several families at once
-    reads. This exists so the family page is not handed the answer shapes it never looks at.
-    """
+    """A model as listed on its family page, with its title, description and metrics."""
 
     name: str
-    """The stable model identifier."""
 
     title: str
-    """The short reader-facing name."""
 
     description: str
-    """The short reader-facing explanation."""
 
     published: bool
-    """Whether a trained file exists."""
 
     evaluation: ModelEvaluationResponse | None
-    """
-    What the model measured on games it never saw, or null where it has never been scored.
-
-    It travels with the card because the page it is drawn on is rendered on a server and read by
-    search engines, and a figure fetched after the page has been sent reaches neither. Unscored is
-    normal rather than an error: a model can be specified before it is fitted.
-    """
 
 class HealthResponse(BaseModel):
     models: list[str]
     newest_stored_game: date | None
-    """A prediction reads rest off the gap to the player's last game, so stale data reads as a layoff."""
 
     feature_build: str | None
-    """
-    Which whole-league feature build a player prediction is being answered from.
-
-    Null while none has been published, which is what makes every player request build the league for
-    itself. See nba_ml/cli/build_features.py.
-    """
+    """Version of the feature build currently used for player predictions."""
 
     roster_snapshot: datetime | None
-    """
-    When the held roster and injury snapshot was collected, in UTC.
-
-    Null while none has been, which is what makes every side of every game open on the lineup it last
-    played. A stale one reads as a player who has since been ruled out still taking the floor.
-    """
+    """When the stored roster and injury snapshot was collected, in UTC."""
 
 @app.exception_handler(PredictionRefused)
 def _refused(request: Request, refusal: PredictionRefused) -> JSONResponse:
-    """
-    A request that is well formed and cannot be answered from what is stored.
-
-    The reason travels beside the message so a caller can word the failure for its own reader rather
-    than repeat a sentence naming stored ids.
-    """
+    """Returns a 422 when a valid request can't be answered with the stored data."""
 
     return JSONResponse(
         status_code=422,
@@ -265,31 +176,13 @@ def health() -> HealthResponse:
 
 @app.get("/showcase")
 def todays_showcase() -> dict | None:
-    """
-    The day's sample predictions, built by a job rather than by this request.
-
-    Read straight off the published file and passed on as it stands. Nothing is predicted here: this
-    endpoint exists precisely so that a visitor arriving at the home page starts no forward pass, and
-    it is deliberately outside the prediction cap because it costs one file read.
-
-    Null where no set has been published, which is what a machine that has never run the job looks
-    like. A caller draws its page without samples rather than treating it as a failure. See
-    nba_ml/showcase.py.
-    """
+    """Returns the sample predictions shown on the home page."""
 
     return showcase.read()
 
 @app.get("/teams")
 def all_teams() -> list[TeamResponse]:
-    """
-    Every team a game can be described with, one to an abbreviation.
-
-    Only teams still playing are offered. The archive reaches back to franchises that folded and out
-    to the overseas sides they toured against, and no prediction can name either.
-
-    A tricode is how a request names a side, and the collected history holds franchises that share
-    one. Only the first of them can ever be resolved back, so only that one is offered.
-    """
+    """Returns all active teams, one per abbreviation, sorted by abbreviation."""
 
     newest = team_games.latest_game_date()
     playing = (
@@ -309,7 +202,7 @@ def all_teams() -> list[TeamResponse]:
     ]
 
 def _named(player_ids: Collection[int]) -> list[PlayerResponse]:
-    """The named players among the given ids, alphabetically, which is how a list of them is read."""
+    """Returns the given players that have a name, sorted by name."""
 
     return [
         PlayerResponse(id=player.id, name=player.name)
@@ -317,23 +210,6 @@ def _named(player_ids: Collection[int]) -> list[PlayerResponse]:
     ]
 
 def _roster(team: Team, game: Game) -> RosterResponse:
-    """
-    One side of a game: the roster it is projected to field, and how it is expected to line up.
-
-    Everyone the collected snapshot puts on the team, plus everyone whose most recent game in the
-    last year was for it and whom the snapshot does not place elsewhere. Neither half is the roster
-    on its own. The snapshot leaves out anybody the provider has not listed, and the played games go
-    on offering a player who has since been traded away.
-
-    A player the snapshot says nothing about is left where their last game put them, which is how a
-    provider that has simply not listed somebody is told apart from one that has dropped them. With
-    no snapshot held that is every player, so this is the played games alone, exactly as it was
-    before any roster was collected.
-
-    A projected player the archive has never named is not offered, because nothing about their box
-    score line could be predicted anyway.
-    """
-
     played_for = player_games.player_ids_on_team(team.id, season.today() - ROSTER_WINDOW)
     on_team_now = {entry.player_id for entry in rosters.on_team(team.id)}
     moved_on = {
@@ -352,13 +228,7 @@ def _roster(team: Team, game: Game) -> RosterResponse:
 
 @app.get("/games/{game_id}/rosters")
 def game_rosters(game_id: int) -> list[RosterResponse]:
-    """
-    Both sides of a scheduled game, away first, which is the order a matchup is written in.
-
-    This is what fills the roster controls once a game has been chosen. Each side arrives with the
-    lineup change the collected snapshot expects of it, so a caller can offer that as the reader's
-    starting point rather than an empty form. See nba_ml/expected_rosters.py.
-    """
+    """Returns both teams' rosters for a scheduled game, away team first."""
 
     scheduled = schedule.get_game(game_id)
     if scheduled is None:
@@ -378,12 +248,7 @@ def game_rosters(game_id: int) -> list[RosterResponse]:
 
 @app.get("/games/upcoming")
 def upcoming_games() -> list[ScheduledGameResponse]:
-    """
-    The games that can be predicted right now, soonest first.
-
-    A game is left out until every earlier game of both its teams has been collected, because until
-    then the model would read one of them as a game out of date. See nba_ml/upcoming.py.
-    """
+    """Returns the upcoming games that can be predicted right now, earliest first."""
 
     named_teams = {
         team.id: TeamResponse(abbreviation=team.abbreviation, name=team.name)
@@ -404,7 +269,7 @@ def find_players(
 
 @app.get("/players/{player_id}")
 def get_player(player_id: int) -> PlayerResponse:
-    """Names a player from a stored id, so a saved prediction link reads without a search."""
+    """Returns the player with the given ID."""
 
     player = players.get_player(player_id)
     if player is None:
@@ -414,12 +279,7 @@ def get_player(player_id: int) -> PlayerResponse:
 
 @app.get("/models")
 def all_models() -> list[ModelResponse]:
-    """
-    Every model of every family, published or not.
-
-    A model with no trained file is still listed, so a caller can say a family is coming without
-    inventing one. Whether it can answer is the published flag.
-    """
+    """Returns all models from all families, including ones without a trained file."""
 
     return [
         ModelResponse(
@@ -440,14 +300,6 @@ def all_models() -> list[ModelResponse]:
     ]
 
 def _model_evaluation(specification: ModelSpecification) -> ModelEvaluationResponse | None:
-    """
-    What one model measured, narrowed to the figures it chose to publish and in that order.
-
-    A figure the model asked for that the run did not score is left out rather than sent as a blank,
-    which is what happens to a model whose answer shape gained a figure after it was last fitted.
-    A model with nothing left to show reports no evaluation at all.
-    """
-
     scored = metrics.read(specification.evaluation_file())
     if scored is None:
         return None
@@ -479,7 +331,7 @@ def _model_evaluation(specification: ModelSpecification) -> ModelEvaluationRespo
     )
 
 def _family(family: str):
-    """The family a caller named, or a 404 saying no such family is offered."""
+    """Returns the model family with the given name, or raises a 404."""
 
     requested = next((candidate for candidate in ALL_FAMILIES if candidate.name == family), None)
     if requested is None:
@@ -489,7 +341,7 @@ def _family(family: str):
 
 @app.get("/models/metrics")
 def model_metric_definitions() -> list[MetricDefinitionResponse]:
-    """The evaluation figures the configured models publish, each explained once."""
+    """Returns the label and description of every metric the models report."""
 
     used = dict.fromkeys(
         key
@@ -510,14 +362,7 @@ def model_metric_definitions() -> list[MetricDefinitionResponse]:
 
 @app.get("/models/{family}/info")
 def family_info_models(family: str) -> list[InfoModelResponse]:
-    """
-    The models in one family's standing listing, with their card copy and figures.
-
-    One request rather than one per model, because the page draws the whole family at once and is
-    rendered before it is sent. Each card carries its own scored file, read here, so the page holds
-    every figure it prints. A family is a dozen or so small JSON files, which is cheaper than the
-    round trips a browser would otherwise make one at a time.
-    """
+    """Returns the models in a family with their descriptions and evaluation metrics."""
 
     requested = _family(family)
 

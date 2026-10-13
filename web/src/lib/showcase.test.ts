@@ -1,14 +1,3 @@
-/**
- * Checks what `showcase.ts` will and will not let the home page draw.
- *
- * The hero is the one surface that has to render whatever the service hands it, and everything it
- * refuses is refused here rather than by failing on the page. Two of these matter more than the
- * rest: a sample carrying no numbers must never reach the drawing, and a set nobody rebuilt must
- * stop offering games that have already been played.
- *
- * Run with `npm test`. Node reads the TypeScript directly, so there is nothing to install.
- */
-
 import { drawableSamples, isDrawable, isUpcoming } from './showcase.ts';
 
 import type { Showcase, ShowcaseSample } from './types.ts';
@@ -61,8 +50,6 @@ const categories = (fields: Partial<ShowcaseSample> = {}) =>
 		...fields
 	});
 
-// What a whole sample looks like when nothing is wrong with it.
-
 check('a whole sample is drawn', isDrawable(sample()), true);
 check('and so is one answering in named categories', isDrawable(categories()), true);
 check(
@@ -70,8 +57,6 @@ check(
 	isDrawable(sample({ player: null, team: null })),
 	true
 );
-
-// A job that stopped half way through, and a file written by something that has moved on.
 
 check('a sample with no numbers is not drawn', isDrawable(sample({ values: [] })), false);
 check(
@@ -127,9 +112,6 @@ check(
 	false
 );
 
-// A set nobody rebuilt. The plate is tonight's slate, so a game already played is the one thing on
-// it that would be untrue rather than merely stale.
-
 const gameOn = (date: string, tipoff: string | null) => ({
 	...sample().game,
 	date,
@@ -166,8 +148,6 @@ check(
 	isUpcoming(gameOn('soon', null), NOON),
 	false
 );
-
-// The whole set, which is what the loader asks for.
 
 const published = (samples: ShowcaseSample[]): Showcase => ({
 	format_version: 1,

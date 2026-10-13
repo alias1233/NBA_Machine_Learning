@@ -1,10 +1,4 @@
-"""
-The server only collects and rebuilds around scheduled games.
-
-Two windows, because the job answers two questions. The archive catches up on games that have
-finished, so it waits for one. The roster describes games that have not, and the site offers those
-whenever the schedule holds one, so it does not.
-"""
+"""Tests for the hourly serving update command."""
 
 from datetime import timedelta
 
@@ -39,13 +33,6 @@ def test_the_hourly_job_runs_for_a_game_from_yesterday(monkeypatch):
 
 
 def test_the_roster_window_reaches_the_games_the_site_is_about_to_be_asked_about(monkeypatch):
-    """
-    Nothing has finished, so there is nothing to collect, but who plays tomorrow still changes.
-
-    The site offers each team's very next game, and an injury report is announced on the day, so a
-    day off between two game days must not leave the rosters a day and a half old.
-    """
-
     tomorrow = fake_data.SEASON_GAMES[0]
     monkeypatch.setattr(season, "today", lambda: tomorrow.day - timedelta(days=1))
     schedule.store([fake_data.scheduled_game(tomorrow, status=GameStatus.SCHEDULED)])
@@ -55,13 +42,6 @@ def test_the_roster_window_reaches_the_games_the_site_is_about_to_be_asked_about
 
 
 def test_a_game_months_off_still_refreshes_the_rosters(monkeypatch):
-    """
-    The site offers that game already, and its player pickers are filled from the snapshot.
-
-    An off season left to itself is what puts a traded player back in his old team's picker, so the
-    roster window does not wait for the game to come near.
-    """
-
     first = fake_data.SEASON_GAMES[0]
     monkeypatch.setattr(season, "today", lambda: first.day - timedelta(days=90))
     schedule.store([fake_data.scheduled_game(first, status=GameStatus.SCHEDULED)])

@@ -1,5 +1,3 @@
-/** Player search for the browser. The prediction service itself is not reachable from one. */
-
 import { json } from '@sveltejs/kit';
 
 import { searchPlayers } from '$lib/server/api';

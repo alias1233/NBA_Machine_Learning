@@ -1,14 +1,4 @@
-"""
-Turning engineered team game rows into the samples a team statistics model reads.
-
-A team statistic belongs to one side of a game, so a sample is one team in one game and both sides
-of a game are samples. That is what makes this family's training set twice the size of the schedule
-and why every row carries whether it was the home side.
-
-The sequence a sample reads is the named team's own past games, and it reads the side it faces as
-well when READS_OPPONENT_HISTORY says so. The rows themselves, and the columns on them, are built in
-feature_engineering/team_game_rows.py and shared with game statistics.
-"""
+"""Builds training and inference samples for the team stats models."""
 
 from datetime import datetime
 from typing import Mapping
@@ -30,20 +20,13 @@ from nba_ml.models.errors import PredictionRefused, Refusal
 from nba_ml.stores import team_games as team_game_store
 
 READS_OPPONENT_HISTORY = True
-"""
-Whether a sample reads the opposing team's past games beside the named team's.
-
-The opponent's averages are already on the row either way, so this adds only the order those games
-came in, and that order was worth about half a percent of the error when measured on 2026-08-11.
-Turning it off changes what a sample holds without changing a column name, so a model fit one way
-cannot answer the other. models/loading.py is what catches that.
-"""
+"""Whether a sample includes the opponent's past games as a second sequence."""
 
 SEQUENCES_READ = 2 if READS_OPPONENT_HISTORY else 1
-"""How many game histories one sample reads, which a saved model has to agree with to be loadable."""
+"""Number of sequences per sample. A saved model must have been trained with the same number."""
 
 def build_feature_set(target: TargetValue) -> FeatureSet:
-    """Resolves the columns a model predicting the given value reads."""
+    """Returns the feature set for a model predicting the given target."""
 
     return team_game_rows.build_feature_set(target)
 
@@ -60,15 +43,7 @@ def get_all_labeled_data(
         SequenceInputSamples,
         SequenceInputSamples
         ]:
-    """
-    Builds every labeled sample the league holds, split into training, validation and test.
-
-    Both sides of a game become a sample, one per team, because a model reads a game from the side it
-    is asked about.
-
-    Returns:
-        (games of every team, training samples, validation samples, test samples)
-    """
+    """Builds every labeled sample, split into training, validation and test."""
 
     if print_debug:
         print("Querying data from databases...")
@@ -110,7 +85,7 @@ def _read_team(
     team_id: int,
     target_game: Game
     ) -> tuple[GameHistory, int]:
-    """One side of the predicted game, ready to be read, or a refusal naming the team it cannot."""
+    """Returns the team's history and the target game's index. Raises PredictionRefused if the team has too few games."""
 
     found = team_game_rows.find_target_game(histories, team_id, target_game)
 
@@ -130,18 +105,7 @@ def get_inference_data(
     rosters: Mapping[int, RosterScenario],
     print_debug: bool = False
     ) -> tuple[GameSequences, SequenceInputSamples]:
-    """
-    Builds the input for one prediction: the games each side reads, and the single sample over them.
-
-    Rest and break length come from the gap between the target game's date and each team's last
-    recorded game. That is only their real rest while the database is current, so collect before
-    predicting.
-
-    Args:
-        target_team_id is the side the answer belongs to, so its row is the static half of the input.
-        rosters is who each side is playing without or with, keyed by team id. Both sides are read,
-        because the named team's row carries what the side it faces has available too.
-    """
+    """Builds the input for one prediction from the past games of the team and its opponent."""
 
     if print_debug:
         print("Querying data from databases...")
@@ -163,9 +127,6 @@ def get_inference_data(
 
     histories = team_game_rows.build_histories(features, team_game_data, roster_totals)
 
-    # Both sides are checked even where only the named one is read, because the row holds each side's
-    # recent form and a team with nothing behind it reads as one averaging zero rather than as one
-    # nothing is known about.
     sides = [
         _read_team(histories, team_id, target_game)
         for team_id in (target_team_id, opponent_team_id)

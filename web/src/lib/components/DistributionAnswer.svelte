@@ -1,19 +1,3 @@
-<!--
-	A finished answer that is a chance per whole number outcome, or per short run of them, drawn.
-
-	The three odds sit in one row above the chart, so the drawing keeps the full width of the surface
-	under them, and the way into the detailed view sits at the end of the line's own row below it.
-
-	It is in the page only while there is an answer to draw, so a new prediction arrives as a new one
-	of these and opens on its own line rather than carrying the last one's.
-
-	It owns the chosen line, because the chart, the odds and the detailed view have to agree on it, and
-	it writes that line back into the address bar so a prediction is shareable at the line it is read
-	on. The write replaces rather than pushes, so dragging the handle does not fill the back button.
-
-	It holds the chart, the line and the odds and nothing else. The ranked outcomes and the full table
-	sit one press away, in the detailed view.
--->
 <script lang="ts">
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/state';
@@ -37,16 +21,16 @@
 
 	type Props = {
 		distribution: Distribution;
-		/** What the model predicts, lowercase. */
+		/** Name of the predicted stat, in lowercase. */
 		stat: string;
-		/** The line the address bar already names, if it names one. */
+		/** Line from the URL, if there is one. */
 		openOn: number | null;
-		/** What the answer names itself, which the detailed view carries because it covers the page. */
+		/** Title of the result. */
 		heading: string;
 		subheading: string;
-		/** True where the block stands for an answer rather than being one, so it owns no address bar. */
+		/** True when the block is a static example and not a real prediction. */
 		example?: boolean;
-		/** Draw the bars when a client-delivered answer arrives. */
+		/** Animates the bars when a result arrives on the client. */
 		animateBars?: boolean;
 	};
 
@@ -70,8 +54,6 @@
 		highest: rangeOutcomes.at(-1)!.highest
 	});
 
-	// Deliberately the opening value only. After that the reader owns it, and a new answer arrives as
-	// a new one of these carrying its own.
 	// svelte-ignore state_referenced_locally
 	let line = $state(
 		Math.min(
@@ -83,13 +65,11 @@
 	const odds = $derived(calculateOdds(distribution, line));
 	const spoken = $derived(oddsPercentages(odds));
 
-	/** Whether the chart is being read over the whole screen. */
+	/** True when the chart is open in full screen. */
 	let detailed = $state(false);
 
 	const likeliest = $derived(mostLikelyOutcomes(distribution, 1)[0]);
 
-	// The push sentence is always present, the same rule the readout follows. On a half number it
-	// reads 0.0 percent, because a half number cannot be landed on.
 	const summary = $derived(
 		[
 			`Expected ${figureText(distribution, expected)} ${stat}.`,
@@ -105,19 +85,15 @@
 	$effect(() => {
 		const chosen = line;
 
-		// A block standing for an answer rather than being one was never asked for, so there is
-		// nothing in the address bar for its line to keep in step with.
 		if (example) return;
 
-		// The first run is the value the answer opened on, which the address bar already agrees with.
 		if (!opened) {
 			opened = true;
 			return;
 		}
 
 		const timer = setTimeout(() => {
-			// The live URL, not page.url, because a shallow write does not refresh page.url and this
-			// would put back whatever the last one replaced.
+			// Uses location.href because replaceState does not update page.url.
 			const url = new URL(location.href);
 			url.searchParams.set('line', String(chosen));
 
@@ -136,8 +112,6 @@
 	</div>
 </div>
 
-<!-- The one way out sits at the end of the line's own row. Every outcome, the ranked ones and the
-     full table are all through here, so the answer itself stays the chart, the line and the odds. -->
 <LineControl id="line" bind:line {distribution} {range}>
 	<button
 		type="button"
@@ -149,8 +123,6 @@
 	</button>
 </LineControl>
 
-<!-- The same surface at the size of the screen, so it sits on this one and takes its colors. It
-     floats above the page rather than in it, so it adds nothing to the height held around it. -->
 {#if detailed}
 	<DetailedChart
 		{distribution}

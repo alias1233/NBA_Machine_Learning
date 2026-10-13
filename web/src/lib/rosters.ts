@@ -1,47 +1,20 @@
-/**
- * What every prediction page that reads a roster shares.
- *
- * A roster arrives with the lineup the collected injury report and roster snapshot expects, so the
- * controls open on who will actually play rather than on an empty form. Those names are the
- * reader's from the moment they appear: they sit in the same fields, submit as the same parameters,
- * and can be removed or added to like any name the reader typed.
- *
- * The whole roster is carried in the address bar, so a prediction made with a changed one is still
- * a shareable link. A page about one player names one team's roster, so its parameters are `out`
- * and `joined`. A page about a team or a whole game names both sides, because one row carries what
- * the side it faces has available too, so each parameter says which side it belongs to.
- */
-
 import type { Player, Roster, ScheduledGame } from '$lib/types';
 
-/** Which side of the game a roster belongs to, where a page carries both. */
+/** Side of the game a roster is for, on pages that have both. */
 export type RosterSide = 'home' | 'away';
 
 export const outParameter = (side?: RosterSide) => (side ? `${side}_out` : 'out');
 export const joinedParameter = (side?: RosterSide) => (side ? `${side}_joined` : 'joined');
 
-/**
- * The parameter that marks a roster as the reader's own rather than the one the page suggested.
- *
- * Without it there is no telling a reader who cleared every name apart from a reader who has not
- * touched the fields, since both submit nothing. The button writes it with the rest of the form, so
- * a link carrying it is answered exactly as it reads, empty fields included, and a link without it
- * opens on whoever is expected to play.
- */
+/** Query parameter that marks a roster as set by the user and not the suggested one. */
 export const ROSTER_PARAMETER = 'roster';
 export const ROSTER_VALUE = 'set';
 
-/** Whether the address bar names the reader's own roster rather than the expected one. */
+/** Returns true if the URL has a user-set roster. */
 export const isReadersRoster = (parameters: URLSearchParams) =>
 	parameters.get(ROSTER_PARAMETER) === ROSTER_VALUE;
 
-/**
- * Both sides of a chosen game, each with the lineup change expected of it.
- *
- * Choosing a game card changes parameters without navigating, so the player lists it opens have to
- * be fetched rather than loaded. A game the schedule no longer holds answers with no sides, which a
- * page draws as a roster it cannot offer rather than as a failure.
- */
+/** Fetches both teams' rosters for a game, with the expected lineup changes. */
 export async function fetchRosters(gameId: number): Promise<Roster[]> {
 	try {
 		const response = await fetch(`/api/rosters?game=${gameId}`);
@@ -52,32 +25,21 @@ export async function fetchRosters(gameId: number): Promise<Roster[]> {
 	}
 }
 
-/** The named side's roster, or nothing while the rosters are still on their way. */
+/** Returns a team's roster, or undefined if it is not loaded yet. */
 export const rosterOf = (rosters: Roster[], abbreviation: string): Roster | undefined =>
 	rosters.find((roster) => roster.team.abbreviation === abbreviation);
 
-/** The named side's players, or none while the rosters are still on their way. */
+/** Returns a team's players, or an empty list if the rosters are not loaded yet. */
 export const playersOf = (rosters: Roster[], abbreviation: string): Player[] =>
 	rosterOf(rosters, abbreviation)?.players ?? [];
 
-/**
- * The lineup change expected of one side, in the words the controls use.
- *
- * Empty for a side the page is not holding yet, and for one nothing collected says anything about,
- * which is the empty form every prediction was made with before any roster was collected.
- */
+/** Returns a team's expected lineup changes, using the field names the roster controls use. */
 export const expectedOf = (roster: Roster | undefined) => ({
 	out: roster?.without ?? [],
 	joined: roster?.returning ?? []
 });
 
-/**
- * The lineup expected around one player, which is what a player page's roster fields open on.
- *
- * The player themselves is never sat out by it. A statistic is about somebody taking the floor, so a
- * suggestion that leaves them off is a question with no answer. A reader naming them out by hand is
- * still answered as they asked.
- */
+/** Returns the expected lineup changes for a player's team. The player is never listed as out. */
 export const expectedAround = (roster: Roster | undefined, playerId: number | null) => {
 	const expected = expectedOf(roster);
 
@@ -87,7 +49,7 @@ export const expectedAround = (roster: Roster | undefined, playerId: number | nu
 	};
 };
 
-/** Which side of the chosen game each roster belongs to, so a control can be labeled by its team. */
+/** Returns the away and home teams of a game with their side, so each roster control can be labeled. */
 export const sidesOf = (
 	game: ScheduledGame | null
 ): { side: RosterSide; team: ScheduledGame['home_team'] }[] =>

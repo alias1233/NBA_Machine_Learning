@@ -17,20 +17,9 @@
 		</script>
 		<!-- End Google Tag Manager -->
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-
-		<!-- Declared before any stylesheet arrives, so the browser paints its canvas in the reader's
-		     theme rather than white. -->
 		<meta name="color-scheme" content="light dark" />
-
-		<!-- A PNG rather than an ICO: the Node adapter's static server has no type for .ico and
-		     serves it with an empty Content-Type, which the site's own nosniff header tells the
-		     browser not to guess past. -->
 		<link rel="icon" type="image/png" href="%sveltekit.assets%/favicon.png" />
 
-		<!-- All four faces are self-hosted, Latin only, and preloaded so text is not swapped late.
-		     Dropping the serif here on the home page, where it sets nothing above the fold, was
-		     measured on 2026-08-17 and changed nothing: the browser finds it in the stylesheet and
-		     raises it to the same priority anyway. -->
 		<link
 			rel="preload"
 			as="font"

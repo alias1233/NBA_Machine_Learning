@@ -1,4 +1,4 @@
-"""One row per player per finished game, straight off the box score."""
+"""Stores player box scores, one row per player per game."""
 
 from datetime import date
 from typing import Collection
@@ -42,8 +42,6 @@ PRIMARY_KEYS = [
 ]
 DATA_CONFLICT_HANDLER = DataConflictHandler.REPLACE
 
-# A date narrows almost every read here, and a roster read names a team and its games. The primary
-# key covers neither, so without these the whole archive is scanned each time.
 INDEXES = [
     [GAME_DATE],
     [TEAM_ID, GAME_ID]
@@ -55,7 +53,7 @@ DATABASE = Database(
 
 # Writing
 def store(player_game_data: pd.DataFrame) -> int:
-    """Adds the given rows, replacing any game already held. Returns how many were written."""
+    """Inserts the given rows, replacing existing ones. Returns the number of rows written."""
 
     with DATABASE:
         return DATABASE.add_dataframe(player_game_data)
@@ -89,10 +87,7 @@ def get_players_game_data(
         player_ids: Collection[int],
         date_start: date | None = None
         ) -> pd.DataFrame:
-    """
-    Every stored game of the named players, which is what a prediction reads around one player: the
-    player themselves and the team mates whose recent form its roster columns total.
-    """
+    """Returns every stored game for the given players, optionally from date_start onwards."""
 
     if not player_ids:
         return pd.DataFrame(columns=DATABASE.category_names)
@@ -113,7 +108,7 @@ def get_players_game_data(
     return data
 
 def player_ids_in_games(team_id: int, game_ids: Collection[int]) -> set[int]:
-    """Who played for a team in the named games, which is the roster around those games."""
+    """Returns the IDs of players who played for the team in the given games."""
 
     if not game_ids:
         return set()
@@ -135,15 +130,7 @@ def recent_mean_minutes(
     before: date,
     games: int
     ) -> dict[int, float]:
-    """
-    What each of the named players was averaging in minutes over their last few games before a date.
-
-    Minutes stand in for how much of a team a player is, so this is what says whether somebody
-    joining a roster is worth counting. Only the players with a stored game before the date appear.
-
-    Args:
-        games is how many of each player's own most recent games the average is taken over.
-    """
+    """Returns each player's average minutes over their last `games` games before the given date."""
 
     if not player_ids:
         return {}
@@ -172,7 +159,7 @@ def get_game_data_after_date(date_start: date) -> pd.DataFrame:
     return data
 
 def latest_game_date() -> date | None:
-    """The newest game held, which is where an update run starts from. None when nothing is held."""
+    """Returns the date of the latest stored game, or None if the store is empty."""
 
     with DATABASE:
         newest = DATABASE.max_value(GAME_DATE)
@@ -180,13 +167,7 @@ def latest_game_date() -> date | None:
     return None if newest is None else season.from_date_string(newest).date()
 
 def oldest_game_date_outside(game_ids: Collection[int]) -> date | None:
-    """
-    The date of the oldest game held here that is not among the given ones, or None when every one
-    of them is.
-
-    A team row is a total of these rows, so this is what says how far back a rebuild of the team
-    store has to reach to leave no stored game without one. See data_collection/games.py.
-    """
+    """Returns the date of the oldest stored game not in game_ids, or None if there isn't one."""
 
     held = {int(game_id) for game_id in game_ids}
 
@@ -201,10 +182,7 @@ def oldest_game_date_outside(game_ids: Collection[int]) -> date | None:
     return season.from_date_string(min(outside)).date() if outside else None
 
 def latest_team_id(player_id: int, before: date | None = None) -> int | None:
-    """
-    The team a player last played for, which is the team they are on unless they have just moved.
-    None when they have no recorded game.
-    """
+    """Returns the ID of the team the player last played for, or None if they have no stored games."""
 
     SQL_condition = f"{PLAYER_ID.category_name} = :{PLAYER_ID.category_name}"
     condition_params: dict = {PLAYER_ID : player_id}
@@ -225,10 +203,7 @@ def latest_team_id(player_id: int, before: date | None = None) -> int | None:
     return None if not rows else int(rows[0][0])
 
 def player_ids_on_team(team_id: int, date_start: date) -> list[int]:
-    """
-    Who a team's players are, taken as everyone whose most recent game since the given date was
-    for that team. A traded player therefore lands on the team they last played for.
-    """
+    """Returns the players whose most recent game since date_start was for the given team."""
 
     with DATABASE:
         rows = DATABASE.query(
@@ -246,7 +221,7 @@ def player_ids_on_team(team_id: int, date_start: date) -> list[int]:
     return sorted(player_id for player_id, (_, played_for) in latest.items() if played_for == team_id)
 
 def player_ids_since(date_start: date) -> list[int]:
-    """Who has played since the given date, which is who is worth refreshing information for."""
+    """Returns the IDs of players with a game on or after the given date."""
 
     with DATABASE:
         rows = DATABASE.query(
@@ -259,7 +234,7 @@ def player_ids_since(date_start: date) -> list[int]:
     return sorted(int(row[0]) for row in rows)
 
 def career_seasons() -> dict[int, tuple[int, int]]:
-    """The first and last season each stored player appeared in."""
+    """Returns each player's first and last season, based on their stored games."""
 
     with DATABASE:
         rows = DATABASE.cursor.execute(

@@ -1,4 +1,4 @@
-"""Build the day's sample predictions, which the home page shows without asking for one."""
+"""Command for building the home page's sample predictions."""
 
 import argparse
 

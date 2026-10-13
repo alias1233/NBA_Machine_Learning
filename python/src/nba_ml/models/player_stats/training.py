@@ -1,9 +1,4 @@
-"""
-Fitting a player game statistics model.
-
-Everything about the run itself is shared, in models/classifier_training.py. What is here is what
-only this family knows: how its samples are built, and how to describe what a model of it reads.
-"""
+"""Trains the player stats models."""
 
 from datetime import datetime
 from functools import partial
@@ -28,8 +23,6 @@ def _training_inputs(model_specs: PlayerStatModelSpecification) -> TrainingInput
         static_columns=feature_set.static_columns,
         minimum_past_games=stat_features.MINIMUM_PAST_GAMES,
         max_sequence_length=MAX_SEQUENCE_LENGTH,
-        # A thousand players halve cleanly, so validation and test share nobody and the epoch a run
-        # stops on cannot have been picked on the players it is then scored against.
         split_on=SplitKey.SUBJECT
     )
 
@@ -43,7 +36,7 @@ def train(
         training_start_date: datetime = season.season_start_date(season.ARCHIVE_START_SEASON),
         evaluation_split: EvaluationSplit | None = None
         ) -> classifier_training.TrainingResult:
-    """Fits one model spec, saves it, and writes a report of the run next to it."""
+    """Trains a model, saves it, and writes a training report next to it."""
 
     return classifier_training.train(
         model_specs,
@@ -61,6 +54,6 @@ def rescore(
         model_specs: PlayerStatModelSpecification,
         print_debug: bool = True
         ) -> metrics.ModelEvaluation:
-    """Rewrites a saved model's held-out evaluation without fitting it again."""
+    """Re-evaluates a saved model on its test set without retraining it."""
 
     return classifier_training.rescore(model_specs, _training_inputs(model_specs), print_debug)

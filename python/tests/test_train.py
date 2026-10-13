@@ -1,4 +1,4 @@
-"""The training command's NBA-era selection, its split settings, and what a finished run leaves behind."""
+"""Tests for the training command: start season choice, split settings and saved outputs."""
 
 import sys
 from dataclasses import replace
@@ -49,8 +49,6 @@ def test_the_training_start_season_is_limited_to_nba_milestones(monkeypatch):
 
 
 def test_the_split_settings_reach_the_selected_family(monkeypatch):
-    """Pinning the day is what scores several models on exactly the same games across two days."""
-
     called = {}
     monkeypatch.setattr(
         sys,
@@ -96,11 +94,6 @@ def test_a_training_cache_is_not_shared_between_eras():
 
 
 def test_a_training_cache_is_not_shared_between_splits():
-    """
-    A saved build holds the finished splits and nothing about them can be read back out of it, so a
-    run under new split settings has to rebuild rather than fit and score itself on the old ones.
-    """
-
     model = specifications.TEAM_POINTS_MODEL
     inputs = training._training_inputs(model)
     era = datetime(2019, 10, 1)
@@ -121,11 +114,6 @@ def test_a_training_cache_is_not_shared_between_splits():
 
 
 def test_only_models_with_nothing_servable_are_selected_by_a_day_in_the_past(monkeypatch):
-    """
-    A day far in the past is what "train whatever nothing can serve" is asked for, so a model with a
-    working file has to be left alone however old that file is.
-    """
-
     trained = specifications.TEAM_POINTS_MODEL
     monkeypatch.setattr(
         train.loading,
@@ -147,11 +135,6 @@ def test_a_model_trained_before_the_given_day_is_retrained(monkeypatch):
 
 
 def test_retraining_since_a_day_fits_every_selected_model_on_the_same_games(monkeypatch):
-    """
-    One run, many models. The held-back games are worked out once, so a batch crossing midnight
-    scores its last model on the same games as its first.
-    """
-
     fitted = []
     monkeypatch.setattr(sys, "argv", ["nba-train", "--retrain-since", "2026-08-16", "--no-cache"])
     monkeypatch.setattr(train.loading, "trained_at", lambda model: None)
@@ -171,8 +154,6 @@ def test_retraining_since_a_day_fits_every_selected_model_on_the_same_games(monk
 
 
 def test_a_model_that_fails_does_not_stop_the_rest_of_a_batch(monkeypatch):
-    """A batch of eighteen models is hours of work, so one failure is reported and not obeyed."""
-
     fitted = []
     monkeypatch.setattr(sys, "argv", ["nba-train", "--retrain-since", "2026-08-16"])
     monkeypatch.setattr(train.loading, "trained_at", lambda model: None)
@@ -193,8 +174,6 @@ def test_a_model_that_fails_does_not_stop_the_rest_of_a_batch(monkeypatch):
 
 
 def test_naming_a_model_and_a_day_at_once_is_refused(monkeypatch):
-    """The two answer the same question, so a run taking both would have to pick one silently."""
-
     monkeypatch.setattr(
         sys, "argv", ["nba-train", "--model", "team_points", "--retrain-since", "2026-08-16"]
     )
@@ -204,7 +183,7 @@ def test_naming_a_model_and_a_day_at_once_is_refused(monkeypatch):
 
 
 def _one_epoch(model_specification):
-    """The same model fitted for a single epoch, which is all a test of the plumbing needs."""
+    """Returns the same model specification set to train for one epoch."""
 
     parameters = model_specification.training_parameters
 
@@ -218,14 +197,6 @@ def _one_epoch(model_specification):
 
 
 def test_a_finished_run_writes_a_held_out_score_the_service_reads_back():
-    """
-    The whole chain, end to end on the made up league: fit, score the games the run never read,
-    write them down, and serve them on the family Info page.
-
-    A run that scored its own validation games would report a number nobody should publish, so what
-    matters here is that the split named in the file is the held-out one.
-    """
-
     team_games.store(fake_data.team_game_frame())
     model_specification = _one_epoch(specifications.TEAM_POINTS_MODEL)
 
@@ -243,15 +214,12 @@ def test_a_finished_run_writes_a_held_out_score_the_service_reads_back():
     assert result.evaluation.samples > 0
     assert result.evaluation.first_game <= result.evaluation.last_game
 
-    # Every figure the answer's shape publishes was scored, and the floor was scored on the same games.
     written = metrics.read(model_specification.evaluation_file())
     assert written is not None
     assert set(model_specification.reported_metrics) <= set(written.metrics)
     assert set(written.floor) <= set(written.metrics)
     assert evaluation.EXPECTED_VALUE_MAE in written.floor
 
-    # And the Info page is served those figures with the model's card, which is where a reader reads
-    # them.
     card = next(card for card in family_info_models("team_stats") if card.name == "team_points")
 
     assert card.evaluation is not None
@@ -261,8 +229,6 @@ def test_a_finished_run_writes_a_held_out_score_the_service_reads_back():
 
 
 def test_rescoring_uses_the_recorded_split_and_scalers_without_changing_the_model(monkeypatch):
-    """A legacy model can be rescored from its report, with its original inputs still intact."""
-
     team_games.store(fake_data.team_game_frame())
     model_specification = _one_epoch(specifications.TEAM_POINTS_MODEL)
     split = EvaluationSplit(start_date=datetime(2024, 10, 27))
@@ -329,8 +295,6 @@ def test_rescoring_uses_the_recorded_split_and_scalers_without_changing_the_mode
 
 
 def test_rescore_without_a_model_runs_every_saved_model(monkeypatch):
-    """A bare --rescore is the batch form, like retraining every selected model."""
-
     saved_models = (specifications.TEAM_POINTS_MODEL, game_stat_specifications.TOTAL_POINTS)
     for model in saved_models:
         model.model_file().parent.mkdir(parents=True, exist_ok=True)
@@ -351,11 +315,6 @@ def test_rescore_without_a_model_runs_every_saved_model(monkeypatch):
 
 
 def test_a_run_whose_evaluation_period_holds_no_game_stops_rather_than_reporting_nothing():
-    """
-    An empty validation split picks the stopping epoch out of nothing and an empty test split scores
-    the model on nothing. Neither says a word on its own, so the run is refused instead.
-    """
-
     team_games.store(fake_data.team_game_frame())
 
     with pytest.raises(ValueError, match="validation and test split holds no samples"):
@@ -370,11 +329,6 @@ def test_a_run_whose_evaluation_period_holds_no_game_stops_rather_than_reporting
 
 
 def test_each_family_splits_its_evaluation_games_on_what_it_can_halve():
-    """
-    A thousand players halve cleanly and thirty teams do not, so the two families answer differently
-    and the answer belongs to the family rather than to a run.
-    """
-
     player_inputs = player_stat_training._training_inputs(
         player_stat_specifications.POINTS_MODEL
     )

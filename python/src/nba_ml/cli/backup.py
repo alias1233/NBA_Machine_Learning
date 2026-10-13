@@ -1,17 +1,4 @@
-"""
-Copying what the server cannot rebuild for itself.
-
-Two things are irreplaceable: the collected box scores, which took thousands of paced requests to a
-data service, and the trained model files, which were fit on a machine the server is not. Everything
-else under the data directory is derived. A feature build is ten seconds of work and a training cache
-is a saved copy of work any training run can simply do again, so neither is worth carrying.
-
-A database is copied with SQLite's own backup rather than read as bytes, so an archive taken while a
-collection is writing still holds a whole database rather than a torn one.
-
-Every choice is a command line argument and nothing is asked for at a prompt, so the command a person
-runs by hand is the command a scheduled job runs.
-"""
+"""Command for backing up the databases and trained models."""
 
 import argparse
 import sqlite3
@@ -27,19 +14,18 @@ from nba_ml.data_collection.source_identity import MARKER as SOURCE_MARKER
 ARCHIVE_PREFIX = "nba-ml-"
 ARCHIVE_SUFFIX = ".tar.gz"
 VERSION_FORMAT = "%Y%m%d-%H%M%S"
-"""How an archive is named after when it was taken. Sorting these names sorts them by age."""
+"""Timestamp format used in archive names. Sorting by name sorts by date."""
 
 WORKING_SUFFIX = ".incomplete"
-"""What an archive is called while it is being written, so a half written one is never kept."""
+"""Suffix added to an archive while it is still being written."""
 
 KEPT_BACKUPS = 7
-"""How many archives are left on disk. A week of nightly ones, which is what catches a slow mistake."""
 
 DATABASES = "databases"
 MODELS = "models"
 
 def _copy_databases(into: Path) -> int:
-    """Every database, copied through SQLite so that a copy taken mid write is still whole."""
+    """Copies every database with SQLite's backup API and returns the number copied."""
 
     into.mkdir(parents=True, exist_ok=True)
     copied = 0
@@ -56,12 +42,7 @@ def _copy_databases(into: Path) -> int:
     return copied
 
 def _write_archive(archive: Path) -> tuple[int, int]:
-    """
-    Writes one archive holding the databases and the model files.
-
-    Returns:
-        (databases copied, model files copied)
-    """
+    """Writes the databases and model files to an archive. Returns the number of each."""
 
     archive.parent.mkdir(parents=True, exist_ok=True)
 
@@ -82,13 +63,7 @@ def _write_archive(archive: Path) -> tuple[int, int]:
     return (copied, len(models))
 
 def _remove_old_archives(keep: int) -> int:
-    """
-    Leaves the newest archives and removes the rest, along with anything a run that died before its
-    move left behind. Nothing else prunes either, so repeated failures would fill the server disk.
-
-    Returns:
-        How many finished archives went. A half written one is not one of them.
-    """
+    """Deletes all but the newest `keep` archives and any incomplete ones."""
 
     archives = sorted(paths.BACKUP_DIRECTORY.glob(f"{ARCHIVE_PREFIX}*{ARCHIVE_SUFFIX}"))
 
@@ -101,19 +76,7 @@ def _remove_old_archives(keep: int) -> int:
     return max(len(archives) - keep, 0)
 
 def back_up(keep: int = KEPT_BACKUPS) -> Path:
-    """
-    Writes one archive of everything that cannot be rebuilt, then removes all but the newest keep.
-
-    The archive is written under a working name and moved into place whole, so a run that dies part
-    way through leaves nothing that reads like a finished backup. What it does leave is removed by
-    the next run.
-
-    Args:
-        keep counts the archive this run writes, so it is at least one.
-
-    Returns:
-        The archive written.
-    """
+    """Creates a new backup archive, then deletes all but the newest `keep`."""
 
     if keep < 1:
         raise ValueError(f"A backup run leaves at least the archive it just wrote. Got {keep}.")

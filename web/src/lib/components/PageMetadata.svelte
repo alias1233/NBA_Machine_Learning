@@ -9,13 +9,7 @@
 	type Props = {
 		title?: string;
 		description: string;
-		/**
-		 * The page's own path, which is its canonical URL.
-		 *
-		 * A prediction page passes the bare path rather than the request it is answering, so every
-		 * combination of parameters names one page instead of asking to be indexed as a page of its
-		 * own. See lib/pages.ts.
-		 */
+		/** Path of the page, used for its canonical URL. */
 		path: string;
 		schema?: JsonLd | JsonLd[];
 		article?: boolean;
@@ -26,9 +20,7 @@
 	const canonical = $derived(absoluteUrl(path));
 	const documentTitle = $derived(pageTitle(title));
 	const structuredData = $derived(schema ? jsonLd(schema) : null);
-	// The page's own dates, which an article states as its timestamps. See lib/pages.ts.
 	const dates = $derived(datesOf(path));
-	// Whether the page asks to be held in an index, which its entry in lib/pages.ts decides.
 	const robots = $derived(robotsDirective(path));
 </script>
 
